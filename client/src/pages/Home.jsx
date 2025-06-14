@@ -73,7 +73,7 @@ const HomePage = () => {
   const quickActions = [
     {
       title: 'Add New Skin',
-      description: 'Add a skin to your inventory',
+      description: 'Add a skin to your portfolio',
       icon: Plus,
       color: 'from-green-500 to-emerald-600',
       hoverColor: 'hover:from-green-600 hover:to-emerald-700'
@@ -118,7 +118,7 @@ const HomePage = () => {
           <h1 className="text-3xl font-bold text-white mb-2">
             Portfolio Overview
           </h1>
-          <p className="text-gray-400">Track your CS:GO skin investments and market trends</p>
+          <p className="text-gray-400">Track your Counter-Strike skin investments and market trends</p>
         </div>
 
         {/* Stats Cards */}

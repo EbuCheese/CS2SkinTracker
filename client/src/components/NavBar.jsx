@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, TrendingUp, Home, Search, Briefcase, Eye, Wrench } from 'lucide-react';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeItem, setActiveItem] = useState('Home');
+  const location = useLocation();
 
   const navItems = [
     { name: 'Home', icon: Home, href: '/' },
@@ -12,6 +13,9 @@ const Navbar = () => {
     { name: 'Price Watchlist', icon: Eye, href: '/watchlist' },
     { name: 'Craft Analysis', icon: Wrench, href: '/craft-analysis' }
   ];
+
+  // Function to check if current path matches the nav item
+  const isActive = (href) => location.pathname === href;
 
   return (
     <nav className="bg-gradient-to-r from-gray-900 via-slate-900 to-gray-900 shadow-lg border-b border-orange-500/20">
@@ -35,22 +39,23 @@ const Navbar = () => {
             <div className="ml-10 flex items-baseline space-x-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
+                const active = isActive(item.href);
                 return (
-                  <button
+                  <Link
                     key={item.name}
-                    onClick={() => setActiveItem(item.name)}
+                    to={item.href}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 group relative overflow-hidden ${
-                      activeItem === item.name
+                      active
                         ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/25'
                         : 'text-gray-300 hover:text-white hover:bg-white/10'
                     }`}
                   >
                     <Icon className="w-4 h-4" />
                     <span>{item.name}</span>
-                    {activeItem !== item.name && (
+                    {!active && (
                       <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-red-600/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 rounded-lg" />
                     )}
-                  </button>
+                  </Link>
                 );
               })}
             </div>
@@ -79,22 +84,21 @@ const Navbar = () => {
         <div className="px-2 pt-2 pb-3 space-y-1 bg-gray-900/95 backdrop-blur-sm border-t border-orange-500/20">
           {navItems.map((item) => {
             const Icon = item.icon;
+            const active = isActive(item.href);
             return (
-              <button
+              <Link
                 key={item.name}
-                onClick={() => {
-                  setActiveItem(item.name);
-                  setIsOpen(false);
-                }}
+                to={item.href}
+                onClick={() => setIsOpen(false)}
                 className={`w-full text-left px-4 py-3 rounded-lg text-base font-medium transition-all duration-200 flex items-center space-x-3 ${
-                  activeItem === item.name
+                  active
                     ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg'
                     : 'text-gray-300 hover:text-white hover:bg-white/10'
                 }`}
               >
                 <Icon className="w-5 h-5" />
                 <span>{item.name}</span>
-              </button>
+              </Link>
             );
           })}
         </div>
