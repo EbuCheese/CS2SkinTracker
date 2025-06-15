@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, TrendingUp, Home, Search, Briefcase, Eye, Wrench } from 'lucide-react';
+import { Menu, X, TrendingUp, Home, Search, Briefcase, Eye, Wrench, User } from 'lucide-react';
 
-const Navbar = () => {
+const Navbar = ({ userSession, onLogout }) => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
 
@@ -11,7 +11,8 @@ const Navbar = () => {
     { name: 'Check Prices', icon: Search, href: '/prices' },
     { name: 'My Investments', icon: Briefcase, href: '/investments' },
     { name: 'Price Watchlist', icon: Eye, href: '/watchlist' },
-    { name: 'Craft Analysis', icon: Wrench, href: '/craft-analysis' }
+    { name: 'Craft Analysis', icon: Wrench, href: '/craft-analysis' },
+    { name: 'Account', icon: User, href: '/account' }
   ];
 
   // Function to check if current path matches the nav item
