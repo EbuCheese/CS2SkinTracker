@@ -1,75 +1,136 @@
-import React, { useState } from 'react';
-import { Search, Plus, Upload, X, Minus, Edit3, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Plus, Upload, X, Minus, Edit3, DollarSign, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
-const InvestmentsPage = () => {
+const InvestmentsPage = ({ userSession }) => {
   const [activeTab, setActiveTab] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
-  
-  // Sample data for demonstration
-  const [liquidItems, setLiquidItems] = useState([
-    {
-      id: 'liquid_1',
-      name: 'AK-47 | Redline',
-      condition: 'Field-Tested',
-      buyPrice: 45.50,
-      currentPrice: 52.30,
-      soldPrice: null,
-      quantity: 2,
-      image: 'https://via.placeholder.com/80x60/ff6b35/ffffff?text=AK-47'
-    }
-  ]);
-  
-  const [craftItems, setCraftItems] = useState([
-    {
-      id: 'craft_1',
-      name: 'Custom AK-47 Blue Gem',
-      skinName: 'AK-47 | Case Hardened',
-      buyPrice: 1250.00,
-      currentPrice: 1450.00,
-      soldPrice: null,
-      image: null
-    }
-  ]);
-  
-  const [caseItems, setCaseItems] = useState([
-    {
-      id: 'case_1',
-      name: 'Chroma 3 Case',
-      buyPrice: 0.85,
-      currentPrice: 0.92,
-      soldPrice: null,
-      quantity: 50,
-      image: 'https://via.placeholder.com/80x60/4a90e2/ffffff?text=Case'
-    }
-  ]);
+  const [investments, setInvestments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const tabs = ['All', 'Liquids', 'Crafts', 'Cases'];
+
+  // Fetch investments from Supabase
+  useEffect(() => {
+    if (userSession?.id) {
+      fetchInvestments();
+    } else {
+      setLoading(false);
+      setError('No user session found. Please validate your beta key.');
+    }
+  }, [userSession]);
+
+  const fetchInvestments = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log('Fetching investments for user:', userSession.id);
+      
+      const { data, error } = await supabase
+        .from('investments')
+        .select('*')
+        .eq('user_id', userSession.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      console.log('Investments fetched:', data);
+      setInvestments(data ?? []);
+    
+      // If no investments found, that's normal for a new user
+      if (!data || data.length === 0) {
+        console.log('No investments found for user - this is normal for new users');
+      }
+
+      } catch (err) {
+      const errorMessage = `Failed to fetch investments: ${err.message}`;
+      setError(errorMessage);
+      console.error('Error fetching investments:', err);
+    } finally {
+      setLoading(false);
+    }
+
+    const retry = () => {
+    if (userSession?.id) {
+      fetchInvestments();
+    } else {
+      setError('No user session found. Please validate your beta key first.');
+    }
+  };
+
+  };
 
   const AddItemForm = ({ type, onClose, onAdd }) => {
     const [formData, setFormData] = useState({
       name: '',
-      skinName: '',
-      buyPrice: '',
+      skin_name: '',
+      condition: '',
+      buy_price: '',
       quantity: 1,
-      image: null
+      image_url: ''
     });
+    const [submitting, setSubmitting] = useState(false);
 
     const handleImageUpload = (e) => {
       const file = e.target.files[0];
       if (file) {
         const reader = new FileReader();
         reader.onload = (e) => {
-          setFormData(prev => ({ ...prev, image: e.target.result }));
+          setFormData(prev => ({ ...prev, image_url: e.target.result }));
         };
         reader.readAsDataURL(file);
       }
     };
 
-    const handleSubmit = () => {
-      if (formData.name && formData.buyPrice) {
-        onAdd(formData);
+    const handleSubmit = async () => {
+      if (!formData.name || !formData.buy_price) {
+        alert('Please fill in required fields');
+        return;
+      }
+
+      if (!betaUser?.id) {
+        alert('No beta user found');
+        return;
+      }
+
+      try {
+        setSubmitting(true);
+        const buyPrice = parseFloat(formData.buy_price);
+        
+        if (isNaN(buyPrice) || buyPrice <= 0) {
+          alert('Please enter a valid buy price');
+          return;
+        }
+        
+        const newInvestment = {
+          user_id: betaUser.id,
+          type: type.toLowerCase().slice(0, -1), // Remove 's' and lowercase
+          name: formData.name.trim(),
+          skin_name: formData.skin_name?.trim() || null,
+          condition: formData.condition?.trim() || null,
+          buy_price: buyPrice,
+          current_price: buyPrice * (1 + (Math.random() * 0.4 - 0.2)), // Random current price for demo
+          quantity: Math.max(1, formData.quantity),
+          image_url: formData.image_url || null
+        };
+
+        const { data, error } = await supabase
+          .from('investments')
+          .insert([newInvestment])
+          .select()
+          .single();
+
+        if (error) throw error;
+        
+        setInvestments(prev => [data, ...prev]);
         onClose();
+      } catch (err) {
+        console.error('Error adding investment:', err);
+        alert('Failed to add investment: ' + err.message);
+      } finally {
+        setSubmitting(false);
       }
     };
 
@@ -97,8 +158,8 @@ const InvestmentsPage = () => {
                       id="image-upload"
                     />
                     <label htmlFor="image-upload" className="cursor-pointer flex flex-col items-center">
-                      {formData.image ? (
-                        <img src={formData.image} alt="Preview" className="w-20 h-20 object-cover rounded" />
+                      {formData.image_url ? (
+                        <img src={formData.image_url} alt="Preview" className="w-20 h-20 object-cover rounded" />
                       ) : (
                         <>
                           <Upload className="w-8 h-8 text-orange-500 mb-2" />
@@ -119,10 +180,9 @@ const InvestmentsPage = () => {
                 <input
                   type="text"
                   placeholder="Base Skin Name"
-                  value={formData.skinName}
-                  onChange={(e) => setFormData(prev => ({ ...prev, skinName: e.target.value }))}
+                  value={formData.skin_name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, skin_name: e.target.value }))}
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
-                  required
                 />
               </>
             ) : (
@@ -138,6 +198,17 @@ const InvestmentsPage = () => {
                     required
                   />
                 </div>
+                
+                {type === 'Liquids' && (
+                  <input
+                    type="text"
+                    placeholder="Condition (e.g., Field-Tested)"
+                    value={formData.condition}
+                    onChange={(e) => setFormData(prev => ({ ...prev, condition: e.target.value }))}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
+                  />
+                )}
+                
                 {(type === 'Liquids' || type === 'Cases') && (
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Quantity</label>
@@ -173,8 +244,8 @@ const InvestmentsPage = () => {
               type="number"
               step="0.01"
               placeholder="Buy Price ($)"
-              value={formData.buyPrice}
-              onChange={(e) => setFormData(prev => ({ ...prev, buyPrice: e.target.value }))}
+              value={formData.buy_price}
+              onChange={(e) => setFormData(prev => ({ ...prev, buy_price: e.target.value }))}
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
               required
             />
@@ -182,9 +253,17 @@ const InvestmentsPage = () => {
             <button
               type="button"
               onClick={handleSubmit}
-              className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-2 rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium"
+              disabled={submitting}
+              className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-2 rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium disabled:opacity-50 flex items-center justify-center space-x-2"
             >
-              Add Item
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Adding...</span>
+                </>
+              ) : (
+                <span>Add Item</span>
+              )}
             </button>
           </div>
         </div>
@@ -192,28 +271,101 @@ const InvestmentsPage = () => {
     );
   };
 
-  const ItemCard = ({ item, type, onUpdateSoldPrice, onUpdateQuantity }) => {
+  const ItemCard = ({ item }) => {
     const [isEditing, setIsEditing] = useState(false);
-    const [soldPrice, setSoldPrice] = useState(item.soldPrice || '');
+    const [soldPrice, setSoldPrice] = useState(item.sold_price?.toString() || '');
+    const [updating, setUpdating] = useState(false);
     
-    const profitLoss = item.soldPrice ? 
-      (type === 'Liquids' || type === 'Cases' ? 
-        (item.soldPrice - item.buyPrice) * item.quantity : 
-        item.soldPrice - item.buyPrice) : 
-      (type === 'Liquids' || type === 'Cases' ? 
-        (item.currentPrice - item.buyPrice) * item.quantity : 
-        item.currentPrice - item.buyPrice);
+    const profitLoss = item.sold_price ? 
+      ((item.sold_price - item.buy_price) * item.quantity) : 
+      ((item.current_price - item.buy_price) * item.quantity);
     
-    const profitPercentage = ((profitLoss / (type === 'Liquids' || type === 'Cases' ? 
-      item.buyPrice * item.quantity : 
-      item.buyPrice)) * 100).toFixed(2);
+    const totalBuyPrice = item.buy_price * item.quantity;
+    const profitPercentage = totalBuyPrice > 0 ? ((profitLoss / totalBuyPrice) * 100).toFixed(2) : '0.00';
 
+    const handleSoldPriceUpdate = async () => {
+      const price = parseFloat(soldPrice);
+      if (!soldPrice || isNaN(price) || price <= 0) {
+        alert('Please enter a valid sold price');
+        return;
+      }
+      
+      try {
+        setUpdating(true);
+        const { error } = await supabase
+          .from('investments')
+          .update({ sold_price: price })
+          .eq('id', item.id);
+
+        if (error) throw error;
+        
+        // Update local state
+        setInvestments(prev => 
+          prev.map(inv => 
+            inv.id === item.id 
+              ? { ...inv, sold_price: price }
+              : inv
+          )
+        );
+        setIsEditing(false);
+      } catch (err) {
+        console.error('Error updating sold price:', err);
+        alert('Failed to update sold price: ' + err.message);
+      } finally {
+        setUpdating(false);
+      }
+    };
+
+    const handleQuantityUpdate = async (newQuantity) => {
+      if (newQuantity < 1) return;
+      
+      try {
+        const { error } = await supabase
+          .from('investments')
+          .update({ quantity: newQuantity })
+          .eq('id', item.id);
+
+        if (error) throw error;
+        
+        // Update local state
+        setInvestments(prev => 
+          prev.map(inv => 
+            inv.id === item.id 
+              ? { ...inv, quantity: newQuantity }
+              : inv
+          )
+        );
+      } catch (err) {
+        console.error('Error updating quantity:', err);
+        alert('Failed to update quantity: ' + err.message);
+      }
+    };
+
+    const handleDeleteItem = async () => {
+      if (!confirm('Are you sure you want to delete this investment?')) return;
+      
+      try {
+        const { error } = await supabase
+          .from('investments')
+          .delete()
+          .eq('id', item.id);
+
+        if (error) throw error;
+        
+        // Update local state
+        setInvestments(prev => prev.filter(inv => inv.id !== item.id));
+      } catch (err) {
+        console.error('Error deleting investment:', err);
+        alert('Failed to delete investment: ' + err.message);
+      }
+    };
+    
     return (
       <div className="bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/30 transition-all duration-200">
         <div className="flex items-start space-x-4">
           <div className="w-20 h-16 bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
-            {item.image ? (
-              <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+            {item.image_url ? (
+              <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
             ) : (
               <div className="text-gray-400 text-xs text-center">No Image</div>
             )}
@@ -221,8 +373,8 @@ const InvestmentsPage = () => {
           
           <div className="flex-1">
             <h3 className="font-medium text-white">{item.name}</h3>
-            {item.skinName && (
-              <p className="text-sm text-gray-400">{item.skinName}</p>
+            {item.skin_name && (
+              <p className="text-sm text-gray-400">{item.skin_name}</p>
             )}
             {item.condition && (
               <p className="text-xs text-gray-500">{item.condition}</p>
@@ -231,29 +383,29 @@ const InvestmentsPage = () => {
             <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
               <div>
                 <span className="text-gray-400">Buy: </span>
-                <span className="text-white">${item.buyPrice.toFixed(2)}</span>
-                {(type === 'Liquids' || type === 'Cases') && (
+                <span className="text-white">${item.buy_price.toFixed(2)}</span>
+                {item.quantity > 1 && (
                   <span className="text-gray-400"> x{item.quantity}</span>
                 )}
               </div>
               <div>
                 <span className="text-gray-400">Current: </span>
-                <span className="text-white">${item.currentPrice.toFixed(2)}</span>
+                <span className="text-white">${item.current_price.toFixed(2)}</span>
               </div>
             </div>
             
-            {(type === 'Liquids' || type === 'Cases') && (
+            {(item.type === 'liquid' || item.type === 'case') && (
               <div className="mt-2 flex items-center space-x-2">
                 <span className="text-gray-400 text-sm">Qty:</span>
                 <button
-                  onClick={() => onUpdateQuantity(item.id, Math.max(1, item.quantity - 1), type)}
+                  onClick={() => handleQuantityUpdate(item.quantity - 1)}
                   className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white"
                 >
                   <Minus className="w-3 h-3" />
                 </button>
                 <span className="text-white text-sm w-8 text-center">{item.quantity}</span>
                 <button
-                  onClick={() => onUpdateQuantity(item.id, item.quantity + 1, type)}
+                  onClick={() => handleQuantityUpdate(item.quantity + 1)}
                   className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white"
                 >
                   <Plus className="w-3 h-3" />
@@ -271,19 +423,25 @@ const InvestmentsPage = () => {
               <span className="text-xs">({profitPercentage}%)</span>
             </div>
             
-            <div className="mt-2">
-              {!item.soldPrice ? (
+            <div className="mt-2 space-y-1">
+              {!item.sold_price ? (
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded hover:bg-orange-500/30 transition-colors"
+                  className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded hover:bg-orange-500/30 transition-colors block w-full"
                 >
                   Mark Sold
                 </button>
               ) : (
                 <div className="text-xs text-gray-400">
-                  Sold: ${item.soldPrice.toFixed(2)}
+                  Sold: ${item.sold_price.toFixed(2)}
                 </div>
               )}
+              <button
+                onClick={handleDeleteItem}
+                className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded hover:bg-red-500/30 transition-colors block w-full"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
@@ -300,13 +458,12 @@ const InvestmentsPage = () => {
                 className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
               />
               <button
-                onClick={() => {
-                  onUpdateSoldPrice(item.id, parseFloat(soldPrice), type);
-                  setIsEditing(false);
-                }}
-                className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors"
+                onClick={handleSoldPriceUpdate}
+                disabled={updating}
+                className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors disabled:opacity-50 flex items-center space-x-1"
               >
-                Save
+                {updating ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                <span>Save</span>
               </button>
               <button
                 onClick={() => setIsEditing(false)}
@@ -321,96 +478,75 @@ const InvestmentsPage = () => {
     );
   };
 
-  const getAllItems = () => {
-    return [
-      ...liquidItems.map(item => ({ ...item, type: 'Liquids' })),
-      ...craftItems.map(item => ({ ...item, type: 'Crafts' })),
-      ...caseItems.map(item => ({ ...item, type: 'Cases' }))
-    ];
-  };
-
   const getCurrentItems = () => {
-    switch (activeTab) {
-      case 'All':
-        return getAllItems();
-      case 'Liquids':
-        return liquidItems;
-      case 'Crafts':
-        return craftItems;
-      case 'Cases':
-        return caseItems;
-      default:
-        return [];
+    let filteredItems = investments;
+    
+    // Filter by tab
+    if (activeTab !== 'All') {
+      const typeFilter = activeTab.toLowerCase().slice(0, -1); // Remove 's' and lowercase
+      filteredItems = filteredItems.filter(item => item.type === typeFilter);
     }
+    
+    // Filter by search query
+    if (searchQuery) {
+      filteredItems = filteredItems.filter(item =>
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.skin_name && item.skin_name.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+    }
+    
+    return filteredItems;
   };
 
-  // Generate unique IDs with type prefix
-  const generateId = (type) => {
-    const prefix = type.toLowerCase().substring(0, 5);
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 1000);
-    return `${prefix}_${timestamp}_${random}`;
-  };
+  // Calculate portfolio summary
+  const getPortfolioSummary = () => {
+    const currentItems = getCurrentItems();
+    const totalBuyValue = currentItems.reduce((sum, item) => sum + (item.buy_price * item.quantity), 0);
+    const totalCurrentValue = currentItems.reduce((sum, item) => {
+      const price = item.sold_price || item.current_price;
+      return sum + (price * item.quantity);
+    }, 0);
+    const totalProfit = totalCurrentValue - totalBuyValue;
+    const profitPercentage = totalBuyValue > 0 ? ((totalProfit / totalBuyValue) * 100) : 0;
 
-  const addItem = (formData) => {
-    const itemType = activeTab;
-    const newItem = {
-      id: generateId(itemType),
-      ...formData,
-      buyPrice: parseFloat(formData.buyPrice),
-      currentPrice: parseFloat(formData.buyPrice) * (1 + Math.random() * 0.4 - 0.2), // Random current price for demo
-      soldPrice: null
+    return {
+      totalBuyValue,
+      totalCurrentValue,
+      totalProfit,
+      profitPercentage,
+      itemCount: currentItems.length
     };
-
-    switch (itemType) {
-      case 'Liquids':
-        setLiquidItems(prev => [...prev, newItem]);
-        break;
-      case 'Crafts':
-        setCraftItems(prev => [...prev, newItem]);
-        break;
-      case 'Cases':
-        setCaseItems(prev => [...prev, newItem]);
-        break;
-    }
   };
 
-  const updateSoldPrice = (id, soldPrice, itemType) => {
-    const updateFunction = (items) => 
-      items.map(item => item.id === id ? { ...item, soldPrice } : item);
+  const summary = getPortfolioSummary();
 
-    // Determine which array to update based on item type
-    const targetType = itemType || activeTab;
-    
-    switch (targetType) {
-      case 'Liquids':
-        setLiquidItems(updateFunction);
-        break;
-      case 'Crafts':
-        setCraftItems(updateFunction);
-        break;
-      case 'Cases':
-        setCaseItems(updateFunction);
-        break;
-    }
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center">
+        <div className="flex items-center space-x-2 text-white">
+          <Loader2 className="w-8 h-8 animate-spin" />
+          <span>Loading investments...</span>
+        </div>
+      </div>
+    );
+  }
 
-  const updateQuantity = (id, quantity, itemType) => {
-    const updateFunction = (items) => 
-      items.map(item => item.id === id ? { ...item, quantity } : item);
-
-    // Determine which array to update based on item type
-    const targetType = itemType || activeTab;
-    
-    switch (targetType) {
-      case 'Liquids':
-        setLiquidItems(updateFunction);
-        break;
-      case 'Cases':
-        setCaseItems(updateFunction);
-        break;
-    }
-  };
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-400 text-lg mb-2">Error</div>
+          <div className="text-gray-400 mb-4">{error}</div>
+          <button
+            onClick={retry}
+            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 p-4">
@@ -421,6 +557,47 @@ const InvestmentsPage = () => {
             My Investments
           </h1>
           <p className="text-gray-400">Track your CS:GO skin investments and performance</p>
+        </div>
+
+        {/* Portfolio Summary */}
+        {investments.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
+              <div className="text-gray-400 text-sm">Total Invested</div>
+              <div className="text-white text-xl font-semibold">${summary.totalBuyValue.toFixed(2)}</div>
+            </div>
+            <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
+              <div className="text-gray-400 text-sm">Current Value</div>
+              <div className="text-white text-xl font-semibold">${summary.totalCurrentValue.toFixed(2)}</div>
+            </div>
+            <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
+              <div className="text-gray-400 text-sm">Total P&L</div>
+              <div className={`text-xl font-semibold flex items-center space-x-1 ${
+                summary.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'
+              }`}>
+                {summary.totalProfit >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                <span>${Math.abs(summary.totalProfit).toFixed(2)} ({summary.profitPercentage.toFixed(2)}%)</span>
+              </div>
+            </div>
+            <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
+              <div className="text-gray-400 text-sm">Items</div>
+              <div className="text-white text-xl font-semibold">{summary.itemCount}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Search Bar */}
+        <div className="mb-6">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search investments..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
+            />
+          </div>
         </div>
 
         {/* Tabs */}
@@ -456,13 +633,7 @@ const InvestmentsPage = () => {
         {/* Items Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {getCurrentItems().map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              type={item.type || activeTab}
-              onUpdateSoldPrice={updateSoldPrice}
-              onUpdateQuantity={updateQuantity}
-            />
+            <ItemCard key={item.id} item={item} />
           ))}
         </div>
 
@@ -471,11 +642,14 @@ const InvestmentsPage = () => {
             <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
               <DollarSign className="w-8 h-8 text-gray-600" />
             </div>
-            <h3 className="text-lg font-medium text-gray-400 mb-2">No investments yet</h3>
+            <h3 className="text-lg font-medium text-gray-400 mb-2">
+              {searchQuery ? 'No matching investments' : 'No investments yet'}
+            </h3>
             <p className="text-gray-500">
-              {activeTab === 'All' 
-                ? 'Start by adding some items to track your investments'
-                : `Add your first ${activeTab.toLowerCase()} to get started`
+              {searchQuery ? 'Try adjusting your search terms' :
+                activeTab === 'All' 
+                  ? 'Start by adding some items to track your investments'
+                  : `Add your first ${activeTab.toLowerCase()} to get started`
               }
             </p>
           </div>
@@ -486,7 +660,7 @@ const InvestmentsPage = () => {
           <AddItemForm
             type={activeTab}
             onClose={() => setShowAddForm(false)}
-            onAdd={addItem}
+            onAdd={() => {}}
           />
         )}
       </div>
