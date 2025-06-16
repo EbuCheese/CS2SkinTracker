@@ -1,4 +1,4 @@
-// hooks/useAuth.js - Fixed version with better error handling
+// hooks/useAuth.js - Fixed version
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 
@@ -14,134 +14,65 @@ export const useAuth = () => {
   const [storedBetaKey, setStoredBetaKey] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Secure beta key verification using security definer function
-  const verifyBetaKey = useCallback(async (betaKey) => {
-    console.log('🔍 Verifying beta key:', betaKey);
-    
+  // Debug: Check table structure using direct table queries
+  const checkTableStructure = useCallback(async () => {
     try {
-      // Use the secure function instead of direct table access
-      const { data, error } = await supabase
-        .rpc('verify_beta_key', { key_value: betaKey });
+      console.log('🔍 Checking table structures...');
       
-      console.log('🔑 Beta key verification result:', { data, error });
+      // Check beta_keys structure by trying to select columns
+      const { data: betaKeysTest, error: betaKeysError } = await supabase
+        .from('beta_keys')
+        .select('*')
+        .limit(0); // Get no rows, just structure
       
-      if (error) {
-        console.error('❌ Beta key verification error:', error);
-        return false;
-      }
+      console.log('📊 beta_keys structure test:', { betaKeysTest, betaKeysError });
       
-      // The function returns an array with one object
-      if (!data || data.length === 0) {
-        console.log('❌ No data returned from verification');
-        return false;
-      }
+      // Check beta_users structure
+      const { data: betaUsersTest, error: betaUsersError } = await supabase
+        .from('beta_users')
+        .select('*')
+        .limit(0); // Get no rows, just structure
       
-      const result = data[0];
-      if (!result.is_valid || !result.key_id) {
-        console.log('❌ Beta key is invalid or already used');
-        return false;
-      }
+      console.log('📊 beta_users structure test:', { betaUsersTest, betaUsersError });
       
-      console.log('✅ Beta key verified successfully');
-      return { id: result.key_id };
-    } catch (err) {
-      console.error('🚨 Exception in verifyBetaKey:', err);
-      return false;
+    } catch (error) {
+      console.error('❌ Error checking table structure:', error);
     }
   }, []);
 
-  // Validate existing session using secure function
+  // Validate existing session using the function
   const validateSession = useCallback(async (sessionId) => {
     console.log('🔍 Validating session:', sessionId);
     
     try {
-      // Use the secure function to get session data
       const { data, error } = await supabase
-        .rpc('get_user_session', { user_session_id: sessionId });
+        .rpc('validate_session', { input_session_id: sessionId });
       
       console.log('👤 Session validation result:', { data, error });
       
       if (error) {
-        console.error('❌ Session validation error:', error);
+        console.log('❌ Session validation error:', error);
         return false;
       }
       
-      if (!data || data.length === 0) {
-        console.log('❌ No matching session found');
-        return false;
+      if (data && data.valid) {
+        return data.session;
       }
       
-      console.log('✅ Session validated successfully');
-      return data[0];
+      return false;
     } catch (err) {
       console.error('🚨 Exception in validateSession:', err);
       return false;
     }
   }, []);
 
-  // Create new session and mark beta key as used securely
-  const createSession = useCallback(async (betaKey, betaKeyId) => {
-    console.log('🏗️ Creating session for beta key ID:', betaKeyId);
-    
-    try {
-      // First, mark the beta key as used using secure function
-      const { data: keyUpdateResult, error: keyError } = await supabase
-        .rpc('use_beta_key', { key_value: betaKey });
-      
-      console.log('🔑 Key usage result:', { keyUpdateResult, keyError });
-      
-      if (keyError) {
-        console.error('❌ Failed to mark beta key as used:', keyError);
-        return false;
-      }
-      
-      if (!keyUpdateResult || keyUpdateResult.length === 0) {
-        console.error('❌ No result from use_beta_key function');
-        return false;
-      }
-      
-      const keyResult = keyUpdateResult[0];
-      if (!keyResult.success) {
-        console.error('❌ Beta key could not be marked as used');
-        return false;
-      }
-      
-      // Generate session ID
-      const sessionId = crypto.randomUUID();
-      console.log('🆔 Generated session ID:', sessionId);
-      
-      // Create the session
-      const sessionData = {
-        session_id: sessionId,
-        beta_key_id: keyResult.key_id,
-        created_at: new Date().toISOString()
-      };
-      
-      console.log('📝 Inserting session data:', sessionData);
-      
-      const { data: userData, error: sessionError } = await supabase
-        .from('beta_users')
-        .insert(sessionData)
-        .select()
-        .single();
-
-      if (sessionError) {
-        console.error('❌ Session creation error:', sessionError);
-        return false;
-      }
-
-      console.log('✅ Session created successfully:', userData);
-      return userData;
-    } catch (err) {
-      console.error('🚨 Exception in createSession:', err);
-      return false;
-    }
-  }, []);
-
-  // Initialize auth state on mount
+  // Initialize auth state
   useEffect(() => {
     const initializeAuth = async () => {
       console.log('🚀 Initializing auth...');
+      
+      // Check table structure for debugging
+      await checkTableStructure();
       
       try {
         const storedUser = localStorage.getItem(STORAGE_KEYS.USER_SESSION);
@@ -152,13 +83,13 @@ export const useAuth = () => {
 
         if (storedUser) {
           const userData = JSON.parse(storedUser);
-          console.log('👤 Parsed user data session ID:', userData.session_id);
+          console.log('👤 Parsed user data:', userData);
           
-          // Validate existing session
-          const isValidSession = await validateSession(userData.session_id);
+          // Validate the stored session
+          const validSession = await validateSession(userData.session_id);
           
-          if (isValidSession) {
-            console.log('✅ Valid session found, logging in user');
+          if (validSession) {
+            console.log('✅ Session is still valid');
             setUserSession(userData);
             setHasValidBetaKey(true);
             if (storedKey) {
@@ -166,7 +97,7 @@ export const useAuth = () => {
               setHasStoredBetaKey(true);
             }
           } else {
-            console.log('❌ Invalid session, clearing user but keeping beta key');
+            console.log('❌ Session is no longer valid, clearing');
             localStorage.removeItem(STORAGE_KEYS.USER_SESSION);
             if (storedKey) {
               setStoredBetaKey(storedKey);
@@ -183,6 +114,7 @@ export const useAuth = () => {
       } catch (error) {
         console.error('🚨 Auth initialization error:', error);
         localStorage.removeItem(STORAGE_KEYS.USER_SESSION);
+        localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
       } finally {
         console.log('✅ Auth initialization complete');
         setIsLoading(false);
@@ -190,127 +122,85 @@ export const useAuth = () => {
     };
 
     initializeAuth();
-  }, [validateSession]);
+  }, [checkTableStructure, validateSession]);
 
-  // Login with beta key
+  // Login with beta key - fixed version
   const loginWithBetaKey = useCallback(async (betaKey) => {
-    console.log('🔐 Attempting login with beta key');
+    console.log('🔐 Attempting login with beta key:', betaKey.substring(0, 4) + '...');
     
     try {
-      const betaKeyData = await verifyBetaKey(betaKey);
-      if (!betaKeyData) {
-        console.log('❌ Beta key verification failed');
-        return { success: false, error: 'Invalid, expired, or already used beta key' };
+      // Try to create a new session with the beta key
+      const { data, error } = await supabase
+        .rpc('create_beta_session', { input_key_value: betaKey });
+      
+      console.log('🔑 create_beta_session result:', { data, error });
+      
+      if (error) {
+        console.error('❌ Function error:', error);
+        return { success: false, error: `Database error: ${error.message}` };
       }
+      
+      if (data && data.success) {
+        console.log('✅ Login succeeded!');
+        const sessionData = data.session;
+        
+        // Update state
+        setUserSession(sessionData);
+        setHasValidBetaKey(true);
+        setStoredBetaKey(betaKey);
+        setHasStoredBetaKey(true);
 
-      console.log('✅ Beta key verified, creating session...');
-      const userData = await createSession(betaKey, betaKeyData.id);
-      if (!userData) {
-        console.log('❌ Session creation failed');
-        return { success: false, error: 'Failed to create session' };
+        // Persist to storage
+        localStorage.setItem(STORAGE_KEYS.USER_SESSION, JSON.stringify(sessionData));
+        localStorage.setItem(STORAGE_KEYS.BETA_KEY, betaKey);
+
+        return { success: true };
+      } else {
+        console.log('❌ Login failed:', data?.error);
+        return { success: false, error: data?.error || 'Unknown error' };
       }
-
-      // Update state
-      const sessionData = {
-        id: userData.id,
-        session_id: userData.session_id,
-        beta_key_id: userData.beta_key_id
-      };
-
-      console.log('💾 Storing session data');
-
-      setUserSession(sessionData);
-      setHasValidBetaKey(true);
-      setStoredBetaKey(betaKey);
-      setHasStoredBetaKey(true);
-
-      // Persist to storage
-      localStorage.setItem(STORAGE_KEYS.USER_SESSION, JSON.stringify(sessionData));
-      localStorage.setItem(STORAGE_KEYS.BETA_KEY, betaKey);
-
-      console.log('🎉 Login successful!');
-      return { success: true };
     } catch (error) {
       console.error('🚨 Login error:', error);
       return { success: false, error: error.message };
     }
-  }, [verifyBetaKey, createSession]);
+  }, []);
 
-  // Quick login with stored beta key - fixed version
+  // Quick login with stored beta key
   const quickLogin = useCallback(async () => {
-    console.log('⚡ Attempting quick login...');
-    
     if (!storedBetaKey) {
-      console.log('❌ No stored beta key');
+      console.log('❌ No stored beta key for quick login');
       return { success: false, error: 'No stored beta key' };
     }
 
+    console.log('⚡ Quick login with stored key');
+    
     try {
-      // For quick login, we assume the beta key is already used
-      // We just need to find the existing beta_key_id and create a new session
       const { data, error } = await supabase
-        .rpc('verify_beta_key', { key_value: storedBetaKey });
-
-      console.log('🔑 Beta key lookup result:', { data, error });
-
+        .rpc('quick_beta_login', { input_key_value: storedBetaKey });
+      
+      console.log('⚡ quick_beta_login result:', { data, error });
+      
       if (error) {
-        console.error('❌ Error looking up beta key:', error);
-        localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
-        setStoredBetaKey(null);
-        setHasStoredBetaKey(false);
-        return { success: false, error: 'Failed to verify stored beta key' };
+        console.error('❌ Quick login error:', error);
+        return { success: false, error: `Database error: ${error.message}` };
       }
+      
+      if (data && data.success) {
+        console.log('✅ Quick login succeeded!');
+        const sessionData = data.session;
+        
+        // Update state
+        setUserSession(sessionData);
+        setHasValidBetaKey(true);
 
-      if (!data || data.length === 0) {
-        console.log('❌ Stored beta key no longer exists');
-        localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
-        setStoredBetaKey(null);
-        setHasStoredBetaKey(false);
-        return { success: false, error: 'Beta key no longer exists' };
+        // Persist to storage
+        localStorage.setItem(STORAGE_KEYS.USER_SESSION, JSON.stringify(sessionData));
+
+        return { success: true };
+      } else {
+        console.log('❌ Quick login failed:', data?.error);
+        return { success: false, error: data?.error || 'Unknown error' };
       }
-
-      const keyId = data[0].key_id;
-      if (!keyId) {
-        console.log('❌ Invalid key data');
-        return { success: false, error: 'Invalid key data' };
-      }
-
-      // Create new session (beta key should already be used for quick login)
-      const sessionId = crypto.randomUUID();
-      const sessionData = {
-        session_id: sessionId,
-        beta_key_id: keyId,
-        created_at: new Date().toISOString()
-      };
-
-      console.log('📝 Creating quick login session:', sessionData);
-
-      const { data: userData, error: sessionError } = await supabase
-        .from('beta_users')
-        .insert(sessionData)
-        .select()
-        .single();
-
-      if (sessionError) {
-        console.log('❌ Quick login session creation failed:', sessionError);
-        return { success: false, error: 'Failed to create session' };
-      }
-
-      // Update state
-      const userSessionData = {
-        id: userData.id,
-        session_id: userData.session_id,
-        beta_key_id: userData.beta_key_id
-      };
-
-      setUserSession(userSessionData);
-      setHasValidBetaKey(true);
-
-      // Update storage
-      localStorage.setItem(STORAGE_KEYS.USER_SESSION, JSON.stringify(userSessionData));
-
-      console.log('🎉 Quick login successful!');
-      return { success: true };
     } catch (error) {
       console.error('🚨 Quick login error:', error);
       return { success: false, error: error.message };
