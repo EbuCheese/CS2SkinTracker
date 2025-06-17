@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { User, LogOut, Shield, Calendar, Key, AlertTriangle, X } from 'lucide-react';
 
-const AccountPage = ({ userSession, onLogout }) => {
+const AccountPage = ({ userSession, onLogout, onRevoke }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isRevoking, setIsRevoking] = useState(false);
   const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
 
   const handleLogout = async (clearBetaKey = false) => {
@@ -17,9 +18,24 @@ const AccountPage = ({ userSession, onLogout }) => {
     setShowRevokeConfirm(true);
   };
 
-  const handleRevokeConfirm = () => {
+  const handleRevokeConfirm = async () => {
+    setIsRevoking(true);
     setShowRevokeConfirm(false);
-    handleLogout(true);
+    
+    try {
+      const result = await onRevoke();
+      if (result.success) {
+        // The revoke function handles clearing all state
+        console.log('Beta key revoked successfully');
+      } else {
+        console.error('Failed to revoke beta key:', result.error);
+        // You might want to show an error message to the user here
+      }
+    } catch (error) {
+      console.error('Error revoking beta key:', error);
+    } finally {
+      setIsRevoking(false);
+    }
   };
 
   const handleRevokeCancel = () => {
@@ -107,9 +123,9 @@ const AccountPage = ({ userSession, onLogout }) => {
                 </div>
                 <button
                   onClick={() => handleLogout(false)}
-                  disabled={isLoggingOut}
+                  disabled={isLoggingOut || isRevoking}
                   className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${
-                    isLoggingOut
+                    isLoggingOut || isRevoking
                       ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                       : 'bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white shadow-lg hover:shadow-orange-500/25'
                   }`}
@@ -138,26 +154,35 @@ const AccountPage = ({ userSession, onLogout }) => {
                     <span>Revoke Key</span>
                   </h3>
                   <p className="text-gray-400 text-sm">
-                    Permanently sign out and clear all saved data.
+                    Permanently revoke your beta key and clear all saved data.
                   </p>
                   <p className="text-red-300 text-sm mt-2 font-medium">
-                    Note: Your beta key will no longer work after signing out
+                    Warning: Your beta key will be permanently deactivated
                   </p>
                   <p className="text-red-300 text-sm font-medium">
-                    you'll need to obtain a new beta key for future access.
+                    and you'll need a new one for future access.
                   </p>
                 </div>
                 <button
                   onClick={handleRevokeClick}
-                  disabled={isLoggingOut}
+                  disabled={isLoggingOut || isRevoking}
                   className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${
-                    isLoggingOut
+                    isLoggingOut || isRevoking
                       ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                       : 'bg-red-900/50 hover:bg-red-800/70 text-red-200 border border-red-600/50 hover:border-red-500/70'
                   }`}
                 >
-                  <AlertTriangle className="w-4 h-4" />
-                  <span>Revoke Access</span>
+                  {isRevoking ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Revoking...</span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle className="w-4 h-4" />
+                      <span>Revoke Access</span>
+                    </>
+                  )}
                 </button>
               </div>
 
@@ -180,21 +205,31 @@ const AccountPage = ({ userSession, onLogout }) => {
                         <li>Your beta key will be permanently deactivated</li>
                         <li>All saved account data will be cleared</li>
                         <li>You'll need a new beta key to access the app again</li>
+                        <li>This action is irreversible</li>
                       </ul>
                     </div>
 
                     <div className="flex space-x-3">
                       <button
                         onClick={handleRevokeCancel}
-                        className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors duration-200"
+                        disabled={isRevoking}
+                        className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handleRevokeConfirm}
-                        className="flex-1 px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-red-500/25"
+                        disabled={isRevoking}
+                        className="flex-1 px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-red-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                       >
-                        Yes, Revoke Key
+                        {isRevoking ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Revoking...</span>
+                          </>
+                        ) : (
+                          <span>Yes, Revoke Key</span>
+                        )}
                       </button>
                     </div>
                   </div>

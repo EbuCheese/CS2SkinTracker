@@ -1,8 +1,7 @@
-// App.js - Simplified with custom hook
+// App.js - Updated with revoke functionality
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import './index.css'
-
 import Navbar from './components/NavBar'
 import Home from './pages/Home'
 import InvestmentsPage from './pages/Investments';
@@ -21,7 +20,8 @@ function App() {
     loginWithBetaKey,
     quickLogin,
     logout,
-    clearStoredBetaKey
+    clearStoredBetaKey,
+    revokeBetaKey
   } = useAuth();
 
   // Show loading spinner while checking session
@@ -37,7 +37,16 @@ function App() {
         <Routes>
           <Route path="/" element={<Home userSession={userSession} />} />
           <Route path="/investments" element={<InvestmentsPage userSession={userSession} />} />
-          <Route path="/account" element={<AccountPage userSession={userSession} onLogout={logout} />} />
+          <Route 
+            path="/account" 
+            element={
+              <AccountPage 
+                userSession={userSession} 
+                onLogout={logout}
+                onRevoke={revokeBetaKey} // Pass the revoke function
+              />
+            } 
+          />
         </Routes>
       </Router>
     );
