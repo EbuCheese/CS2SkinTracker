@@ -14,52 +14,72 @@ const InvestmentsPage = ({ userSession }) => {
 
   // Fetch investments from Supabase
   useEffect(() => {
-    if (userSession?.id) {
-      fetchInvestments();
-    } else {
-      setLoading(false);
-      setError('No user session found. Please validate your beta key.');
+  if (!userSession) return; // wait for session to be set
+
+  if (validateUserSession(userSession)) {
+    fetchInvestments();
+  } else {
+    setLoading(false);
+    setError('Invalid user session. Please validate your beta key.');
+  }
+}, [userSession]);
+
+
+const fetchInvestments = async () => {
+  try {
+    setLoading(true);
+    setError(null);
+
+    if (!userSession?.id || typeof userSession.id !== 'string') {
+      setError('Invalid user session. Please re-validate your beta key.');
+      return;
     }
-  }, [userSession]);
 
-  const fetchInvestments = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+    console.log('Fetching investments for user:', userSession.id);
 
-      console.log('Fetching investments for user:', userSession.id);
-      
-      const { data, error } = await supabase
-        .from('investments')
-        .select('*')
-        .eq('user_id', userSession.id)
-        .order('created_at', { ascending: false });
+    // Use the custom function that handles context properly
+    const { data, error } = await supabase.rpc('fetch_user_investments', {
+      context_user_id: userSession.id
+    });
 
-      if (error) throw error;
-      console.log('Investments fetched:', data);
-      setInvestments(data ?? []);
+    if (error) {
+      console.error('Database query failed:', error);
+      setError('Access denied. Please verify your beta key is valid and active.');
+      return;
+    }
     
-      // If no investments found, that's normal for a new user
-      if (!data || data.length === 0) {
-        console.log('No investments found for user - this is normal for new users');
-      }
+    // The function returns a JSON array, so we need to parse it
+    const investmentsArray = Array.isArray(data) ? data : JSON.parse(data || '[]');
+    
+    console.log(`Successfully loaded ${investmentsArray.length} investments`);
+    setInvestments(investmentsArray);
 
-      } catch (err) {
-      const errorMessage = `Failed to fetch investments: ${err.message}`;
-      setError(errorMessage);
-      console.error('Error fetching investments:', err);
-    } finally {
-      setLoading(false);
-    }
+  } catch (err) {
+    console.error('Unexpected error:', err);
+    setError('An unexpected error occurred. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
-    const retry = () => {
+const validateUserSession = (session) => {
+  if (!session) return false;
+  if (!session.id) return false;
+  if (typeof session.id !== 'string') return false;
+  
+  // Add additional validation if needed (e.g., UUID format)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(session.id)) return false;
+  
+  return true;
+};
+
+const retry = () => {
     if (userSession?.id) {
       fetchInvestments();
     } else {
       setError('No user session found. Please validate your beta key first.');
     }
-  };
-
   };
 
   const AddItemForm = ({ type, onClose, onAdd }) => {
@@ -76,6 +96,18 @@ const InvestmentsPage = ({ userSession }) => {
     const handleImageUpload = (e) => {
       const file = e.target.files[0];
       if (file) {
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+          alert('Please select a valid image file');
+          return;
+        }
+        
+        // Validate file size (5MB limit)
+        if (file.size > 5 * 1024 * 1024) {
+          alert('Image file size must be less than 5MB');
+          return;
+        }
+
         const reader = new FileReader();
         reader.onload = (e) => {
           setFormData(prev => ({ ...prev, image_url: e.target.result }));
@@ -84,55 +116,87 @@ const InvestmentsPage = ({ userSession }) => {
       }
     };
 
-    const handleSubmit = async () => {
-      if (!formData.name || !formData.buy_price) {
-        alert('Please fill in required fields');
-        return;
+    const validateFormData = () => {
+      if (!formData.name.trim()) {
+        alert('Please enter a name for the item');
+        return false;
       }
-
-      if (!betaUser?.id) {
-        alert('No beta user found');
-        return;
+      
+      if (!formData.buy_price || isNaN(parseFloat(formData.buy_price)) || parseFloat(formData.buy_price) <= 0) {
+        alert('Please enter a valid buy price greater than 0');
+        return false;
       }
-
-      try {
-        setSubmitting(true);
-        const buyPrice = parseFloat(formData.buy_price);
-        
-        if (isNaN(buyPrice) || buyPrice <= 0) {
-          alert('Please enter a valid buy price');
-          return;
-        }
-        
-        const newInvestment = {
-          user_id: betaUser.id,
-          type: type.toLowerCase().slice(0, -1), // Remove 's' and lowercase
-          name: formData.name.trim(),
-          skin_name: formData.skin_name?.trim() || null,
-          condition: formData.condition?.trim() || null,
-          buy_price: buyPrice,
-          current_price: buyPrice * (1 + (Math.random() * 0.4 - 0.2)), // Random current price for demo
-          quantity: Math.max(1, formData.quantity),
-          image_url: formData.image_url || null
-        };
-
-        const { data, error } = await supabase
-          .from('investments')
-          .insert([newInvestment])
-          .select()
-          .single();
-
-        if (error) throw error;
-        
-        setInvestments(prev => [data, ...prev]);
-        onClose();
-      } catch (err) {
-        console.error('Error adding investment:', err);
-        alert('Failed to add investment: ' + err.message);
-      } finally {
-        setSubmitting(false);
+      
+      if (formData.quantity < 1) {
+        alert('Quantity must be at least 1');
+        return false;
       }
+      
+      return true;
     };
+
+const handleSubmit = async () => {
+  if (!validateFormData()) return;
+
+  if (!userSession?.id) {
+    alert('No user session found');
+    return;
+  }
+
+  try {
+    setSubmitting(true);
+    const buyPrice = parseFloat(formData.buy_price);
+    
+    // Generate realistic current price variation (±20%)
+    const priceVariation = (Math.random() * 0.4 - 0.2);
+    const currentPrice = buyPrice * (1 + priceVariation);
+    
+    const newInvestment = {
+      user_id: userSession.id,
+      type: type.toLowerCase().slice(0, -1),
+      name: formData.name.trim(),
+      skin_name: formData.skin_name?.trim() || null,
+      condition: formData.condition?.trim() || null,
+      buy_price: buyPrice,
+      current_price: Math.max(0.01, currentPrice),
+      quantity: Math.max(1, parseInt(formData.quantity)),
+      image_url: formData.image_url || null
+    };
+
+    console.log('Attempting to insert investment:', newInvestment);
+
+    // CRITICAL FIX: Use a transaction to ensure context is maintained
+    const { data: insertData, error: insertError } = await supabase.rpc('insert_investment_with_context', {
+      investment_data: newInvestment,
+      context_user_id: userSession.id
+    });
+
+    if (insertError) {
+      console.error('Insert failed:', insertError);
+      throw insertError;
+    }
+    
+    console.log('Investment inserted successfully:', insertData);
+    setInvestments(prev => [insertData, ...prev]);
+    onClose();
+
+  } catch (err) {
+    console.error('Error adding investment:', err);
+    
+    // Provide more specific error messages
+    if (err.message.includes('row-level security policy')) {
+      alert('Authentication error: Unable to verify your access. Please refresh the page and re-enter your beta key.');
+    } else if (err.message.includes('foreign key')) {
+      alert('User session error: Your user session is invalid. Please refresh the page and re-enter your beta key.');
+    } else if (err.message.includes('context')) {
+      alert('Authentication context error: Please try again or refresh the page.');
+    } else {
+      alert('Failed to add investment: ' + err.message);
+    }
+  } finally {
+    setSubmitting(false);
+  }
+};
 
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
@@ -176,6 +240,7 @@ const InvestmentsPage = ({ userSession }) => {
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
                   required
+                  maxLength={100}
                 />
                 <input
                   type="text"
@@ -183,6 +248,7 @@ const InvestmentsPage = ({ userSession }) => {
                   value={formData.skin_name}
                   onChange={(e) => setFormData(prev => ({ ...prev, skin_name: e.target.value }))}
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
+                  maxLength={100}
                 />
               </>
             ) : (
@@ -196,6 +262,7 @@ const InvestmentsPage = ({ userSession }) => {
                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                     className="w-full pl-10 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
                     required
+                    maxLength={100}
                   />
                 </div>
                 
@@ -206,6 +273,7 @@ const InvestmentsPage = ({ userSession }) => {
                     value={formData.condition}
                     onChange={(e) => setFormData(prev => ({ ...prev, condition: e.target.value }))}
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
+                    maxLength={50}
                   />
                 )}
                 
@@ -223,13 +291,14 @@ const InvestmentsPage = ({ userSession }) => {
                       <input
                         type="number"
                         min="1"
+                        max="9999"
                         value={formData.quantity}
-                        onChange={(e) => setFormData(prev => ({ ...prev, quantity: parseInt(e.target.value) || 1 }))}
+                        onChange={(e) => setFormData(prev => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))}
                         className="w-16 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-white text-center focus:border-orange-500 focus:outline-none"
                       />
                       <button
                         type="button"
-                        onClick={() => setFormData(prev => ({ ...prev, quantity: prev.quantity + 1 }))}
+                        onClick={() => setFormData(prev => ({ ...prev, quantity: Math.min(9999, prev.quantity + 1) }))}
                         className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white"
                       >
                         <Plus className="w-4 h-4" />
@@ -243,6 +312,8 @@ const InvestmentsPage = ({ userSession }) => {
             <input
               type="number"
               step="0.01"
+              min="0.01"
+              max="999999"
               placeholder="Buy Price ($)"
               value={formData.buy_price}
               onChange={(e) => setFormData(prev => ({ ...prev, buy_price: e.target.value }))}
@@ -286,7 +357,7 @@ const InvestmentsPage = ({ userSession }) => {
     const handleSoldPriceUpdate = async () => {
       const price = parseFloat(soldPrice);
       if (!soldPrice || isNaN(price) || price <= 0) {
-        alert('Please enter a valid sold price');
+        alert('Please enter a valid sold price greater than 0');
         return;
       }
       
@@ -295,7 +366,8 @@ const InvestmentsPage = ({ userSession }) => {
         const { error } = await supabase
           .from('investments')
           .update({ sold_price: price })
-          .eq('id', item.id);
+          .eq('id', item.id)
+          .eq('user_id', userSession.id); // Extra security check
 
         if (error) throw error;
         
@@ -317,13 +389,14 @@ const InvestmentsPage = ({ userSession }) => {
     };
 
     const handleQuantityUpdate = async (newQuantity) => {
-      if (newQuantity < 1) return;
+      if (newQuantity < 1 || newQuantity > 9999) return;
       
       try {
         const { error } = await supabase
           .from('investments')
           .update({ quantity: newQuantity })
-          .eq('id', item.id);
+          .eq('id', item.id)
+          .eq('user_id', userSession.id); // Extra security check
 
         if (error) throw error;
         
@@ -342,13 +415,14 @@ const InvestmentsPage = ({ userSession }) => {
     };
 
     const handleDeleteItem = async () => {
-      if (!confirm('Are you sure you want to delete this investment?')) return;
+      if (!confirm('Are you sure you want to delete this investment? This action cannot be undone.')) return;
       
       try {
         const { error } = await supabase
           .from('investments')
           .delete()
-          .eq('id', item.id);
+          .eq('id', item.id)
+          .eq('user_id', userSession.id); // Extra security check
 
         if (error) throw error;
         
@@ -372,12 +446,12 @@ const InvestmentsPage = ({ userSession }) => {
           </div>
           
           <div className="flex-1">
-            <h3 className="font-medium text-white">{item.name}</h3>
+            <h3 className="font-medium text-white truncate">{item.name}</h3>
             {item.skin_name && (
-              <p className="text-sm text-gray-400">{item.skin_name}</p>
+              <p className="text-sm text-gray-400 truncate">{item.skin_name}</p>
             )}
             {item.condition && (
-              <p className="text-xs text-gray-500">{item.condition}</p>
+              <p className="text-xs text-gray-500 truncate">{item.condition}</p>
             )}
             
             <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
@@ -399,14 +473,16 @@ const InvestmentsPage = ({ userSession }) => {
                 <span className="text-gray-400 text-sm">Qty:</span>
                 <button
                   onClick={() => handleQuantityUpdate(item.quantity - 1)}
-                  className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white"
+                  disabled={item.quantity <= 1}
+                  className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Minus className="w-3 h-3" />
                 </button>
                 <span className="text-white text-sm w-8 text-center">{item.quantity}</span>
                 <button
                   onClick={() => handleQuantityUpdate(item.quantity + 1)}
-                  className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white"
+                  disabled={item.quantity >= 9999}
+                  className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-3 h-3" />
                 </button>
@@ -452,6 +528,7 @@ const InvestmentsPage = ({ userSession }) => {
               <input
                 type="number"
                 step="0.01"
+                min="0.01"
                 placeholder="Sold price"
                 value={soldPrice}
                 onChange={(e) => setSoldPrice(e.target.value)}
@@ -466,7 +543,10 @@ const InvestmentsPage = ({ userSession }) => {
                 <span>Save</span>
               </button>
               <button
-                onClick={() => setIsEditing(false)}
+                onClick={() => {
+                  setIsEditing(false);
+                  setSoldPrice(item.sold_price?.toString() || '');
+                }}
                 className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
               >
                 Cancel
@@ -489,9 +569,11 @@ const InvestmentsPage = ({ userSession }) => {
     
     // Filter by search query
     if (searchQuery) {
+      const query = searchQuery.toLowerCase();
       filteredItems = filteredItems.filter(item =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.skin_name && item.skin_name.toLowerCase().includes(searchQuery.toLowerCase()))
+        item.name.toLowerCase().includes(query) ||
+        (item.skin_name && item.skin_name.toLowerCase().includes(query)) ||
+        (item.condition && item.condition.toLowerCase().includes(query))
       );
     }
     
