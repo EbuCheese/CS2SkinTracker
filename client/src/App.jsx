@@ -1,4 +1,3 @@
-// App.js - Updated with revoke functionality
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import './index.css'
@@ -17,6 +16,9 @@ function App() {
     hasStoredBetaKey,
     storedBetaKey,
     isLoading,
+    revocationMessage,
+    isStoredKeyRevoked,
+    clearRevocationMessage,
     loginWithBetaKey,
     quickLogin,
     logout,
@@ -37,15 +39,15 @@ function App() {
         <Routes>
           <Route path="/" element={<Home userSession={userSession} />} />
           <Route path="/investments" element={<InvestmentsPage userSession={userSession} />} />
-          <Route 
-            path="/account" 
+          <Route
+            path="/account"
             element={
-              <AccountPage 
-                userSession={userSession} 
+              <AccountPage
+                userSession={userSession}
                 onLogout={logout}
-                onRevoke={revokeBetaKey} // Pass the revoke function
+                onRevoke={revokeBetaKey}
               />
-            } 
+            }
           />
         </Routes>
       </Router>
@@ -53,19 +55,27 @@ function App() {
   }
 
   // Quick login flow - user has stored beta key but no active session
+  // Only show if we actually have a stored key (not just a revocation message)
   if (hasStoredBetaKey) {
     return (
       <QuickLogin
         onQuickLogin={quickLogin}
         onNewBetaKey={clearStoredBetaKey}
         storedBetaKey={storedBetaKey}
+        revocationMessage={revocationMessage}
+        isStoredKeyRevoked={isStoredKeyRevoked}
+        onClearRevocationMessage={clearRevocationMessage}
       />
     );
   }
 
-  // Initial beta key entry
+  // Initial beta key entry (including when showing revocation messages without stored keys)
   return (
-    <BetaKeyEntry onSuccess={loginWithBetaKey} />
+    <BetaKeyEntry
+      onSuccess={loginWithBetaKey}
+      revocationMessage={revocationMessage}
+      onClearRevocationMessage={clearRevocationMessage}
+    />
   );
 }
 

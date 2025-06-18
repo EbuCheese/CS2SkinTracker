@@ -1,4 +1,4 @@
-// hooks/useAuth.js - Updated with revoke functionality
+// hooks/useAuth.js - Streamlined revocation logic
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 
@@ -14,25 +14,65 @@ export const useAuth = () => {
   const [storedBetaKey, setStoredBetaKey] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Simplified: Just track the revocation message
+  const [revocationMessage, setRevocationMessage] = useState(null);
+
+  // Helper function to set revocation message
+  const setRevocationAlert = useCallback((type, title, message) => {
+    setRevocationMessage({ type, title, message });
+  }, []);
+
+  // Simplified: Clear revocation message AND remove stored key if revoked
+  const clearRevocationMessage = useCallback(() => {
+    const wasRevoked = revocationMessage?.type === 'revoked';
+    setRevocationMessage(null);
+    
+    // If this was a revocation message, also clear the stored key
+    if (wasRevoked) {
+      localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
+      setStoredBetaKey(null);
+      setHasStoredBetaKey(false);
+    }
+  }, [revocationMessage]);
+
+  // Simplified: Handle revoked key - just clear everything and show message
+  const handleRevokedKey = useCallback((title, message) => {
+    console.log('🚫 Handling revoked key cleanup');
+    
+    // Clear all stored data
+    localStorage.removeItem(STORAGE_KEYS.USER_SESSION);
+    localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
+    
+    // Update state
+    setUserSession(null);
+    setHasValidBetaKey(false);
+    setStoredBetaKey(null);
+    setHasStoredBetaKey(false);
+    
+    // Set revocation message
+    setRevocationAlert('revoked', title, message);
+  }, [setRevocationAlert]);
+
+  // Check if current stored key is revoked
+  const isStoredKeyRevoked = revocationMessage?.type === 'revoked';
 
   // Debug: Check table structure using direct table queries
   const checkTableStructure = useCallback(async () => {
     try {
       console.log('🔍 Checking table structures...');
       
-      // Check beta_keys structure by trying to select columns
       const { data: betaKeysTest, error: betaKeysError } = await supabase
         .from('beta_keys')
         .select('*')
-        .limit(0); // Get no rows, just structure
+        .limit(0);
       
       console.log('📊 beta_keys structure test:', { betaKeysTest, betaKeysError });
       
-      // Check beta_users structure
       const { data: betaUsersTest, error: betaUsersError } = await supabase
         .from('beta_users')
         .select('*')
-        .limit(0); // Get no rows, just structure
+        .limit(0);
       
       console.log('📊 beta_users structure test:', { betaUsersTest, betaUsersError });
       
@@ -60,13 +100,12 @@ export const useAuth = () => {
         return data.session;
       }
       
-      // If session is invalid due to revoked key, clear stored data
+      // If session is invalid due to revoked key, handle cleanup
       if (data && !data.valid && data.error === 'Beta key has been revoked') {
-        console.log('🚫 Beta key was revoked, clearing all stored data');
-        localStorage.removeItem(STORAGE_KEYS.USER_SESSION);
-        localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
-        setStoredBetaKey(null);
-        setHasStoredBetaKey(false);
+        handleRevokedKey(
+          'Beta Access Revoked',
+          'Your beta access has been revoked. Please contact support if you believe this is an error.'
+        );
       }
       
       return false;
@@ -74,14 +113,13 @@ export const useAuth = () => {
       console.error('🚨 Exception in validateSession:', err);
       return false;
     }
-  }, []);
+  }, [handleRevokedKey]);
 
   // Initialize auth state
   useEffect(() => {
     const initializeAuth = async () => {
       console.log('🚀 Initializing auth...');
       
-      // Check table structure for debugging
       await checkTableStructure();
       
       try {
@@ -95,7 +133,6 @@ export const useAuth = () => {
           const userData = JSON.parse(storedUser);
           console.log('👤 Parsed user data:', userData);
           
-          // Validate the stored session
           const validSession = await validateSession(userData.session_id);
           
           if (validSession) {
@@ -107,9 +144,10 @@ export const useAuth = () => {
               setHasStoredBetaKey(true);
             }
           } else {
-            console.log('❌ Session is no longer valid, clearing');
-            localStorage.removeItem(STORAGE_KEYS.USER_SESSION);
-            if (storedKey) {
+            console.log('❌ Session is no longer valid');
+            // Only set stored key if validation didn't fail due to revocation
+            // (if it was revoked, handleRevokedKey would have cleared everything)
+            if (storedKey && !revocationMessage) {
               setStoredBetaKey(storedKey);
               setHasStoredBetaKey(true);
             }
@@ -132,15 +170,17 @@ export const useAuth = () => {
     };
 
     initializeAuth();
-  }, [checkTableStructure, validateSession]);
+  }, [checkTableStructure, validateSession, revocationMessage]);
 
-  // Login with beta key - updated to handle revoked keys
+  // Login with beta key
   const loginWithBetaKey = useCallback(async (betaKey) => {
     console.log('🔐 Attempting login with beta key:', betaKey.substring(0, 4) + '...');
     setError(null);
+    
+    // Clear any existing revocation message
+    setRevocationMessage(null);
 
     try {
-      // Try to create a new session with the beta key
       const { data, error } = await supabase
         .rpc('create_beta_session', { input_key_value: betaKey });
       
@@ -155,13 +195,11 @@ export const useAuth = () => {
         console.log('✅ Login succeeded!');
         const sessionData = data.session;
         
-        // Update state
         setUserSession(sessionData);
         setHasValidBetaKey(true);
         setStoredBetaKey(betaKey);
         setHasStoredBetaKey(true);
 
-        // Persist to storage
         localStorage.setItem(STORAGE_KEYS.USER_SESSION, JSON.stringify(sessionData));
         localStorage.setItem(STORAGE_KEYS.BETA_KEY, betaKey);
 
@@ -169,11 +207,11 @@ export const useAuth = () => {
       } else {
         console.log('❌ Login failed:', data?.error);
         
-        // If the key is revoked, clear any stored version
         if (data?.error === 'Beta key has been revoked') {
-          localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
-          setStoredBetaKey(null);
-          setHasStoredBetaKey(false);
+          handleRevokedKey(
+            'Beta Key Revoked',
+            'This beta key has been revoked and is no longer valid. Please contact support or request a new beta key.'
+          );
         }
         
         return { success: false, error: data?.error || 'Unknown error' };
@@ -182,13 +220,13 @@ export const useAuth = () => {
       console.error('🚨 Login error:', error);
       return { success: false, error: error.message };
     }
-  }, []);
+  }, [handleRevokedKey]);
 
-  // Quick login with stored beta key - updated to handle revoked keys
+  // Quick login with stored beta key
   const quickLogin = useCallback(async () => {
-    if (!storedBetaKey) {
-      console.log('❌ No stored beta key for quick login');
-      return { success: false, error: 'No stored beta key' };
+    if (!storedBetaKey || isStoredKeyRevoked) {
+      console.log('❌ No stored beta key or key is revoked for quick login');
+      return { success: false, error: isStoredKeyRevoked ? 'Beta key has been revoked' : 'No stored beta key' };
     }
 
     console.log('⚡ Quick login with stored key');
@@ -208,25 +246,20 @@ export const useAuth = () => {
         console.log('✅ Quick login succeeded!');
         const sessionData = data.session;
         
-        // Update state
         setUserSession(sessionData);
         setHasValidBetaKey(true);
 
-        // Persist to storage
         localStorage.setItem(STORAGE_KEYS.USER_SESSION, JSON.stringify(sessionData));
 
         return { success: true };
       } else {
         console.log('❌ Quick login failed:', data?.error);
         
-        // If the key is revoked, clear stored data
         if (data?.error === 'Beta key has been revoked') {
-          localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
-          localStorage.removeItem(STORAGE_KEYS.USER_SESSION);
-          setStoredBetaKey(null);
-          setHasStoredBetaKey(false);
-          setUserSession(null);
-          setHasValidBetaKey(false);
+          handleRevokedKey(
+            'Beta Access Revoked',
+            'Your beta access has been revoked. Please contact support if you believe this is an error, or request a new beta key.'
+          );
         }
         
         return { success: false, error: data?.error || 'Unknown error' };
@@ -235,9 +268,9 @@ export const useAuth = () => {
       console.error('🚨 Quick login error:', error);
       return { success: false, error: error.message };
     }
-  }, [storedBetaKey]);
+  }, [storedBetaKey, isStoredKeyRevoked, handleRevokedKey]);
 
-  // Revoke beta key - new function
+  // Revoke beta key
   const revokeBetaKey = useCallback(async () => {
     if (!storedBetaKey) {
       console.log('❌ No stored beta key to revoke');
@@ -260,13 +293,10 @@ export const useAuth = () => {
       if (data && data.success) {
         console.log('✅ Beta key revoked successfully');
         
-        // Clear all local state and storage
-        localStorage.removeItem(STORAGE_KEYS.USER_SESSION);
-        localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
-        setUserSession(null);
-        setHasValidBetaKey(false);
-        setStoredBetaKey(null);
-        setHasStoredBetaKey(false);
+        handleRevokedKey(
+          'Beta Key Revoked',
+          'Your beta key has been successfully revoked. You have been logged out.'
+        );
 
         return { success: true };
       } else {
@@ -277,7 +307,7 @@ export const useAuth = () => {
       console.error('🚨 Revoke error:', error);
       return { success: false, error: error.message };
     }
-  }, [storedBetaKey]);
+  }, [storedBetaKey, handleRevokedKey]);
 
   // Logout
   const logout = useCallback((clearBetaKey = false) => {
@@ -286,6 +316,7 @@ export const useAuth = () => {
     localStorage.removeItem(STORAGE_KEYS.USER_SESSION);
     setUserSession(null);
     setHasValidBetaKey(false);
+    setRevocationMessage(null);
 
     if (clearBetaKey) {
       localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
@@ -300,6 +331,7 @@ export const useAuth = () => {
     localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
     setStoredBetaKey(null);
     setHasStoredBetaKey(false);
+    setRevocationMessage(null);
   }, []);
 
   return {
@@ -308,10 +340,13 @@ export const useAuth = () => {
     hasStoredBetaKey,
     storedBetaKey,
     isLoading,
+    revocationMessage,
+    isStoredKeyRevoked,        // Computed from revocationMessage
+    clearRevocationMessage,
     loginWithBetaKey,
     quickLogin,
     logout,
     clearStoredBetaKey,
-    revokeBetaKey // New function for revoking keys
+    revokeBetaKey
   };
 };
