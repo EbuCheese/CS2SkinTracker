@@ -9,6 +9,7 @@ const InvestmentsPage = ({ userSession }) => {
   const [investments, setInvestments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [itemToDelete, setItemToDelete] = useState(null);
 
   const tabs = ['All', 'Liquids', 'Crafts', 'Cases'];
 
@@ -59,6 +60,40 @@ const fetchInvestments = async () => {
     setError('An unexpected error occurred. Please try again.');
   } finally {
     setLoading(false);
+  }
+};
+
+  const handleDeleteItem = async () => {  
+  if (!itemToDelete) return;
+  
+  try {
+    // Use the new context-aware function
+    const { data, error } = await supabase.rpc('delete_investment_with_context', {
+      investment_id: itemToDelete.id,
+      context_user_id: userSession.id
+    });
+
+    if (error) {
+      console.error('Delete failed:', error);
+      throw error;
+    }
+    
+    console.log('Investment deleted successfully');
+    
+    // Update local state
+    setInvestments(prev => prev.filter(inv => inv.id !== itemToDelete.id));
+    setItemToDelete(null); // Clear the item to delete
+  } catch (err) {
+    console.error('Error deleting investment:', err);
+    
+    // Provide more specific error messages
+    if (err.message.includes('Invalid user context')) {
+      alert('Authentication error: Please refresh the page and re-enter your beta key.');
+    } else if (err.message.includes('not found or access denied')) {
+      alert('Access denied: You can only delete your own investments.');
+    } else {
+      alert('Failed to delete investment: ' + err.message);
+    }
   }
 };
 
@@ -338,6 +373,7 @@ const handleSubmit = async () => {
             </button>
           </div>
         </div>
+        
       </div>
     );
   };
@@ -363,15 +399,22 @@ const handleSubmit = async () => {
       
       try {
         setUpdating(true);
-        const { error } = await supabase
-          .from('investments')
-          .update({ sold_price: price })
-          .eq('id', item.id)
-          .eq('user_id', userSession.id); // Extra security check
-
-        if (error) throw error;
         
-        // Update local state
+        // Use the new context-aware function
+        const { data, error } = await supabase.rpc('update_investment_with_context', {
+          investment_id: item.id,
+          investment_data: { sold_price: price },
+          context_user_id: userSession.id
+        });
+
+        if (error) {
+          console.error('Update failed:', error);
+          throw error;
+        }
+        
+        console.log('Investment updated successfully:', data);
+        
+        // Update local state with the returned data
         setInvestments(prev => 
           prev.map(inv => 
             inv.id === item.id 
@@ -382,57 +425,60 @@ const handleSubmit = async () => {
         setIsEditing(false);
       } catch (err) {
         console.error('Error updating sold price:', err);
-        alert('Failed to update sold price: ' + err.message);
+        
+        // Provide more specific error messages
+        if (err.message.includes('Invalid user context')) {
+          alert('Authentication error: Please refresh the page and re-enter your beta key.');
+        } else if (err.message.includes('not found or access denied')) {
+          alert('Access denied: You can only update your own investments.');
+        } else {
+          alert('Failed to update sold price: ' + err.message);
+        }
       } finally {
         setUpdating(false);
       }
-    };
+};
 
     const handleQuantityUpdate = async (newQuantity) => {
-      if (newQuantity < 1 || newQuantity > 9999) return;
-      
-      try {
-        const { error } = await supabase
-          .from('investments')
-          .update({ quantity: newQuantity })
-          .eq('id', item.id)
-          .eq('user_id', userSession.id); // Extra security check
+  if (newQuantity < 1 || newQuantity > 9999) return;
+  
+  try {
+    // Use the new context-aware function
+    const { data, error } = await supabase.rpc('update_investment_with_context', {
+      investment_id: item.id,
+      investment_data: { quantity: newQuantity },
+      context_user_id: userSession.id
+    });
 
-        if (error) throw error;
-        
-        // Update local state
-        setInvestments(prev => 
-          prev.map(inv => 
-            inv.id === item.id 
-              ? { ...inv, quantity: newQuantity }
-              : inv
-          )
-        );
-      } catch (err) {
-        console.error('Error updating quantity:', err);
-        alert('Failed to update quantity: ' + err.message);
-      }
-    };
+    if (error) {
+      console.error('Update failed:', error);
+      throw error;
+    }
+    
+    console.log('Investment quantity updated successfully:', data);
+    
+    // Update local state
+    setInvestments(prev => 
+      prev.map(inv => 
+        inv.id === item.id 
+          ? { ...inv, quantity: newQuantity }
+          : inv
+      )
+    );
+  } catch (err) {
+    console.error('Error updating quantity:', err);
+    
+    // Provide more specific error messages
+    if (err.message.includes('Invalid user context')) {
+      alert('Authentication error: Please refresh the page and re-enter your beta key.');
+    } else if (err.message.includes('not found or access denied')) {
+      alert('Access denied: You can only update your own investments.');
+    } else {
+      alert('Failed to update quantity: ' + err.message);
+    }
+  }
+};
 
-    const handleDeleteItem = async () => {
-      if (!confirm('Are you sure you want to delete this investment? This action cannot be undone.')) return;
-      
-      try {
-        const { error } = await supabase
-          .from('investments')
-          .delete()
-          .eq('id', item.id)
-          .eq('user_id', userSession.id); // Extra security check
-
-        if (error) throw error;
-        
-        // Update local state
-        setInvestments(prev => prev.filter(inv => inv.id !== item.id));
-      } catch (err) {
-        console.error('Error deleting investment:', err);
-        alert('Failed to delete investment: ' + err.message);
-      }
-    };
     
     return (
       <div className="bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/30 transition-all duration-200">
@@ -513,11 +559,11 @@ const handleSubmit = async () => {
                 </div>
               )}
               <button
-                onClick={handleDeleteItem}
-                className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded hover:bg-red-500/30 transition-colors block w-full"
-              >
-                Delete
-              </button>
+                  onClick={() => setItemToDelete(item)}
+                  className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded hover:bg-red-500/30 transition-colors block w-full"
+                >
+                  Delete
+            </button>
             </div>
           </div>
         </div>
@@ -746,6 +792,36 @@ const handleSubmit = async () => {
           />
         )}
       </div>
+
+      {itemToDelete && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-gradient-to-br from-gray-900 to-slate-900 p-6 rounded-xl border border-red-500/20 max-w-sm w-full mx-4">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <X className="w-6 h-6 text-red-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">Delete Investment</h3>
+              <p className="text-gray-400 mb-6">
+                Are you sure you want to delete "{itemToDelete.name}"? This action cannot be undone.
+              </p>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setItemToDelete(null)} // Clear the item instead of setting false
+                  className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteItem}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

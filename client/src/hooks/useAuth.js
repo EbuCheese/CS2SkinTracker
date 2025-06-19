@@ -172,55 +172,76 @@ export const useAuth = () => {
     initializeAuth();
   }, [checkTableStructure, validateSession, revocationMessage]);
 
-  // Login with beta key
-  const loginWithBetaKey = useCallback(async (betaKey) => {
-    console.log('🔐 Attempting login with beta key:', betaKey.substring(0, 4) + '...');
-    setError(null);
+const loginWithBetaKey = useCallback(async (betaKey) => {
+  console.log('🔐 Attempting login with beta key:', betaKey.substring(0, 4) + '...');
+  setError(null);
+  
+  // Clear any existing revocation message
+  setRevocationMessage(null);
+
+  try {
+    console.log('📡 Calling create_beta_session function...');
     
-    // Clear any existing revocation message
-    setRevocationMessage(null);
-
-    try {
-      const { data, error } = await supabase
-        .rpc('create_beta_session', { input_key_value: betaKey });
-      
-      console.log('🔑 create_beta_session result:', { data, error });
-      
-      if (error) {
-        console.error('❌ Function error:', error);
-        return { success: false, error: `Database error: ${error.message}` };
-      }
-      
-      if (data && data.success) {
-        console.log('✅ Login succeeded!');
-        const sessionData = data.session;
-        
-        setUserSession(sessionData);
-        setHasValidBetaKey(true);
-        setStoredBetaKey(betaKey);
-        setHasStoredBetaKey(true);
-
-        localStorage.setItem(STORAGE_KEYS.USER_SESSION, JSON.stringify(sessionData));
-        localStorage.setItem(STORAGE_KEYS.BETA_KEY, betaKey);
-
-        return { success: true };
-      } else {
-        console.log('❌ Login failed:', data?.error);
-        
-        if (data?.error === 'Beta key has been revoked') {
-          handleRevokedKey(
-            'Beta Key Revoked',
-            'This beta key has been revoked and is no longer valid. Please contact support or request a new beta key.'
-          );
-        }
-        
-        return { success: false, error: data?.error || 'Unknown error' };
-      }
-    } catch (error) {
-      console.error('🚨 Login error:', error);
-      return { success: false, error: error.message };
+    const { data, error } = await supabase
+      .rpc('create_beta_session', { input_key_value: betaKey });
+    
+    console.log('🔑 create_beta_session raw response:', { 
+      data, 
+      error,
+      dataType: typeof data,
+      errorDetails: error ? {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      } : null
+    });
+    
+    if (error) {
+      console.error('❌ Supabase function error:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      return { 
+        success: false, 
+        error: `Database error: ${error.message}${error.details ? ` (${error.details})` : ''}` 
+      };
     }
-  }, [handleRevokedKey]);
+    
+    if (data && data.success) {
+      console.log('✅ Login succeeded!');
+      const sessionData = data.session;
+      
+      setUserSession(sessionData);
+      setHasValidBetaKey(true);
+      setStoredBetaKey(betaKey);
+      setHasStoredBetaKey(true);
+
+      localStorage.setItem(STORAGE_KEYS.USER_SESSION, JSON.stringify(sessionData));
+      localStorage.setItem(STORAGE_KEYS.BETA_KEY, betaKey);
+
+      return { success: true };
+    } else {
+      console.log('❌ Login failed:', data?.error);
+      console.log('📊 Full response data:', data);
+      
+      if (data?.error === 'Beta key has been revoked') {
+        handleRevokedKey(
+          'Beta Key Revoked',
+          'This beta key has been revoked and is no longer valid. Please contact support or request a new beta key.'
+        );
+      }
+      
+      return { success: false, error: data?.error || 'Unknown error' };
+    }
+  } catch (error) {
+    console.error('🚨 Login exception:', error);
+    console.error('🚨 Error stack:', error.stack);
+    return { success: false, error: `Network error: ${error.message}` };
+  }
+}, [handleRevokedKey]);
 
   // Quick login with stored beta key
   const quickLogin = useCallback(async () => {
