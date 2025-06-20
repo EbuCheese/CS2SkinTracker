@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
-import { User, LogOut, Shield, Calendar, Key, AlertTriangle, X } from 'lucide-react';
+import { User, LogOut, Shield, Calendar, Key, AlertTriangle, X, Eye, EyeOff, Copy, Check } from 'lucide-react';
 
 const AccountPage = ({ userSession, onLogout, onRevoke }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isRevoking, setIsRevoking] = useState(false);
   const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
+  const [showFields, setShowFields] = useState(false);
+  const [copiedField, setCopiedField] = useState(null);
+
+  // Get beta key from localStorage
+  const betaKey = localStorage.getItem('beta_key') || 'N/A';
 
   const handleLogout = async (clearBetaKey = false) => {
     setIsLoggingOut(true);
@@ -42,6 +47,40 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
     setShowRevokeConfirm(false);
   };
 
+  const toggleFieldVisibility = () => {
+    setShowFields(!showFields);
+  };
+
+  const copyToClipboard = async (text, fieldName) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(fieldName);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const maskValue = (value, showFull = false) => {
+    if (!value || value === 'N/A') return 'N/A';
+    if (showFull || showFields) return value;
+    return '••••••••••••••••';
+  };
+
+  const CopyButton = ({ text, fieldName }) => (
+    <button
+      onClick={() => copyToClipboard(text, fieldName)}
+      className="p-1 text-gray-400 hover:text-orange-400 transition-colors duration-200"
+      title="Copy to clipboard"
+    >
+      {copiedField === fieldName ? (
+        <Check className="w-4 h-4 text-green-400" />
+      ) : (
+        <Copy className="w-4 h-4" />
+      )}
+    </button>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -58,51 +97,75 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
 
         {/* Account Info Card */}
         <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 p-6 mb-6 shadow-xl">
-          <div className="flex items-center space-x-3 mb-6">
-            <Shield className="w-6 h-6 text-orange-500" />
-            <h2 className="text-xl font-semibold text-white">Beta Account Information</h2>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-3">
+              <Shield className="w-6 h-6 text-orange-500" />
+              <h2 className="text-xl font-semibold text-white">Beta Account Information</h2>
+            </div>
+            <button
+              onClick={toggleFieldVisibility}
+              className="p-2 text-gray-400 hover:text-orange-400 transition-colors duration-200 rounded-lg hover:bg-gray-700/30"
+              title={showFields ? "Hide fields" : "Show fields"}
+            >
+              {showFields ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+            </button>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div className="flex items-center space-x-3 p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
-                <Key className="w-5 h-5 text-orange-400" />
-                <div>
-                  <p className="text-sm text-gray-400">User ID</p>
-                  <p className="text-white font-medium">{userSession?.id || 'N/A'}</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center space-x-3 p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+          <div className="space-y-4">
+            {/* Session ID - Top Left */}
+            <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+              <div className="flex items-center space-x-3">
                 <Calendar className="w-5 h-5 text-orange-400" />
                 <div>
                   <p className="text-sm text-gray-400">Session ID</p>
                   <p className="text-white font-medium font-mono text-sm">
-                    {userSession?.session_id ? 
-                      `${userSession.session_id.substring(0, 8)}...` : 
-                      'N/A'
-                    }
+                    {maskValue(userSession?.session_id)}
                   </p>
                 </div>
               </div>
+              <CopyButton text={userSession?.session_id || ''} fieldName="session_id" />
             </div>
             
-            <div className="space-y-4">
-              <div className="flex items-center space-x-3 p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+            {/* User ID - Below Session ID */}
+            <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+              <div className="flex items-center space-x-3">
+                <User className="w-5 h-5 text-blue-400" />
+                <div>
+                  <p className="text-sm text-gray-400">User ID</p>
+                  <p className="text-white font-medium font-mono text-sm">
+                    {maskValue(userSession?.id)}
+                  </p>
+                </div>
+              </div>
+              <CopyButton text={userSession?.id || ''} fieldName="user_id" />
+            </div>
+            
+            {/* Beta Key - Replacing Beta Active */}
+            <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+              <div className="flex items-center space-x-3">
                 <Shield className="w-5 h-5 text-green-400" />
                 <div>
-                  <p className="text-sm text-gray-400">Account Status</p>
-                  <p className="text-green-400 font-medium">Beta Access Active</p>
+                  <p className="text-sm text-gray-400">Beta Key</p>
+                  <p className="text-white font-medium font-mono text-sm">
+                    {maskValue(betaKey)}
+                  </p>
                 </div>
               </div>
-              
-              <div className="flex items-center space-x-3 p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
-                <Key className="w-5 h-5 text-orange-400" />
+              <CopyButton text={betaKey} fieldName="beta_key" />
+            </div>
+            
+            {/* Beta Key ID - Below Beta Key */}
+            <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+              <div className="flex items-center space-x-3">
+                <Key className="w-5 h-5 text-purple-400" />
                 <div>
                   <p className="text-sm text-gray-400">Beta Key ID</p>
-                  <p className="text-white font-medium">{userSession?.beta_key_id || 'N/A'}</p>
+                  <p className="text-white font-medium font-mono text-sm">
+                    {maskValue(userSession?.beta_key_id)}
+                  </p>
                 </div>
               </div>
+              <CopyButton text={userSession?.beta_key_id || ''} fieldName="beta_key_id" />
             </div>
           </div>
         </div>
