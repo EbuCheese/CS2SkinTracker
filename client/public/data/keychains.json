@@ -1,0 +1,240 @@
+[
+    {
+        "id": "keychain-1",
+        "name": "Charm | Lil' Ava",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_ava_png.png",
+        "rarity": "High Grade",
+        "rarityColor": "#4b69ff"
+    },
+    {
+        "id": "keychain-2",
+        "name": "Charm | That's Bananas",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_banana_png.png",
+        "rarity": "Remarkable",
+        "rarityColor": "#8847ff"
+    },
+    {
+        "id": "keychain-3",
+        "name": "Charm | Lil' Whiskers",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_cat_png.png",
+        "rarity": "Remarkable",
+        "rarityColor": "#8847ff"
+    },
+    {
+        "id": "keychain-4",
+        "name": "Charm | Lil' Sandy",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_catbeach_png.png",
+        "rarity": "Remarkable",
+        "rarityColor": "#8847ff"
+    },
+    {
+        "id": "keychain-5",
+        "name": "Charm | Chicken Lil'",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_chicken_png.png",
+        "rarity": "Remarkable",
+        "rarityColor": "#8847ff"
+    },
+    {
+        "id": "keychain-6",
+        "name": "Charm | Lil' Crass",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_guerilla_png.png",
+        "rarity": "High Grade",
+        "rarityColor": "#4b69ff"
+    },
+    {
+        "id": "keychain-7",
+        "name": "Charm | Hot Howl",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_howl_png.png",
+        "rarity": "Extraordinary",
+        "rarityColor": "#eb4b4b"
+    },
+    {
+        "id": "keychain-8",
+        "name": "Charm | Big Kev",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_kev_png.png",
+        "rarity": "High Grade",
+        "rarityColor": "#4b69ff"
+    },
+    {
+        "id": "keychain-9",
+        "name": "Charm | Lil' Monster",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_monster_png.png",
+        "rarity": "Exotic",
+        "rarityColor": "#d32ce6"
+    },
+    {
+        "id": "keychain-10",
+        "name": "Charm | Hot Sauce",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_sam_catchup_png.png",
+        "rarity": "High Grade",
+        "rarityColor": "#4b69ff"
+    },
+    {
+        "id": "keychain-11",
+        "name": "Charm | Diamond Dog",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_sam_diamond_png.png",
+        "rarity": "Exotic",
+        "rarityColor": "#d32ce6"
+    },
+    {
+        "id": "keychain-12",
+        "name": "Charm | Pinch O' Salt",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_sam_salty_png.png",
+        "rarity": "High Grade",
+        "rarityColor": "#4b69ff"
+    },
+    {
+        "id": "keychain-13",
+        "name": "Charm | Diner Dog",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_sam_shape_png.png",
+        "rarity": "Exotic",
+        "rarityColor": "#d32ce6"
+    },
+    {
+        "id": "keychain-14",
+        "name": "Charm | Lil' Teacup",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_sam_toile_png.png",
+        "rarity": "Remarkable",
+        "rarityColor": "#8847ff"
+    },
+    {
+        "id": "keychain-15",
+        "name": "Charm | Lil' SAS",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_sas_png.png",
+        "rarity": "High Grade",
+        "rarityColor": "#4b69ff"
+    },
+    {
+        "id": "keychain-16",
+        "name": "Charm | Hot Wurst",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_wurst_png.png",
+        "rarity": "Extraordinary",
+        "rarityColor": "#eb4b4b"
+    },
+    {
+        "id": "keychain-17",
+        "name": "Charm | Baby's AK",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_ak_base_png.png",
+        "rarity": "High Grade",
+        "rarityColor": "#4b69ff"
+    },
+    {
+        "id": "keychain-18",
+        "name": "Charm | Die-cast AK",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_ak_jelly_png.png",
+        "rarity": "Remarkable",
+        "rarityColor": "#8847ff"
+    },
+    {
+        "id": "keychain-19",
+        "name": "Charm | Pocket AWP",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_awp_plastic_png.png",
+        "rarity": "High Grade",
+        "rarityColor": "#4b69ff"
+    },
+    {
+        "id": "keychain-20",
+        "name": "Charm | Titeenium AWP",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_awp_spoon_png.png",
+        "rarity": "Exotic",
+        "rarityColor": "#d32ce6"
+    },
+    {
+        "id": "keychain-21",
+        "name": "Charm | Baby Karat CT",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_ctknife_gold_png.png",
+        "rarity": "Extraordinary",
+        "rarityColor": "#eb4b4b"
+    },
+    {
+        "id": "keychain-22",
+        "name": "Charm | Whittle Knife",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_ctknife_wood_png.png",
+        "rarity": "High Grade",
+        "rarityColor": "#4b69ff"
+    },
+    {
+        "id": "keychain-23",
+        "name": "Charm | POP Art",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_m4a1s_comic_png.png",
+        "rarity": "Remarkable",
+        "rarityColor": "#8847ff"
+    },
+    {
+        "id": "keychain-24",
+        "name": "Charm | Lil' Squirt",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_m4a1s_ss_png.png",
+        "rarity": "Exotic",
+        "rarityColor": "#d32ce6"
+    },
+    {
+        "id": "keychain-25",
+        "name": "Charm | Disco MAC",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_mac10_glitter_png.png",
+        "rarity": "Remarkable",
+        "rarityColor": "#8847ff"
+    },
+    {
+        "id": "keychain-26",
+        "name": "Charm | Backsplash",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_mac10_tile_png.png",
+        "rarity": "High Grade",
+        "rarityColor": "#4b69ff"
+    },
+    {
+        "id": "keychain-27",
+        "name": "Charm | Lil' Cap Gun",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_tec9_cap_png.png",
+        "rarity": "High Grade",
+        "rarityColor": "#4b69ff"
+    },
+    {
+        "id": "keychain-28",
+        "name": "Charm | Hot Hands",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_tec9_magma_png.png",
+        "rarity": "Remarkable",
+        "rarityColor": "#8847ff"
+    },
+    {
+        "id": "keychain-29",
+        "name": "Charm | Semi-Precious",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_tknife_crystal_png.png",
+        "rarity": "Exotic",
+        "rarityColor": "#d32ce6"
+    },
+    {
+        "id": "keychain-30",
+        "name": "Charm | Baby Karat T",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_tknife_gold_png.png",
+        "rarity": "Extraordinary",
+        "rarityColor": "#eb4b4b"
+    },
+    {
+        "id": "keychain-31",
+        "name": "Charm | Glamour Shot",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_usp_jewel_png.png",
+        "rarity": "Remarkable",
+        "rarityColor": "#8847ff"
+    },
+    {
+        "id": "keychain-32",
+        "name": "Charm | Stitch-Loaded",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/weapon_1/kc_wpn_usp_yarn_png.png",
+        "rarity": "High Grade",
+        "rarityColor": "#4b69ff"
+    },
+    {
+        "id": "keychain-33",
+        "name": "Charm | Lil' Squatch",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/missinglink/kc_missinglink_bigfoot_png.png",
+        "rarity": "Remarkable",
+        "rarityColor": "#8847ff"
+    },
+    {
+        "id": "keychain-36",
+        "name": "Charm | Austin 2025 Highlight",
+        "image": "https://raw.githubusercontent.com/ByMykel/counter-strike-image-tracker/main/static/panorama/images/econ/keychains/aus2025/kc_aus2025_png.png",
+        "rarity": "High Grade",
+        "rarityColor": "#4b69ff"
+    }
+]

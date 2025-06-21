@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Plus, Upload, X, Minus, Edit3, DollarSign, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import CSItemSearch from '../components/CSItemSearch';
 
 const InvestmentsPage = ({ userSession }) => {
   const [activeTab, setActiveTab] = useState('All');
@@ -288,19 +289,24 @@ const handleSubmit = async () => {
               </>
             ) : (
               <>
-                <div className="relative">
-                  <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder={`Search ${type.toLowerCase()}...`}
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full pl-10 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
-                    required
-                    maxLength={100}
-                  />
-                </div>
-                
+                <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Search {type}
+                </label>
+                <CSItemSearch
+                  type={type.toLowerCase()} // This should be 'liquids' or 'cases'
+                  placeholder={`Search ${type.toLowerCase()}...`}
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  onSelect={(item) => setFormData(prev => ({ 
+                    ...prev, 
+                    name: item.name,
+                    image_url: item.image || ''
+                  }))}
+                  className="w-full"
+                />
+              </div>
+                          
                 {type === 'Liquids' && (
                   <input
                     type="text"
