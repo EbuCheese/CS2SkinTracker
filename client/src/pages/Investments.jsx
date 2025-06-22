@@ -235,21 +235,21 @@ const handleSubmit = async () => {
 };
 
     return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-        <div className="bg-gradient-to-br from-gray-900 to-slate-900 p-6 rounded-xl border border-orange-500/20 max-w-md w-full mx-4">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-white">Add {type} Item</h3>
-            <button onClick={onClose} className="text-gray-400 hover:text-white">
-              <X className="w-5 h-5" />
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-gradient-to-br from-gray-900 to-slate-900 p-6 rounded-xl border border-orange-500/20 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-xl font-semibold text-white">Add {type} Item</h3>
+            <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+              <X className="w-6 h-6" />
             </button>
           </div>
           
-          <div className="space-y-4">
+          <div className="space-y-6">
             {type === 'Crafts' ? (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Upload Image</label>
-                  <div className="border-2 border-dashed border-orange-500/30 rounded-lg p-4 text-center hover:border-orange-500/50 transition-colors">
+                  <label className="block text-sm font-medium text-gray-300 mb-3">Upload Image</label>
+                  <div className="border-2 border-dashed border-orange-500/30 rounded-lg p-6 text-center hover:border-orange-500/50 transition-colors">
                     <input
                       type="file"
                       accept="image/*"
@@ -259,75 +259,105 @@ const handleSubmit = async () => {
                     />
                     <label htmlFor="image-upload" className="cursor-pointer flex flex-col items-center">
                       {formData.image_url ? (
-                        <img src={formData.image_url} alt="Preview" className="w-20 h-20 object-cover rounded" />
+                        <img src={formData.image_url} alt="Preview" className="w-24 h-24 object-cover rounded mb-2" />
                       ) : (
                         <>
-                          <Upload className="w-8 h-8 text-orange-500 mb-2" />
+                          <Upload className="w-10 h-10 text-orange-500 mb-3" />
                           <span className="text-sm text-gray-400">Click to upload image</span>
                         </>
                       )}
                     </label>
                   </div>
                 </div>
-                <input
-                  type="text"
-                  placeholder="Custom Name"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
-                  required
-                  maxLength={100}
-                />
-                <input
-                  type="text"
-                  placeholder="Base Skin Name"
-                  value={formData.skin_name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, skin_name: e.target.value }))}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
-                  maxLength={100}
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Custom Name</label>
+                  <input
+                    type="text"
+                    placeholder="Enter custom name"
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors"
+                    required
+                    maxLength={100}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Base Skin Name</label>
+                  <input
+                    type="text"
+                    placeholder="Enter base skin name"
+                    value={formData.skin_name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, skin_name: e.target.value }))}
+                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors"
+                    maxLength={100}
+                  />
+                </div>
               </>
             ) : (
               <>
                 <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Search {type}
-                </label>
-                <CSItemSearch
-                  type={type.toLowerCase()} // This should be 'liquids' or 'cases'
-                  placeholder={`Search ${type.toLowerCase()}...`}
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  onSelect={(item) => setFormData(prev => ({ 
-                    ...prev, 
-                    name: item.name,
-                    image_url: item.image || ''
-                  }))}
-                  className="w-full"
-                />
-              </div>
-                          
-                {type === 'Liquids' && (
-                  <input
-                    type="text"
-                    placeholder="Condition (e.g., Field-Tested)"
-                    value={formData.condition}
-                    onChange={(e) => setFormData(prev => ({ ...prev, condition: e.target.value }))}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
-                    maxLength={50}
+                  <label className="block text-sm font-medium text-gray-300 mb-3">
+                    Search {type}
+                  </label>
+                  {/* Enhanced search with larger view */}
+                  <CSItemSearch
+                    type={type.toLowerCase()} // This should be 'liquids' or 'cases'
+                    placeholder={`Search ${type.toLowerCase()}...`}
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    onSelect={(item) => setFormData(prev => ({ 
+                      ...prev, 
+                      name: item.name,
+                      image_url: item.image || ''
+                    }))}
+                    className="w-full"
+                    showLargeView={true} // Enable larger search results
+                    maxResults={15} // Show more results in modal
                   />
+                </div>
+                
+                {/* Selected item preview */}
+                {formData.image_url && (
+                  <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Selected Item</label>
+                    <div className="flex items-center space-x-3">
+                      <img 
+                        src={formData.image_url} 
+                        alt={formData.name}
+                        className="w-16 h-16 object-contain bg-gray-700 rounded"
+                      />
+                      <div>
+                        <p className="text-white font-medium">{formData.name}</p>
+                        <p className="text-gray-400 text-sm">Ready to add</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                            
+                {type === 'Liquids' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Condition</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., Field-Tested, Factory New"
+                      value={formData.condition}
+                      onChange={(e) => setFormData(prev => ({ ...prev, condition: e.target.value }))}
+                      className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors"
+                      maxLength={50}
+                    />
+                  </div>
                 )}
                 
                 {(type === 'Liquids' || type === 'Cases') && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Quantity</label>
-                    <div className="flex items-center space-x-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-3">Quantity</label>
+                    <div className="flex items-center justify-center space-x-4">
                       <button
                         type="button"
                         onClick={() => setFormData(prev => ({ ...prev, quantity: Math.max(1, prev.quantity - 1) }))}
-                        className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white"
+                        className="w-10 h-10 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors"
                       >
-                        <Minus className="w-4 h-4" />
+                        <Minus className="w-5 h-5" />
                       </button>
                       <input
                         type="number"
@@ -335,51 +365,60 @@ const handleSubmit = async () => {
                         max="9999"
                         value={formData.quantity}
                         onChange={(e) => setFormData(prev => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))}
-                        className="w-16 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-white text-center focus:border-orange-500 focus:outline-none"
+                        className="w-20 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-center focus:border-orange-500 focus:outline-none transition-colors"
                       />
                       <button
                         type="button"
                         onClick={() => setFormData(prev => ({ ...prev, quantity: Math.min(9999, prev.quantity + 1) }))}
-                        className="w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white"
+                        className="w-10 h-10 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors"
                       >
-                        <Plus className="w-4 h-4" />
+                        <Plus className="w-5 h-5" />
                       </button>
                     </div>
+                    <p className="text-gray-400 text-xs text-center mt-2">Current quantity: {formData.quantity}</p>
                   </div>
                 )}
               </>
             )}
             
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              max="999999"
-              placeholder="Buy Price ($)"
-              value={formData.buy_price}
-              onChange={(e) => setFormData(prev => ({ ...prev, buy_price: e.target.value }))}
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
-              required
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Buy Price</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max="999999"
+                  placeholder="0.00"
+                  value={formData.buy_price}
+                  onChange={(e) => setFormData(prev => ({ ...prev, buy_price: e.target.value }))}
+                  className="w-full pl-8 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors"
+                  required
+                />
+              </div>
+            </div>
             
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={submitting}
-              className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-2 rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium disabled:opacity-50 flex items-center justify-center space-x-2"
+              disabled={submitting || !formData.name || !formData.buy_price}
+              className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
             >
               {submitting ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Adding...</span>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Adding Item...</span>
                 </>
               ) : (
-                <span>Add Item</span>
+                <>
+                  <span>Add {type} Item</span>
+                  {formData.quantity > 1 && <span className="text-orange-200">({formData.quantity}x)</span>}
+                </>
               )}
             </button>
           </div>
         </div>
-        
       </div>
     );
   };
