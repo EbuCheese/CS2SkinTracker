@@ -1,5 +1,5 @@
-// CSItemSearch.jsx - Lightweight version with minimal performance impact
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+// CSItemSearch.jsx - Enhanced version with smart image loading
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Search } from 'lucide-react';
 import { debounce } from 'lodash';
 import { useCSData } from '../contexts/CSDataContext';
@@ -12,14 +12,40 @@ const CSItemSearch = ({
   onChange,
   maxResults = 20,
   className = '',
-  disabled = false 
+  disabled = false,
+  showLargeView = false // New prop for larger search results
 }) => {
   const { data, loading: globalLoading, error: globalError, getDataForType } = useCSData();
   const [searchIndex, setSearchIndex] = useState(null);
   const [results, setResults] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
+  const intersectionObserver = useRef(null); // For lazy loading visible images
 
-  // Create search index when data is available
+  // Setup intersection observer for smart image loading
+  useEffect(() => {
+    intersectionObserver.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const img = entry.target;
+            if (img.dataset.src && !img.src) {
+              img.src = img.dataset.src;
+              img.removeAttribute('data-src');
+              intersectionObserver.current?.unobserve(img);
+            }
+          }
+        });
+      },
+      {
+        rootMargin: '50px', // Start loading images 50px before they come into view
+        threshold: 0.1
+      }
+    );
+
+    return () => {
+      intersectionObserver.current?.disconnect();
+    };
+  }, []);
   useEffect(() => {
     const createSearchIndex = () => {
       const typeData = getDataForType(type);
@@ -218,13 +244,17 @@ const CSItemSearch = ({
 
       {/* Search Results Dropdown */}
       {isOpen && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 max-h-80 overflow-y-auto z-50 shadow-xl">
+        <div className={`absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 overflow-y-auto z-50 shadow-xl ${
+          showLargeView ? 'max-h-96' : 'max-h-80'
+        }`}>
           {results.map(item => (
             <OptimizedSearchResultItem
               key={`${item.id}-${item.name}`}
               item={item}
               type={type}
               onClick={() => handleItemSelect(item)}
+              showLargeView={showLargeView}
+              intersectionObserver={intersectionObserver.current}
             />
           ))}
         </div>
@@ -240,8 +270,28 @@ const CSItemSearch = ({
   );
 };
 
-// Optimized SearchResultItem with minimal overhead
-const OptimizedSearchResultItem = React.memo(({ item, type, onClick }) => {
+// Enhanced SearchResultItem with smart image loading
+const OptimizedSearchResultItem = React.memo(({ item, type, onClick, showLargeView = false, intersectionObserver }) => {
+  const [imageLoading, setImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
+  const imgRef = useRef(null);
+
+  // Setup intersection observer for this image
+  useEffect(() => {
+    const imgElement = imgRef.current;
+    if (imgElement && intersectionObserver) {
+      // Set data-src for lazy loading
+      imgElement.dataset.src = item.image;
+      intersectionObserver.observe(imgElement);
+
+      return () => {
+        if (imgElement) {
+          intersectionObserver.unobserve(imgElement);
+        }
+      };
+    }
+  }, [item.image, intersectionObserver]);
+
   const getRarityColor = (rarity, rarityColor) => {
     return rarityColor || '#6B7280';
   };
@@ -263,33 +313,52 @@ const OptimizedSearchResultItem = React.memo(({ item, type, onClick }) => {
   };
 
   const metadata = getMetadataText();
+  const imageSize = showLargeView ? 'w-16 h-16' : 'w-12 h-12';
+  const paddingSize = showLargeView ? 'p-4' : 'p-3';
+
+  const handleImageLoad = () => {
+    setImageLoading(false);
+    setImageError(false);
+  };
+
+  const handleImageError = (e) => {
+    setImageLoading(false);
+    setImageError(true);
+    // Only set fallback once to prevent infinite loops
+    if (!e.target.dataset.fallback) {
+      e.target.dataset.fallback = 'true';
+      e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjMzc0MTUxIi8+CjxwYXRoIGQ9Ik0yNCAzNkMzMC42Mjc0IDM2IDM2IDMwLjYyNzQgMzYgMjRDMzYgMTcuMzcyNiAzMC42Mjc0IDEyIDI0IDEyQzE3LjM3MjYgMTIgMTIgMTcuMzcyNiAxMiAyNEMxMiAzMC42Mjc0IDE3LjM3MjYgMzYgMjQgMzZaIiBzdHJva2U9IiM2QjczODAiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMjQgMjBWMjgiIHN0cm9rZT0iIzZCNzM4MCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4K';
+    }
+  };
 
   return (
     <div 
-      className="flex items-center p-3 hover:bg-gray-700 cursor-pointer transition-colors"
+      className={`flex items-center ${paddingSize} hover:bg-gray-700 cursor-pointer transition-colors`}
       onClick={onClick}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <div className="relative w-12 h-12 mr-3 flex-shrink-0 bg-gray-700 rounded overflow-hidden">
+      <div className={`relative ${imageSize} ${showLargeView ? 'mr-4' : 'mr-3'} flex-shrink-0 bg-gray-700 rounded overflow-hidden`}>
+        {imageLoading && !imageError && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        )}
         <img 
-          src={item.image} 
+          ref={imgRef}
           alt={item.name}
-          className="w-full h-full object-contain"
-          loading="eager"
-          decoding="async"
-          onError={(e) => {
-            // Only set fallback once to prevent infinite loops
-            if (!e.target.dataset.fallback) {
-              e.target.dataset.fallback = 'true';
-              e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjMzc0MTUxIi8+CjxwYXRoIGQ9Ik0yNCAzNkMzMC42Mjc0IDM2IDM2IDMwLjYyNzQgMzYgMjRDMzYgMTcuMzcyNiAzMC42Mjc0IDEyIDI0IDEyQzE3LjM3MjYgMTIgMTIgMTcuMzcyNiAxMiAyNEMxMiAzMC42Mjc0IDE3LjM3MjYgMzYgMjQgMzZaIiBzdHJva2U9IiM2QjczODAiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMjQgMjBWMjgiIHN0cm9rZT0iIzZCNzM4MCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4K';
-            }
-          }}
+          className={`w-full h-full object-contain transition-opacity duration-200 ${
+            imageLoading ? 'opacity-0' : 'opacity-100'
+          }`}
+          onLoad={handleImageLoad}
+          onError={handleImageError}
         />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-white font-medium truncate">{item.name}</p>
+        <p className={`text-white font-medium truncate ${showLargeView ? 'text-base' : 'text-sm'}`}>
+          {item.name}
+        </p>
         {metadata.length > 0 && (
-          <div className="flex items-center space-x-2 text-xs">
+          <div className={`flex items-center space-x-2 ${showLargeView ? 'text-sm mt-1' : 'text-xs'}`}>
             {metadata.map((text, index) => (
               <React.Fragment key={text}>
                 {index > 0 && <span className="text-gray-500">•</span>}
@@ -298,14 +367,18 @@ const OptimizedSearchResultItem = React.memo(({ item, type, onClick }) => {
             ))}
           </div>
         )}
-        <div className="flex items-center gap-1 mt-1">
+        <div className={`flex items-center gap-1 ${showLargeView ? 'mt-2' : 'mt-1'}`}>
           {item.stattrak && (
-            <span className="inline-block text-xs px-1 py-0.5 bg-orange-600 text-white rounded">
+            <span className={`inline-block px-1 py-0.5 bg-orange-600 text-white rounded ${
+              showLargeView ? 'text-xs' : 'text-xs'
+            }`}>
               StatTrak™
             </span>
           )}
           {item.souvenir && (
-            <span className="inline-block text-xs px-1 py-0.5 bg-yellow-600 text-white rounded">
+            <span className={`inline-block px-1 py-0.5 bg-yellow-600 text-white rounded ${
+              showLargeView ? 'text-xs' : 'text-xs'
+            }`}>
               Souvenir
             </span>
           )}
@@ -314,7 +387,9 @@ const OptimizedSearchResultItem = React.memo(({ item, type, onClick }) => {
       {item.rarity && (
         <div className="flex-shrink-0 ml-2">
           <span 
-            className="text-xs px-2 py-1 rounded text-white font-medium"
+            className={`px-2 py-1 rounded text-white font-medium ${
+              showLargeView ? 'text-sm' : 'text-xs'
+            }`}
             style={{ backgroundColor: getRarityColor(item.rarity, item.rarityColor) }}
           >
             {item.rarity}
