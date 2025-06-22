@@ -1,7 +1,8 @@
-// CSItemSearch.jsx - Updated for processed static data
+// CSItemSearch.jsx - Lightweight version with minimal performance impact
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search } from 'lucide-react';
 import { debounce } from 'lodash';
+import { useCSData } from '../contexts/CSDataContext';
 
 const CSItemSearch = ({ 
   type = 'skins', 
@@ -13,129 +14,67 @@ const CSItemSearch = ({
   className = '',
   disabled = false 
 }) => {
+  const { data, loading: globalLoading, error: globalError, getDataForType } = useCSData();
   const [searchIndex, setSearchIndex] = useState(null);
   const [results, setResults] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
-  const [error, setError] = useState(null);
 
-  // Updated endpoints for local static files
-  const endpoints = {
-    skins: '/data/skins.json',
-    liquids: '/data/skins.json', // Liquids = normal skins
-    cases: '/data/cases.json',
-    stickers: '/data/stickers.json',
-    agents: '/data/agents.json',
-    keychains: '/data/keychains.json',
-    graffiti: '/data/graffiti.json',
-    patches: '/data/patches.json'
-  };
-
-  // Load and index data
+  // Create search index when data is available
   useEffect(() => {
-    const initializeSearch = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        
-        const endpoint = endpoints[type] || endpoints.skins;
-        console.log(`Loading ${type} data from:`, endpoint);
-        
-        const response = await fetch(endpoint);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch ${type} data: ${response.status}`);
-        }
-        
-        // Direct JSON parsing - no proxy wrapper needed
-        const fullData = await response.json();
-        console.log(`Loaded ${fullData.length} ${type} items`);
-        
-        // Create search data with enhanced text processing
-        const searchData = fullData.map(item => {
-          const searchText = item.name.toLowerCase()
-            .replace(/[★]/g, 'star') // Convert star symbol to searchable text
-            .replace(/[|]/g, ' ') // Replace pipes with spaces
-            .replace(/[^\w\s\-]/g, ' ') // Replace special chars with spaces
-            .replace(/\s+/g, ' ') // Normalize whitespace
-            .trim();
+    const createSearchIndex = () => {
+      const typeData = getDataForType(type);
+      if (!typeData || typeData.length === 0) return;
 
-          return {
-            ...item, // Keep all the processed fields
-            searchText
-          };
+      console.log(`Creating search index for ${type} with ${typeData.length} items`);
+      
+      // Create search data with enhanced text processing
+      const searchData = typeData.map(item => {
+        const searchText = item.name.toLowerCase()
+          .replace(/[★]/g, 'star')
+          .replace(/[|]/g, ' ')
+          .replace(/[^\w\s\-]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        return { ...item, searchText };
+      });
+
+      // Create comprehensive search index
+      const index = new Map();
+      searchData.forEach((item, idx) => {
+        // Index full name
+        const fullName = item.searchText;
+        if (!index.has(fullName)) index.set(fullName, []);
+        index.get(fullName).push(idx);
+
+        // Index individual words (minimum 2 characters)
+        const words = fullName.split(/[\s\-]+/).filter(w => w.length >= 2);
+        words.forEach(word => {
+          if (!index.has(word)) index.set(word, []);
+          index.get(word).push(idx);
         });
 
-        // Create comprehensive search index
-        const index = new Map();
-        searchData.forEach((item, idx) => {
-          // Index full name
-          const fullName = item.searchText;
-          if (!index.has(fullName)) index.set(fullName, []);
-          index.get(fullName).push(idx);
-
-          // Index individual words (minimum 2 characters)
-          const words = fullName.split(/[\s\-]+/).filter(w => w.length >= 2);
-          words.forEach(word => {
-            if (!index.has(word)) index.set(word, []);
-            index.get(word).push(idx);
-          });
-
-          // Index weapon name if available (for skins)
-          if (item.weapon) {
-            const weaponName = item.weapon.toLowerCase();
-            if (!index.has(weaponName)) index.set(weaponName, []);
-            index.get(weaponName).push(idx);
-          }
-
-          // Index category if available (for skins)
-          if (item.category) {
-            const categoryName = item.category.toLowerCase();
-            if (!index.has(categoryName)) index.set(categoryName, []);
-            index.get(categoryName).push(idx);
-          }
-
-          // Index pattern if available (for skins)
-          if (item.pattern) {
-            const patternName = item.pattern.toLowerCase();
-            if (!index.has(patternName)) index.set(patternName, []);
-            index.get(patternName).push(idx);
-          }
-
-          // Index team if available (for agents)
-          if (item.team) {
-            const teamName = item.team.toLowerCase();
-            if (!index.has(teamName)) index.set(teamName, []);
-            index.get(teamName).push(idx);
-          }
-
-          // Index tournament info if available (for stickers)
-          if (item.tournamentEvent) {
-            const eventName = item.tournamentEvent.toLowerCase();
-            if (!index.has(eventName)) index.set(eventName, []);
-            index.get(eventName).push(idx);
-          }
-          if (item.tournamentTeam) {
-            const teamName = item.tournamentTeam.toLowerCase();
-            if (!index.has(teamName)) index.set(teamName, []);
-            index.get(teamName).push(idx);
+        // Index additional fields based on item type
+        const fieldsToIndex = ['weapon', 'category', 'pattern', 'team', 'tournamentEvent', 'tournamentTeam'];
+        fieldsToIndex.forEach(field => {
+          if (item[field]) {
+            const fieldValue = item[field].toLowerCase();
+            if (!index.has(fieldValue)) index.set(fieldValue, []);
+            index.get(fieldValue).push(idx);
           }
         });
+      });
 
-        setSearchIndex({ index, items: searchData });
-        console.log(`Search index created with ${index.size} entries`);
-        
-      } catch (error) {
-        console.error(`Failed to load ${type} data:`, error);
-        setError(`Failed to load ${type} data. Please try again.`);
-      } finally {
-        setIsLoading(false);
-      }
+      setSearchIndex({ index, items: searchData });
+      console.log(`Search index created with ${index.size} entries`);
     };
 
-    initializeSearch();
-  }, [type]);
+    if (!globalLoading && data) {
+      createSearchIndex();
+    }
+  }, [data, type, globalLoading, getDataForType]);
 
-  // Enhanced search function (same as before)
+  // Enhanced search function
   const performSearch = useCallback((query) => {
     if (!query || !searchIndex || query.length < 2) {
       setResults([]);
@@ -194,7 +133,6 @@ const CSItemSearch = ({
     setIsOpen(searchResults.length > 0);
   }, [searchIndex, maxResults]);
 
-  // Rest of the component logic remains the same...
   const debouncedSearch = useMemo(
     () => debounce(performSearch, 200),
     [performSearch]
@@ -228,22 +166,33 @@ const CSItemSearch = ({
     }
   };
 
-  if (isLoading) {
+  if (globalLoading) {
     return (
       <div className={`relative ${className}`}>
         <div className="flex items-center justify-center p-3 bg-gray-800 rounded-lg">
           <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-500"></div>
-          <span className="ml-2 text-gray-400">Loading {type}...</span>
+          <span className="ml-2 text-gray-400">Loading CS data...</span>
         </div>
       </div>
     );
   }
 
-  if (error) {
+  if (globalError) {
     return (
       <div className={`relative ${className}`}>
         <div className="flex items-center justify-center p-3 bg-red-900/20 border border-red-500/20 rounded-lg">
-          <span className="text-red-400 text-sm">{error}</span>
+          <span className="text-red-400 text-sm">Failed to load CS data</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!searchIndex) {
+    return (
+      <div className={`relative ${className}`}>
+        <div className="flex items-center justify-center p-3 bg-gray-800 rounded-lg">
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-500"></div>
+          <span className="ml-2 text-gray-400">Preparing search...</span>
         </div>
       </div>
     );
@@ -271,7 +220,7 @@ const CSItemSearch = ({
       {isOpen && results.length > 0 && (
         <div className="absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 max-h-80 overflow-y-auto z-50 shadow-xl">
           {results.map(item => (
-            <SearchResultItem
+            <OptimizedSearchResultItem
               key={`${item.id}-${item.name}`}
               item={item}
               type={type}
@@ -291,37 +240,23 @@ const CSItemSearch = ({
   );
 };
 
-// Enhanced SearchResultItem component that handles different item types
-const SearchResultItem = ({ item, type, onClick }) => {
+// Optimized SearchResultItem with minimal overhead
+const OptimizedSearchResultItem = React.memo(({ item, type, onClick }) => {
   const getRarityColor = (rarity, rarityColor) => {
-    return rarityColor || '#6B7280'; // Default gray if no color
+    return rarityColor || '#6B7280';
   };
 
   const getMetadataText = () => {
     switch (type) {
       case 'skins':
-        return [
-          item.weapon,
-          item.category,
-          item.pattern
-        ].filter(Boolean);
-      
+      case 'liquids':
+        return [item.weapon, item.category, item.pattern].filter(Boolean);
       case 'agents':
         return [item.team].filter(Boolean);
-      
       case 'stickers':
-        return [
-          item.tournamentEvent,
-          item.tournamentTeam,
-          item.type
-        ].filter(Boolean);
-      
+        return [item.tournamentEvent, item.tournamentTeam, item.type].filter(Boolean);
       case 'cases':
-        return [
-          item.type,
-          item.firstSaleDate
-        ].filter(Boolean);
-      
+        return [item.type, item.firstSaleDate].filter(Boolean);
       default:
         return [];
     }
@@ -335,14 +270,19 @@ const SearchResultItem = ({ item, type, onClick }) => {
       onClick={onClick}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <div className="relative w-12 h-12 mr-3 flex-shrink-0">
+      <div className="relative w-12 h-12 mr-3 flex-shrink-0 bg-gray-700 rounded overflow-hidden">
         <img 
           src={item.image} 
           alt={item.name}
-          className="w-full h-full object-contain rounded"
-          loading="lazy"
+          className="w-full h-full object-contain"
+          loading="eager"
+          decoding="async"
           onError={(e) => {
-            e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjMzc0MTUxIi8+CjxwYXRoIGQ9Ik0yNCAzNkMzMC42Mjc0IDM2IDM2IDMwLjYyNzQgMzYgMjRDMzYgMTcuMzcyNiAzMC42Mjc0IDEyIDI0IDEyQzE3LjM3MjYgMTIgMTIgMTcuMzcyNiAxMiAyNEMxMiAzMC42Mjc0IDE3LjM3MjYgMzYgMjQgMzZaIiBzdHJva2U9IiM2QjczODAiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMjQgMjBWMjgiIHN0cm9rZT0iIzZCNzM4MCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4K';
+            // Only set fallback once to prevent infinite loops
+            if (!e.target.dataset.fallback) {
+              e.target.dataset.fallback = 'true';
+              e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjMzc0MTUxIi8+CjxwYXRoIGQ9Ik0yNCAzNkMzMC42Mjc0IDM2IDM2IDMwLjYyNzQgMzYgMjRDMzYgMTcuMzcyNiAzMC42Mjc0IDEyIDI0IDEyQzE3LjM3MjYgMTIgMTIgMTcuMzcyNiAxMiAyNEMxMiAzMC42Mjc0IDE3LjM3MjYgMzYgMjQgMzZaIiBzdHJva2U9IiM2QjczODAiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMjQgMjBWMjgiIHN0cm9rZT0iIzZCNzM4MCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4K';
+            }
           }}
         />
       </div>
@@ -358,17 +298,18 @@ const SearchResultItem = ({ item, type, onClick }) => {
             ))}
           </div>
         )}
-        {/* Special badges for certain items */}
-        {item.stattrak && (
-          <span className="inline-block text-xs px-1 py-0.5 bg-orange-600 text-white rounded mr-1 mt-1">
-            StatTrak™
-          </span>
-        )}
-        {item.souvenir && (
-          <span className="inline-block text-xs px-1 py-0.5 bg-yellow-600 text-white rounded mr-1 mt-1">
-            Souvenir
-          </span>
-        )}
+        <div className="flex items-center gap-1 mt-1">
+          {item.stattrak && (
+            <span className="inline-block text-xs px-1 py-0.5 bg-orange-600 text-white rounded">
+              StatTrak™
+            </span>
+          )}
+          {item.souvenir && (
+            <span className="inline-block text-xs px-1 py-0.5 bg-yellow-600 text-white rounded">
+              Souvenir
+            </span>
+          )}
+        </div>
       </div>
       {item.rarity && (
         <div className="flex-shrink-0 ml-2">
@@ -382,6 +323,8 @@ const SearchResultItem = ({ item, type, onClick }) => {
       )}
     </div>
   );
-};
+});
+
+OptimizedSearchResultItem.displayName = 'OptimizedSearchResultItem';
 
 export default CSItemSearch;

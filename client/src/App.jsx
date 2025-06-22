@@ -1,5 +1,7 @@
+// App.js - Updated with CS Data Provider
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
+import { CSDataProvider } from './contexts/CSDataContext';
 import './index.css'
 import Navbar from './components/NavBar'
 import Home from './pages/Home'
@@ -34,28 +36,29 @@ function App() {
   // Main app - user has valid session
   if (hasValidBetaKey) {
     return (
-      <Router>
-        <Navbar userSession={userSession} onLogout={logout} />
-        <Routes>
-          <Route path="/" element={<Home userSession={userSession} />} />
-          <Route path="/investments" element={<InvestmentsPage userSession={userSession} />} />
-          <Route
-            path="/account"
-            element={
-              <AccountPage
-                userSession={userSession}
-                onLogout={logout}
-                onRevoke={revokeBetaKey}
-              />
-            }
-          />
-        </Routes>
-      </Router>
+      <CSDataProvider>
+        <Router>
+          <Navbar userSession={userSession} onLogout={logout} />
+          <Routes>
+            <Route path="/" element={<Home userSession={userSession} />} />
+            <Route path="/investments" element={<InvestmentsPage userSession={userSession} />} />
+            <Route
+              path="/account"
+              element={
+                <AccountPage
+                  userSession={userSession}
+                  onLogout={logout}
+                  onRevoke={revokeBetaKey}
+                />
+              }
+            />
+          </Routes>
+        </Router>
+      </CSDataProvider>
     );
   }
 
   // Quick login flow - user has stored beta key but no active session
-  // Only show if we actually have a stored key (not just a revocation message)
   if (hasStoredBetaKey) {
     return (
       <QuickLogin
@@ -69,7 +72,7 @@ function App() {
     );
   }
 
-  // Initial beta key entry (including when showing revocation messages without stored keys)
+  // Initial beta key entry
   return (
     <BetaKeyEntry
       onSuccess={loginWithBetaKey}
