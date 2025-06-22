@@ -1,4 +1,4 @@
-// CSItemSearch.jsx - Enhanced version with smart image loading
+// CSItemSearch.jsx - Enhanced version with smart image loading and variant handling
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Search } from 'lucide-react';
 import { debounce } from 'lodash';
@@ -19,6 +19,7 @@ const CSItemSearch = ({
   const [searchIndex, setSearchIndex] = useState(null);
   const [results, setResults] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [selectedVariant, setSelectedVariant] = useState({}); // Track selected variant for each item
   const intersectionObserver = useRef(null); // For lazy loading visible images
 
   // Setup intersection observer for smart image loading
@@ -46,6 +47,7 @@ const CSItemSearch = ({
       intersectionObserver.current?.disconnect();
     };
   }, []);
+
   useEffect(() => {
     const createSearchIndex = () => {
       const typeData = getDataForType(type);
@@ -53,8 +55,50 @@ const CSItemSearch = ({
 
       console.log(`Creating search index for ${type} with ${typeData.length} items`);
       
-      // Create search data with enhanced text processing
-      const searchData = typeData.map(item => {
+      // Group items by base name (removing StatTrak™ and Souvenir prefixes)
+      const baseItemsMap = new Map();
+      
+      typeData.forEach(item => {
+        // Create base name by removing StatTrak™ and Souvenir prefixes
+        let baseName = item.name;
+        if (baseName.startsWith('StatTrak™ ')) {
+          baseName = baseName.replace('StatTrak™ ', '');
+        }
+        if (baseName.startsWith('Souvenir ')) {
+          baseName = baseName.replace('Souvenir ', '');
+        }
+        
+        const baseKey = `${baseName}_${item.category || ''}_${item.pattern || ''}`;
+        
+        if (!baseItemsMap.has(baseKey)) {
+          // Create base item with all variants
+          const baseItem = {
+            ...item,
+            name: baseName,
+            baseKey,
+            variants: {
+              normal: !item.stattrak && !item.souvenir ? item : null,
+              stattrak: item.stattrak ? item : null,
+              souvenir: item.souvenir ? item : null
+            }
+          };
+          baseItemsMap.set(baseKey, baseItem);
+        } else {
+          // Add variant to existing base item
+          const existingItem = baseItemsMap.get(baseKey);
+          if (item.stattrak) {
+            existingItem.variants.stattrak = item;
+          } else if (item.souvenir) {
+            existingItem.variants.souvenir = item;
+          } else {
+            existingItem.variants.normal = item;
+          }
+        }
+      });
+
+      // Convert to array and create search data
+      const baseItems = Array.from(baseItemsMap.values());
+      const searchData = baseItems.map(item => {
         const searchText = item.name.toLowerCase()
           .replace(/[★]/g, 'star')
           .replace(/[|]/g, ' ')
@@ -92,7 +136,7 @@ const CSItemSearch = ({
       });
 
       setSearchIndex({ index, items: searchData });
-      console.log(`Search index created with ${index.size} entries`);
+      console.log(`Search index created with ${index.size} entries for ${baseItems.length} base items`);
     };
 
     if (!globalLoading && data) {
@@ -170,11 +214,30 @@ const CSItemSearch = ({
     debouncedSearch(newValue);
   }, [onChange, debouncedSearch]);
 
-  const handleItemSelect = useCallback((item) => {
-    onSelect?.(item);
+  const handleItemSelect = useCallback((item, variant = 'normal') => {
+    // Get the appropriate variant item
+    const selectedItem = item.variants[variant] || item.variants.normal || item;
+    
+    // Add variant info to the selected item for form handling
+    const itemWithVariant = {
+      ...selectedItem,
+      selectedVariant: variant,
+      hasStatTrak: !!item.variants.stattrak,
+      hasSouvenir: !!item.variants.souvenir
+    };
+    
+    onSelect?.(itemWithVariant);
     setIsOpen(false);
     setResults([]);
+    setSelectedVariant({}); // Reset variant selections
   }, [onSelect]);
+
+  const handleVariantChange = useCallback((itemKey, variant) => {
+    setSelectedVariant(prev => ({
+      ...prev,
+      [itemKey]: variant
+    }));
+  }, []);
 
   const handleFocus = () => {
     if (results.length > 0 && value.length >= 2) {
@@ -249,10 +312,12 @@ const CSItemSearch = ({
         }`}>
           {results.map(item => (
             <OptimizedSearchResultItem
-              key={`${item.id}-${item.name}`}
+              key={item.baseKey}
               item={item}
               type={type}
-              onClick={() => handleItemSelect(item)}
+              selectedVariant={selectedVariant[item.baseKey] || 'normal'}
+              onVariantChange={(variant) => handleVariantChange(item.baseKey, variant)}
+              onClick={(variant) => handleItemSelect(item, variant)}
               showLargeView={showLargeView}
               intersectionObserver={intersectionObserver.current}
             />
@@ -270,18 +335,29 @@ const CSItemSearch = ({
   );
 };
 
-// Enhanced SearchResultItem with smart image loading
-const OptimizedSearchResultItem = React.memo(({ item, type, onClick, showLargeView = false, intersectionObserver }) => {
+// Enhanced SearchResultItem with variant selection
+const OptimizedSearchResultItem = React.memo(({ 
+  item, 
+  type, 
+  selectedVariant, 
+  onVariantChange, 
+  onClick, 
+  showLargeView = false, 
+  intersectionObserver 
+}) => {
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
   const imgRef = useRef(null);
+
+  // Get the current variant item for display
+  const currentVariantItem = item.variants[selectedVariant] || item.variants.normal || item;
 
   // Setup intersection observer for this image
   useEffect(() => {
     const imgElement = imgRef.current;
     if (imgElement && intersectionObserver) {
       // Set data-src for lazy loading
-      imgElement.dataset.src = item.image;
+      imgElement.dataset.src = currentVariantItem.image;
       intersectionObserver.observe(imgElement);
 
       return () => {
@@ -290,7 +366,7 @@ const OptimizedSearchResultItem = React.memo(({ item, type, onClick, showLargeVi
         }
       };
     }
-  }, [item.image, intersectionObserver]);
+  }, [currentVariantItem.image, intersectionObserver]);
 
   const getRarityColor = (rarity, rarityColor) => {
     return rarityColor || '#6B7280';
@@ -300,13 +376,13 @@ const OptimizedSearchResultItem = React.memo(({ item, type, onClick, showLargeVi
     switch (type) {
       case 'skins':
       case 'liquids':
-        return [item.weapon, item.category, item.pattern].filter(Boolean);
+        return [currentVariantItem.weapon, currentVariantItem.category, currentVariantItem.pattern].filter(Boolean);
       case 'agents':
-        return [item.team].filter(Boolean);
+        return [currentVariantItem.team].filter(Boolean);
       case 'stickers':
-        return [item.tournamentEvent, item.tournamentTeam, item.type].filter(Boolean);
+        return [currentVariantItem.tournamentEvent, currentVariantItem.tournamentTeam, currentVariantItem.type].filter(Boolean);
       case 'cases':
-        return [item.type, item.firstSaleDate].filter(Boolean);
+        return [currentVariantItem.type, currentVariantItem.firstSaleDate].filter(Boolean);
       default:
         return [];
     }
@@ -331,69 +407,93 @@ const OptimizedSearchResultItem = React.memo(({ item, type, onClick, showLargeVi
     }
   };
 
+  // Get available variants
+  const availableVariants = [];
+  if (item.variants.normal) availableVariants.push('normal');
+  if (item.variants.stattrak) availableVariants.push('stattrak');
+  if (item.variants.souvenir) availableVariants.push('souvenir');
+
+  const handleVariantButtonClick = (e, variant) => {
+    e.stopPropagation();
+    onVariantChange(variant);
+  };
+
+  const handleItemClick = () => {
+    onClick(selectedVariant);
+  };
+
   return (
-    <div 
-      className={`flex items-center ${paddingSize} hover:bg-gray-700 cursor-pointer transition-colors`}
-      onClick={onClick}
-      onMouseDown={(e) => e.preventDefault()}
-    >
-      <div className={`relative ${imageSize} ${showLargeView ? 'mr-4' : 'mr-3'} flex-shrink-0 bg-gray-700 rounded overflow-hidden`}>
-        {imageLoading && !imageError && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        )}
-        <img 
-          ref={imgRef}
-          alt={item.name}
-          className={`w-full h-full object-contain transition-opacity duration-200 ${
-            imageLoading ? 'opacity-0' : 'opacity-100'
-          }`}
-          onLoad={handleImageLoad}
-          onError={handleImageError}
-        />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className={`text-white font-medium truncate ${showLargeView ? 'text-base' : 'text-sm'}`}>
-          {item.name}
-        </p>
-        {metadata.length > 0 && (
-          <div className={`flex items-center space-x-2 ${showLargeView ? 'text-sm mt-1' : 'text-xs'}`}>
-            {metadata.map((text, index) => (
-              <React.Fragment key={text}>
-                {index > 0 && <span className="text-gray-500">•</span>}
-                <span className="text-gray-400">{text}</span>
-              </React.Fragment>
-            ))}
-          </div>
-        )}
-        <div className={`flex items-center gap-1 ${showLargeView ? 'mt-2' : 'mt-1'}`}>
-          {item.stattrak && (
-            <span className={`inline-block px-1 py-0.5 bg-orange-600 text-white rounded ${
-              showLargeView ? 'text-xs' : 'text-xs'
-            }`}>
-              StatTrak™
-            </span>
+    <div className={`${paddingSize} hover:bg-gray-700 cursor-pointer transition-colors border-b border-gray-700 last:border-b-0`}>
+      {/* Main item content */}
+      <div className="flex items-center" onClick={handleItemClick}>
+        <div className={`relative ${imageSize} ${showLargeView ? 'mr-4' : 'mr-3'} flex-shrink-0 bg-gray-700 rounded overflow-hidden`}>
+          {imageLoading && !imageError && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
           )}
-          {item.souvenir && (
-            <span className={`inline-block px-1 py-0.5 bg-yellow-600 text-white rounded ${
-              showLargeView ? 'text-xs' : 'text-xs'
-            }`}>
-              Souvenir
-            </span>
+          <img 
+            ref={imgRef}
+            alt={currentVariantItem.name}
+            className={`w-full h-full object-contain transition-opacity duration-200 ${
+              imageLoading ? 'opacity-0' : 'opacity-100'
+            }`}
+            onLoad={handleImageLoad}
+            onError={handleImageError}
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className={`text-white font-medium truncate ${showLargeView ? 'text-base' : 'text-sm'}`}>
+            {currentVariantItem.name}
+          </p>
+          {metadata.length > 0 && (
+            <div className={`flex items-center space-x-2 ${showLargeView ? 'text-sm mt-1' : 'text-xs'}`}>
+              {metadata.map((text, index) => (
+                <React.Fragment key={text}>
+                  {index > 0 && <span className="text-gray-500">•</span>}
+                  <span className="text-gray-400">{text}</span>
+                </React.Fragment>
+              ))}
+            </div>
           )}
         </div>
+        {currentVariantItem.rarity && (
+          <div className="flex-shrink-0 ml-2">
+            <span 
+              className={`px-2 py-1 rounded text-white font-medium ${
+                showLargeView ? 'text-sm' : 'text-xs'
+              }`}
+              style={{ backgroundColor: getRarityColor(currentVariantItem.rarity, currentVariantItem.rarityColor) }}
+            >
+              {currentVariantItem.rarity}
+            </span>
+          </div>
+        )}
       </div>
-      {item.rarity && (
-        <div className="flex-shrink-0 ml-2">
-          <span 
-            className={`px-2 py-1 rounded text-white font-medium ${
-              showLargeView ? 'text-sm' : 'text-xs'
-            }`}
-            style={{ backgroundColor: getRarityColor(item.rarity, item.rarityColor) }}
-          >
-            {item.rarity}
-          </span>
+
+      {/* Variant selection buttons */}
+      {availableVariants.length > 1 && (
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-600">
+          <span className="text-xs text-gray-400 mr-2">Variant:</span>
+          {availableVariants.map(variant => (
+            <button
+              key={variant}
+              onClick={(e) => handleVariantButtonClick(e, variant)}
+              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                selectedVariant === variant
+                  ? variant === 'stattrak' 
+                    ? 'bg-orange-600 text-white' 
+                    : variant === 'souvenir'
+                    ? 'bg-yellow-600 text-white'
+                    : 'bg-blue-600 text-white'
+                  : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+              }`}
+            >
+              {variant === 'normal' ? 'Normal' : 
+               variant === 'stattrak' ? 'StatTrak™' : 
+               'Souvenir'}
+            </button>
+          ))}
         </div>
       )}
     </div>

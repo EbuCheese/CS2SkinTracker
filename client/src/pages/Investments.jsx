@@ -123,6 +123,7 @@ const retry = () => {
       name: '',
       skin_name: '',
       condition: '',
+      variant: '',
       buy_price: '',
       quantity: 1,
       image_url: ''
@@ -193,6 +194,7 @@ const handleSubmit = async () => {
       name: formData.name.trim(),
       skin_name: formData.skin_name?.trim() || null,
       condition: formData.condition?.trim() || null,
+      variant: formData.variant || formData.selectedVariant || 'normal',
       buy_price: buyPrice,
       current_price: Math.max(0.01, currentPrice),
       quantity: Math.max(1, parseInt(formData.quantity)),
@@ -308,46 +310,149 @@ const handleSubmit = async () => {
                     onSelect={(item) => setFormData(prev => ({ 
                       ...prev, 
                       name: item.name,
-                      image_url: item.image || ''
+                      image_url: item.image || '',
+                      // Store variant information
+                      stattrak: item.stattrak || false,
+                      souvenir: item.souvenir || false,
+                      selectedVariant: item.selectedVariant || 'normal',
+                      hasStatTrak: item.hasStatTrak || false,
+                      hasSouvenir: item.hasSouvenir || false
                     }))}
                     className="w-full"
                     showLargeView={true} // Enable larger search results
                     maxResults={15} // Show more results in modal
                   />
                 </div>
-                
-                {/* Selected item preview */}
+
+                {/* Selected item preview with variant controls */}
                 {formData.image_url && (
                   <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
                     <label className="block text-sm font-medium text-gray-300 mb-2">Selected Item</label>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 mb-3">
                       <img 
                         src={formData.image_url} 
                         alt={formData.name}
                         className="w-16 h-16 object-contain bg-gray-700 rounded"
                       />
-                      <div>
+                      <div className="flex-1">
                         <p className="text-white font-medium">{formData.name}</p>
                         <p className="text-gray-400 text-sm">Ready to add</p>
+                        {/* Show current variant */}
+                        {formData.stattrak && (
+                          <span className="inline-block px-2 py-0.5 bg-orange-600 text-white rounded text-xs mt-1 mr-1">
+                            StatTrak™
+                          </span>
+                        )}
+                        {formData.souvenir && (
+                          <span className="inline-block px-2 py-0.5 bg-yellow-600 text-white rounded text-xs mt-1">
+                            Souvenir
+                          </span>
+                        )}
                       </div>
                     </div>
+                    
+                    {/* Variant toggle controls - only show if variants are available */}
+                    {(formData.hasStatTrak || formData.hasSouvenir) && (
+                      <div className="border-t border-gray-600 pt-3">
+                        <label className="block text-sm font-medium text-gray-300 mb-2">Item Variant</label>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ 
+                              ...prev, 
+                              stattrak: false, 
+                              souvenir: false,
+                              selectedVariant: 'normal',
+                              variant: 'normal'
+                            }))}
+                            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                              !formData.stattrak && !formData.souvenir
+                                ? 'bg-blue-600 text-white' 
+                                : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                            }`}
+                          >
+                            Normal
+                          </button>
+                          
+                          {formData.hasStatTrak && (
+                            <button
+                              type="button"
+                              onClick={() => setFormData(prev => ({ 
+                                ...prev, 
+                                stattrak: true, 
+                                souvenir: false,
+                                selectedVariant: 'stattrak',
+                                variant: 'stattrak'
+                              }))}
+                              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                                formData.stattrak
+                                  ? 'bg-orange-600 text-white' 
+                                  : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                              }`}
+                            >
+                              StatTrak™
+                            </button>
+                          )}
+                          
+                          {formData.hasSouvenir && (
+                            <button
+                              type="button"
+                              onClick={() => setFormData(prev => ({ 
+                                ...prev, 
+                                stattrak: false, 
+                                souvenir: true,
+                                selectedVariant: 'souvenir',
+                                variant: 'souvenir'
+                              }))}
+                              className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                                formData.souvenir
+                                  ? 'bg-yellow-600 text-white' 
+                                  : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                              }`}
+                            >
+                              Souvenir
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-gray-400 text-xs mt-2">
+                          Select the variant you want to add to your inventory
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
                             
                 {type === 'Liquids' && (
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Condition</label>
-                    <input
-                      type="text"
-                      placeholder="e.g., Field-Tested, Factory New"
-                      value={formData.condition}
-                      onChange={(e) => setFormData(prev => ({ ...prev, condition: e.target.value }))}
-                      className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors"
-                      maxLength={50}
-                    />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {[
+                        { short: 'FN', full: 'Factory New' },
+                        { short: 'MW', full: 'Minimal Wear' },
+                        { short: 'FT', full: 'Field-Tested' },
+                        { short: 'WW', full: 'Well-Worn' },
+                        { short: 'BS', full: 'Battle-Scarred' }
+                      ].map(({ short, full }) => (
+                        <button
+                          key={short}
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, condition: full }))}
+                          className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
+                            formData.condition === full
+                              ? 'bg-blue-600 text-white' 
+                              : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                          }`}
+                        >
+                          {short}
+                        </button>
+                      ))}
+                    </div>
+                    {formData.condition && (
+                      <p className="text-gray-400 text-xs mt-2">Selected: {formData.condition}</p>
+                    )}
                   </div>
                 )}
-                
+
                 {(type === 'Liquids' || type === 'Cases') && (
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-3">Quantity</label>
@@ -525,128 +630,173 @@ const handleSubmit = async () => {
 };
 
     
-    return (
-      <div className="bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/30 transition-all duration-200">
-        <div className="flex items-start space-x-4">
-          <div className="w-20 h-16 bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
-            {item.image_url ? (
-              <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="text-gray-400 text-xs text-center">No Image</div>
-            )}
-          </div>
-          
-          <div className="flex-1">
-            <h3 className="font-medium text-white truncate">{item.name}</h3>
-            {item.skin_name && (
-              <p className="text-sm text-gray-400 truncate">{item.skin_name}</p>
-            )}
-            {item.condition && (
-              <p className="text-xs text-gray-500 truncate">{item.condition}</p>
-            )}
-            
-            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="text-gray-400">Buy: </span>
-                <span className="text-white">${item.buy_price.toFixed(2)}</span>
-                {item.quantity > 1 && (
-                  <span className="text-gray-400"> x{item.quantity}</span>
-                )}
-              </div>
-              <div>
-                <span className="text-gray-400">Current: </span>
-                <span className="text-white">${item.current_price.toFixed(2)}</span>
-              </div>
-            </div>
-            
-            {(item.type === 'liquid' || item.type === 'case') && (
-              <div className="mt-2 flex items-center space-x-2">
-                <span className="text-gray-400 text-sm">Qty:</span>
-                <button
-                  onClick={() => handleQuantityUpdate(item.quantity - 1)}
-                  disabled={item.quantity <= 1}
-                  className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Minus className="w-3 h-3" />
-                </button>
-                <span className="text-white text-sm w-8 text-center">{item.quantity}</span>
-                <button
-                  onClick={() => handleQuantityUpdate(item.quantity + 1)}
-                  disabled={item.quantity >= 9999}
-                  className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Plus className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-          
-          <div className="text-right">
-            <div className={`flex items-center space-x-1 ${
-              profitLoss >= 0 ? 'text-green-400' : 'text-red-400'
-            }`}>
-              {profitLoss >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-              <span className="font-medium">${Math.abs(profitLoss).toFixed(2)}</span>
-              <span className="text-xs">({profitPercentage}%)</span>
-            </div>
-            
-            <div className="mt-2 space-y-1">
-              {!item.sold_price ? (
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded hover:bg-orange-500/30 transition-colors block w-full"
-                >
-                  Mark Sold
-                </button>
-              ) : (
-                <div className="text-xs text-gray-400">
-                  Sold: ${item.sold_price.toFixed(2)}
-                </div>
-              )}
-              <button
-                  onClick={() => setItemToDelete(item)}
-                  className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded hover:bg-red-500/30 transition-colors block w-full"
-                >
-                  Delete
-            </button>
-            </div>
-          </div>
-        </div>
+    // Replace the ItemCard component's image and info section with this improved layout:
+
+return (
+  <div className="bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/30 transition-all duration-200">
+    <div className="flex items-start space-x-4">
+      {/* Image Container with Variant Badges */}
+      <div className="relative w-20 h-16 bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+        {item.image_url ? (
+          <img 
+            src={item.image_url} 
+            alt={item.name} 
+            className="w-full h-full object-contain"
+          />
+        ) : (
+          <div className="text-gray-400 text-xs text-center">No Image</div>
+        )}
         
-        {isEditing && (
-          <div className="mt-3 pt-3 border-t border-gray-700">
-            <div className="flex items-center space-x-2">
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                placeholder="Sold price"
-                value={soldPrice}
-                onChange={(e) => setSoldPrice(e.target.value)}
-                className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
-              />
-              <button
-                onClick={handleSoldPriceUpdate}
-                disabled={updating}
-                className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors disabled:opacity-50 flex items-center space-x-1"
-              >
-                {updating ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                <span>Save</span>
-              </button>
-              <button
-                onClick={() => {
-                  setIsEditing(false);
-                  setSoldPrice(item.sold_price?.toString() || '');
-                }}
-                className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
+        {/* Variant badges positioned absolutely over the image */}
+        {item.variant && item.variant !== 'normal' && (
+          <div className="absolute top-0 right-0 flex flex-col gap-0.5">
+            {item.variant === 'stattrak' && (
+              <span className="text-[10px] px-1 py-0.5 rounded-sm bg-orange-500 text-white font-medium shadow-sm">
+                ST
+              </span>
+            )}
+            {item.variant === 'souvenir' && (
+              <span className="text-[10px] px-1 py-0.5 rounded-sm bg-yellow-500 text-white font-medium shadow-sm">
+                SV
+              </span>
+            )}
           </div>
         )}
       </div>
-    );
+      
+      <div className="flex-1 min-w-0"> {/* Added min-w-0 to allow text truncation */}
+        <h3 className="font-medium text-white truncate">{item.name}</h3>
+        {item.skin_name && (
+          <p className="text-sm text-gray-400 truncate">{item.skin_name}</p>
+        )}
+        
+        {/* Condition Display - moved variant badges to image overlay */}
+        <div className="flex items-center space-x-2 mt-1">
+          {item.condition && (
+            <p className="text-xs text-gray-500 truncate">{item.condition}</p>
+          )}
+          
+          {/* Full variant names for better clarity - only show if you want them in addition to badges */}
+          {item.variant && item.variant !== 'normal' && (
+            <div className="flex items-center space-x-1">
+              {item.variant === 'stattrak' && (
+                <span className="text-xs px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                  StatTrak™
+                </span>
+              )}
+              {item.variant === 'souvenir' && (
+                <span className="text-xs px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                  Souvenir
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        
+        <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+          <div>
+            <span className="text-gray-400">Buy: </span>
+            <span className="text-white">${item.buy_price.toFixed(2)}</span>
+            {item.quantity > 1 && (
+              <span className="text-gray-400"> x{item.quantity}</span>
+            )}
+          </div>
+          <div>
+            <span className="text-gray-400">Current: </span>
+            <span className="text-white">${item.current_price.toFixed(2)}</span>
+          </div>
+        </div>
+        
+        {(item.type === 'liquid' || item.type === 'case') && (
+          <div className="mt-2 flex items-center space-x-2">
+            <span className="text-gray-400 text-sm">Qty:</span>
+            <button
+              onClick={() => handleQuantityUpdate(item.quantity - 1)}
+              disabled={item.quantity <= 1}
+              className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Minus className="w-3 h-3" />
+            </button>
+            <span className="text-white text-sm w-8 text-center">{item.quantity}</span>
+            <button
+              onClick={() => handleQuantityUpdate(item.quantity + 1)}
+              disabled={item.quantity >= 9999}
+              className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+      </div>
+      
+      {/* Right side profit/loss and actions remain the same */}
+      <div className="text-right flex-shrink-0">
+        <div className={`flex items-center space-x-1 ${
+          profitLoss >= 0 ? 'text-green-400' : 'text-red-400'
+        }`}>
+          {profitLoss >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+          <span className="font-medium">${Math.abs(profitLoss).toFixed(2)}</span>
+          <span className="text-xs">({profitPercentage}%)</span>
+        </div>
+        
+        <div className="mt-2 space-y-1">
+          {!item.sold_price ? (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded hover:bg-orange-500/30 transition-colors block w-full"
+            >
+              Mark Sold
+            </button>
+          ) : (
+            <div className="text-xs text-gray-400">
+              Sold: ${item.sold_price.toFixed(2)}
+            </div>
+          )}
+          <button
+            onClick={() => setItemToDelete(item)}
+            className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded hover:bg-red-500/30 transition-colors block w-full"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    {/* Editing section remains the same */}
+    {isEditing && (
+      <div className="mt-3 pt-3 border-t border-gray-700">
+        <div className="flex items-center space-x-2">
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            placeholder="Sold price"
+            value={soldPrice}
+            onChange={(e) => setSoldPrice(e.target.value)}
+            className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
+          />
+          <button
+            onClick={handleSoldPriceUpdate}
+            disabled={updating}
+            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors disabled:opacity-50 flex items-center space-x-1"
+          >
+            {updating ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+            <span>Save</span>
+          </button>
+          <button
+            onClick={() => {
+              setIsEditing(false);
+              setSoldPrice(item.sold_price?.toString() || '');
+            }}
+            className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    )}
+  </div>
+);
   };
 
   const getCurrentItems = () => {
