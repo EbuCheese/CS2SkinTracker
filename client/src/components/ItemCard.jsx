@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Minus, Plus, Loader2, Edit2, Save, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
-const ItemCard = ({ item, userSession, onUpdate, onDelete }) => {
+const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingItem, setIsEditingItem] = useState(false);
   const [soldPrice, setSoldPrice] = useState(item.sold_price?.toString() || '');
   const [updating, setUpdating] = useState(false);
+  const [animationClass, setAnimationClass] = useState('');
   
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -15,6 +16,21 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete }) => {
     quantity: item.quantity || 1,
     buy_price: item.buy_price || 0
   });
+
+  // Handle new item animation
+  useEffect(() => {
+    if (isNew) {
+      // Start with the initial state
+      setAnimationClass('animate-slide-in-from-top');
+      
+      // Remove the animation class after animation completes
+      const timer = setTimeout(() => {
+        setAnimationClass('');
+      }, 600); // Match the animation duration
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isNew]);
   
   const profitLoss = item.sold_price ? 
     ((item.sold_price - item.buy_price) * item.quantity) : 
@@ -177,7 +193,7 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete }) => {
   ];
 
   return (
-    <div className="break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/30 transition-all duration-200">
+    <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/30 transition-all duration-200 ${animationClass}`}>
       <div className="flex items-start space-x-4">
         {/* Image Container with Variant Badges */}
         <div className="relative w-20 h-16 bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
