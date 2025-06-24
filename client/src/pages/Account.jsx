@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, LogOut, Shield, Calendar, Key, AlertTriangle, X, Eye, EyeOff, Copy, Check } from 'lucide-react';
+import { User, LogOut, Shield, Calendar, Key, IdCardLanyard, AlertTriangle, X, Eye, EyeOff, Copy, Check } from 'lucide-react';
 
 const AccountPage = ({ userSession, onLogout, onRevoke }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -143,7 +143,7 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
             {/* Beta Key - Replacing Beta Active */}
             <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
               <div className="flex items-center space-x-3">
-                <Shield className="w-5 h-5 text-green-400" />
+                <Key className="w-5 h-5 text-green-400" />
                 <div>
                   <p className="text-sm text-gray-400">Beta Key</p>
                   <p className="text-white font-medium font-mono text-sm">
@@ -157,7 +157,7 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
             {/* Beta Key ID - Below Beta Key */}
             <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
               <div className="flex items-center space-x-3">
-                <Key className="w-5 h-5 text-purple-400" />
+                <IdCardLanyard className="w-5 h-5 text-purple-400" />
                 <div>
                   <p className="text-sm text-gray-400">Beta Key ID</p>
                   <p className="text-white font-medium font-mono text-sm">
