@@ -5,9 +5,14 @@ import { supabase } from '../supabaseClient';
 const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingItem, setIsEditingItem] = useState(false);
-  const [soldPrice, setSoldPrice] = useState(item.sold_price?.toString() || '');
+  const [soldPrice, setSoldPrice] = useState('');
+  const [soldQuantity, setSoldQuantity] = useState(1);
   const [updating, setUpdating] = useState(false);
   const [animationClass, setAnimationClass] = useState('');
+  
+  // Calculate available quantity for selling (total - already sold)
+  const availableQuantity = item.quantity - (item.sold_quantity || 0);
+  const isFullySold = availableQuantity <= 0;
   
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -20,63 +25,124 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
   // Handle new item animation
   useEffect(() => {
     if (isNew) {
-      // Start with the initial state
       setAnimationClass('animate-slide-in-from-top');
-      
-      // Remove the animation class after animation completes
       const timer = setTimeout(() => {
         setAnimationClass('');
-      }, 600); // Match the animation duration
-      
+      }, 600);
       return () => clearTimeout(timer);
     }
   }, [isNew]);
-  
-  const profitLoss = item.sold_price ? 
-    ((item.sold_price - item.buy_price) * item.quantity) : 
-    ((item.current_price - item.buy_price) * item.quantity);
-  
-  const totalBuyPrice = item.buy_price * item.quantity;
-  const profitPercentage = totalBuyPrice > 0 ? ((profitLoss / totalBuyPrice) * 100).toFixed(2) : '0.00';
 
-  const handleSoldPriceUpdate = async () => {
-    const price = parseFloat(soldPrice);
-    if (!soldPrice || isNaN(price) || price <= 0) {
-      alert('Please enter a valid sold price greater than 0');
-      return;
+  // Reset sold quantity when editing starts
+  useEffect(() => {
+    if (isEditing) {
+      setSoldQuantity(Math.min(1, availableQuantity));
+      setSoldPrice('');
     }
+  }, [isEditing, availableQuantity]);
+  
+  // Calculate profit/loss based on sold vs unsold items
+  const soldItems = item.sold_quantity || 0;
+  const soldProfit = soldItems > 0 && item.sold_price ? 
+    (item.sold_price - item.buy_price) * soldItems : 0;
+  
+  const unsoldItems = availableQuantity;
+  const unsoldProfit = unsoldItems > 0 ? 
+    (item.current_price - item.buy_price) * unsoldItems : 0;
+  
+  const totalProfit = soldProfit + unsoldProfit;
+  const totalBuyPrice = item.buy_price * item.quantity;
+  const profitPercentage = totalBuyPrice > 0 ? ((totalProfit / totalBuyPrice) * 100).toFixed(2) : '0.00';
+
+const handlePartialSale = async () => {
+  const price = parseFloat(soldPrice);
+  const quantity = parseInt(soldQuantity);
+  
+  if (!soldPrice || isNaN(price) || price <= 0) {
+    alert('Please enter a valid sold price greater than 0');
+    return;
+  }
+  
+  if (!quantity || quantity < 1 || quantity > availableQuantity) {
+    alert(`Please enter a valid quantity between 1 and ${availableQuantity}`);
+    return;
+  }
+  
+  try {
+    setUpdating(true);
     
-    try {
-      setUpdating(true);
-      
+    // If selling all remaining quantity, just update the existing record
+    if (quantity === availableQuantity) {
       const { data, error } = await supabase.rpc('update_investment_with_context', {
         investment_id: item.id,
-        investment_data: { sold_price: price },
+        investment_data: { 
+          sold_price: price,
+          sold_quantity: (item.sold_quantity || 0) + quantity
+        },
         context_user_id: userSession.id
       });
 
-      if (error) {
-        console.error('Update failed:', error);
-        throw error;
-      }
+      if (error) throw error;
       
-      console.log('Investment updated successfully:', data);
-      onUpdate(item.id, { sold_price: price });
-      setIsEditing(false);
-    } catch (err) {
-      console.error('Error updating sold price:', err);
-      
-      if (err.message.includes('Invalid user context')) {
-        alert('Authentication error: Please refresh the page and re-enter your beta key.');
-      } else if (err.message.includes('not found or access denied')) {
-        alert('Access denied: You can only update your own investments.');
-      } else {
-        alert('Failed to update sold price: ' + err.message);
-      }
-    } finally {
-      setUpdating(false);
+      onUpdate(item.id, { 
+        sold_price: price,
+        sold_quantity: (item.sold_quantity || 0) + quantity
+      });
+    } else {
+      // Split the investment: create new record for sold portion using the stored procedure
+      const newInvestmentData = {
+        user_id: userSession.id,
+        type: item.type,
+        name: item.name,
+        skin_name: item.skin_name,
+        condition: item.condition,
+        buy_price: item.buy_price,
+        current_price: item.current_price,
+        sold_price: price,
+        sold_quantity: quantity,
+        quantity: quantity,
+        image_url: item.image_url,
+        variant: item.variant
+      };
+
+      const { data: newInvestment, error: createError } = await supabase.rpc('insert_investment_with_context', {
+        investment_data: newInvestmentData,
+        context_user_id: userSession.id
+      });
+
+      if (createError) throw createError;
+
+      // Update original record to reduce quantity
+      const { error: updateError } = await supabase.rpc('update_investment_with_context', {
+        investment_id: item.id,
+        investment_data: { 
+          quantity: item.quantity - quantity
+        },
+        context_user_id: userSession.id
+      });
+
+      if (updateError) throw updateError;
+
+      // Update the UI - you might want to handle this differently based on your state management
+      onUpdate(item.id, { quantity: item.quantity - quantity });
+      // You'll need to add the new sold item to your state as well
     }
-  };
+    
+    setIsEditing(false);
+  } catch (err) {
+    console.error('Error processing sale:', err);
+    
+    if (err.message.includes('Invalid user context')) {
+      alert('Authentication error: Please refresh the page and re-enter your beta key.');
+    } else if (err.message.includes('not found or access denied')) {
+      alert('Access denied: You can only update your own investments.');
+    } else {
+      alert('Failed to process sale: ' + err.message);
+    }
+  } finally {
+    setUpdating(false);
+  }
+};
 
   const handleQuantityUpdate = async (newQuantity) => {
     if (newQuantity < 1 || newQuantity > 9999) return;
@@ -88,12 +154,8 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
         context_user_id: userSession.id
       });
 
-      if (error) {
-        console.error('Update failed:', error);
-        throw error;
-      }
+      if (error) throw error;
       
-      console.log('Investment quantity updated successfully:', data);
       onUpdate(item.id, { quantity: newQuantity });
     } catch (err) {
       console.error('Error updating quantity:', err);
@@ -119,7 +181,6 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
         buy_price: parseFloat(editForm.buy_price)
       };
 
-      // Validate form data
       if (updateData.quantity < 1 || updateData.quantity > 9999) {
         alert('Quantity must be between 1 and 9999');
         return;
@@ -136,12 +197,8 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
         context_user_id: userSession.id
       });
 
-      if (error) {
-        console.error('Update failed:', error);
-        throw error;
-      }
+      if (error) throw error;
       
-      console.log('Investment updated successfully:', data);
       onUpdate(item.id, updateData);
       setIsEditingItem(false);
     } catch (err) {
@@ -176,7 +233,6 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
     }));
   };
 
-  // Condition options based on CS:GO wear conditions
   const conditionOptions = [
     { value: '', label: 'Select condition' },
     { value: 'Factory New', label: 'Factory New' },
@@ -193,7 +249,7 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
   ];
 
   return (
-    <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/30 transition-all duration-200 ${animationClass}`}>
+    <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/30 transition-all duration-200 ${animationClass} ${isFullySold ? 'opacity-75' : ''}`}>
       <div className="flex items-start space-x-4">
         {/* Image Container with Variant Badges */}
         <div className="relative w-20 h-16 bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -207,7 +263,6 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
             <div className="text-gray-400 text-xs text-center">No Image</div>
           )}
           
-          {/* Variant badges positioned absolutely over the image */}
           {item.variant && item.variant !== 'normal' && (
             <div className="absolute top-0 right-0 flex flex-col gap-0.5">
               {item.variant === 'stattrak' && (
@@ -220,6 +275,13 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
                   SV
                 </span>
               )}
+            </div>
+          )}
+
+          {/* Sold indicator */}
+          {isFullySold && (
+            <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
+              <span className="text-green-400 text-xs font-medium">SOLD</span>
             </div>
           )}
         </div>
@@ -236,7 +298,6 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
               <p className="text-xs text-gray-500 truncate">{item.condition}</p>
             )}
             
-            {/* Full variant names for better clarity */}
             {item.variant && item.variant !== 'normal' && (
               <div className="flex items-center space-x-1">
                 {item.variant === 'stattrak' && (
@@ -253,7 +314,7 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
             )}
           </div>
           
-          {/* Price Display - Clean columns */}
+          {/* Price Display */}
           <div className="mt-2 text-sm">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -271,10 +332,24 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
               </div>
             </div>
           </div>
+
+          {/* Quantity Display with Sold Status */}
+          <div className="mt-2 text-sm">
+            <div className="flex items-center space-x-2">
+              <span className="text-gray-400">Quantity:</span>
+              <span className="text-white">{availableQuantity}</span>
+              {(item.sold_quantity || 0) > 0 && (
+                <span className="text-green-400">
+                  ({item.sold_quantity} sold)
+                </span>
+              )}
+            </div>
+          </div>
           
-          {(item.type === 'liquid' || item.type === 'case') && !isEditingItem && (
+          {/* Quantity Controls - only show if not fully sold and item supports quantity changes */}
+          {!isFullySold && (item.type === 'liquid' || item.type === 'case') && !isEditingItem && (
             <div className="mt-2 flex items-center space-x-2">
-              <span className="text-gray-400 text-sm">Qty:</span>
+              <span className="text-gray-400 text-sm">Adjust:</span>
               <button
                 onClick={() => handleQuantityUpdate(item.quantity - 1)}
                 disabled={item.quantity <= 1}
@@ -282,7 +357,6 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
               >
                 <Minus className="w-3 h-3" />
               </button>
-              <span className="text-white text-sm w-8 text-center">{item.quantity}</span>
               <button
                 onClick={() => handleQuantityUpdate(item.quantity + 1)}
                 disabled={item.quantity >= 9999}
@@ -294,13 +368,13 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
           )}
         </div>
         
-        {/* Right side profit/loss and actions - Fixed height */}
+        {/* Right side profit/loss and actions */}
         <div className="text-right flex-shrink-0 self-start">
           <div className={`flex items-center space-x-1 ${
-            profitLoss >= 0 ? 'text-green-400' : 'text-red-400'
+            totalProfit >= 0 ? 'text-green-400' : 'text-red-400'
           }`}>
-            {profitLoss >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-            <span className="font-medium">${Math.abs(profitLoss).toFixed(2)}</span>
+            {totalProfit >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+            <span className="font-medium">${Math.abs(totalProfit).toFixed(2)}</span>
             <span className="text-xs">({profitPercentage}%)</span>
           </div>
           
@@ -314,17 +388,17 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
               <span>Edit</span>
             </button>
             
-            {/* Improved Sold Price Display */}
-            {!item.sold_price ? (
+            {/* Sell Button - show different states */}
+            {!isFullySold ? (
               <button
                 onClick={() => setIsEditing(true)}
                 className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded hover:bg-orange-500/30 transition-colors block w-full"
               >
-                Mark Sold
+                {availableQuantity === item.quantity ? 'Mark Sold' : 'Sell More'}
               </button>
             ) : (
               <div className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded border border-green-500/30 text-center">
-                Sold: ${item.sold_price.toFixed(2)}
+                Fully Sold
               </div>
             )}
             
@@ -338,7 +412,7 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
         </div>
       </div>
       
-      {/* Edit Item Form - Fixed width container */}
+      {/* Edit Item Form */}
       {isEditingItem && (
         <div className="mt-4 pt-4 border-t border-gray-600">
           <div className="flex items-center justify-between mb-3">
@@ -351,9 +425,7 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
             </button>
           </div>
           
-          {/* Fixed grid layout to prevent width changes */}
           <div className="grid grid-cols-2 gap-3">
-            {/* Condition */}
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">
                 Condition
@@ -371,7 +443,6 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
               </select>
             </div>
 
-            {/* Variant */}
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">
                 Variant
@@ -389,7 +460,6 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
               </select>
             </div>
 
-            {/* Quantity */}
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">
                 Quantity
@@ -404,7 +474,6 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
               />
             </div>
 
-            {/* Buy Price */}
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">
                 Buy Price ($)
@@ -420,7 +489,6 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
             </div>
           </div>
 
-          {/* Form Actions */}
           <div className="flex items-center justify-end space-x-2 mt-4">
             <button
               onClick={handleEditFormCancel}
@@ -440,37 +508,73 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, isNew = false }) => {
         </div>
       )}
       
-      {/* Mark as Sold section */}
-      {isEditing && (
+      {/* Partial Sale Form */}
+      {isEditing && !isFullySold && (
         <div className="mt-3 pt-3 border-t border-gray-700">
-          <h5 className="text-sm font-medium text-white mb-2">Mark Item as Sold</h5>
-          <div className="flex items-center space-x-2">
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              placeholder="Enter sold price"
-              value={soldPrice}
-              onChange={(e) => setSoldPrice(e.target.value)}
-              className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
-            />
-            <button
-              onClick={handleSoldPriceUpdate}
-              disabled={updating}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors disabled:opacity-50 flex items-center space-x-1"
-            >
-              {updating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-              <span>Save</span>
-            </button>
-            <button
-              onClick={() => {
-                setIsEditing(false);
-                setSoldPrice(item.sold_price?.toString() || '');
-              }}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
-            >
-              Cancel
-            </button>
+          <h5 className="text-sm font-medium text-white mb-2">
+            Sell Items ({availableQuantity} available)
+          </h5>
+          <div className="space-y-3">
+            {/* Quantity to sell */}
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">
+                Quantity to sell
+              </label>
+              <input
+                type="number"
+                min="1"
+                max={availableQuantity}
+                value={soldQuantity}
+                onChange={(e) => setSoldQuantity(Math.min(parseInt(e.target.value) || 1, availableQuantity))}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
+              />
+            </div>
+            
+            {/* Sold price */}
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">
+                Sold price per item ($)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder="Enter sold price per item"
+                value={soldPrice}
+                onChange={(e) => setSoldPrice(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
+              />
+            </div>
+
+            {/* Preview */}
+            {soldPrice && soldQuantity && (
+              <div className="text-xs text-gray-400 bg-gray-700/50 p-2 rounded">
+                Total sale value: ${(parseFloat(soldPrice) * soldQuantity).toFixed(2)}
+                <br />
+                Profit/Loss: ${((parseFloat(soldPrice) - item.buy_price) * soldQuantity).toFixed(2)}
+              </div>
+            )}
+            
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handlePartialSale}
+                disabled={updating}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors disabled:opacity-50 flex items-center space-x-1"
+              >
+                {updating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                <span>Confirm Sale</span>
+              </button>
+              <button
+                onClick={() => {
+                  setIsEditing(false);
+                  setSoldPrice('');
+                  setSoldQuantity(1);
+                }}
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
