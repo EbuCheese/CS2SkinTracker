@@ -9,134 +9,189 @@ const InvestmentsPage = ({ userSession }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [investments, setInvestments] = useState([]);
+  const [soldItems, setSoldItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [newItemIds, setNewItemIds] = useState(new Set());
 
-  const tabs = ['All', 'Liquids', 'Crafts', 'Cases'];
+  const tabs = ['All', 'Liquids', 'Crafts', 'Cases', 'Sold'];
 
-  // Fetch investments from Supabase
+  // Fetch investments and sold items from Supabase
   useEffect(() => {
-  if (!userSession) return; // wait for session to be set
+    if (!userSession) return;
 
-  if (validateUserSession(userSession)) {
-    fetchInvestments();
-  } else {
-    setLoading(false);
-    setError('Invalid user session. Please validate your beta key.');
-  }
-}, [userSession]);
-
-
-const fetchInvestments = async () => {
-  try {
-    setLoading(true);
-    setError(null);
-
-    if (!userSession?.id || typeof userSession.id !== 'string') {
-      setError('Invalid user session. Please re-validate your beta key.');
-      return;
+    if (validateUserSession(userSession)) {
+      fetchData();
+    } else {
+      setLoading(false);
+      setError('Invalid user session. Please validate your beta key.');
     }
+  }, [userSession]);
 
-    console.log('Fetching investments for user:', userSession.id);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-    // Use the custom function that handles context properly
-    const { data, error } = await supabase.rpc('fetch_user_investments', {
-      context_user_id: userSession.id
-    });
+      if (!userSession?.id || typeof userSession.id !== 'string') {
+        setError('Invalid user session. Please re-validate your beta key.');
+        return;
+      }
 
-    if (error) {
-      console.error('Database query failed:', error);
-      setError('Access denied. Please verify your beta key is valid and active.');
-      return;
+      console.log('Fetching data for user:', userSession.id);
+
+      // Fetch both investments and sold items in parallel
+      const [investmentsResult, soldItemsResult] = await Promise.all([
+        supabase.rpc('fetch_user_investments', {
+          context_user_id: userSession.id
+        }),
+        supabase.rpc('fetch_user_investment_sales', {
+          context_user_id: userSession.id
+        })
+      ]);
+
+      if (investmentsResult.error) {
+        console.error('Investments query failed:', investmentsResult.error);
+        setError('Access denied. Please verify your beta key is valid and active.');
+        return;
+      }
+
+      if (soldItemsResult.error) {
+        console.error('Sold items query failed:', soldItemsResult.error);
+        // Don't fail completely if sold items can't be fetched
+        console.warn('Could not fetch sold items, continuing with investments only');
+      }
+
+      // Parse the results
+      const investmentsArray = Array.isArray(investmentsResult.data) 
+        ? investmentsResult.data 
+        : JSON.parse(investmentsResult.data || '[]');
+      
+      let soldItemsArray = soldItemsResult.data || [];
+
+      // Enhance sold items with image URLs from investments
+      if (soldItemsArray.length > 0 && investmentsArray.length > 0) {
+        soldItemsArray = soldItemsArray.map(soldItem => {
+          // Find matching investment to get image_url
+          const matchingInvestment = investmentsArray.find(inv => 
+            inv.name === soldItem.item_name && 
+            inv.skin_name === soldItem.item_skin_name
+          );
+          
+          return {
+            ...soldItem,
+            image_url: matchingInvestment?.image_url || null
+          };
+        });
+      }
+
+      console.log(`Successfully loaded ${investmentsArray.length} investments and ${soldItemsArray.length} sold items`);
+      
+      setInvestments(investmentsArray);
+      setSoldItems(soldItemsArray);
+
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    
-    // The function returns a JSON array, so we need to parse it
-    const investmentsArray = Array.isArray(data) ? data : JSON.parse(data || '[]');
-    
-    console.log(`Successfully loaded ${investmentsArray.length} investments`);
-    setInvestments(investmentsArray);
-
-  } catch (err) {
-    console.error('Unexpected error:', err);
-    setError('An unexpected error occurred. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleDeleteItem = async () => {  
-  if (!itemToDelete) return;
-  
-  try {
-    // Use the new context-aware function
-    const { data, error } = await supabase.rpc('delete_investment_with_context', {
-      investment_id: itemToDelete.id,
-      context_user_id: userSession.id
-    });
+    if (!itemToDelete) return;
+    
+    try {
+      // Use the new context-aware function
+      const { data, error } = await supabase.rpc('delete_investment_with_context', {
+        investment_id: itemToDelete.id,
+        context_user_id: userSession.id
+      });
 
-    if (error) {
-      console.error('Delete failed:', error);
-      throw error;
+      if (error) {
+        console.error('Delete failed:', error);
+        throw error;
+      }
+      
+      console.log('Investment deleted successfully');
+      
+      // Update local state - remove from both investments and sold items
+      setInvestments(prev => prev.filter(inv => inv.id !== itemToDelete.id));
+      setSoldItems(prev => prev.filter(item => item.investment_id !== itemToDelete.id));
+      setItemToDelete(null);
+    } catch (err) {
+      console.error('Error deleting investment:', err);
+      
+      if (err.message.includes('Invalid user context')) {
+        alert('Authentication error: Please refresh the page and re-enter your beta key.');
+      } else if (err.message.includes('not found or access denied')) {
+        alert('Access denied: You can only delete your own investments.');
+      } else {
+        alert('Failed to delete investment: ' + err.message);
+      }
     }
-    
-    console.log('Investment deleted successfully');
-    
-    // Update local state
-    setInvestments(prev => prev.filter(inv => inv.id !== itemToDelete.id));
-    setItemToDelete(null); // Clear the item to delete
-  } catch (err) {
-    console.error('Error deleting investment:', err);
-    
-    // Provide more specific error messages
-    if (err.message.includes('Invalid user context')) {
-      alert('Authentication error: Please refresh the page and re-enter your beta key.');
-    } else if (err.message.includes('not found or access denied')) {
-      alert('Access denied: You can only delete your own investments.');
-    } else {
-      alert('Failed to delete investment: ' + err.message);
-    }
-  }
-};
+  };
 
-const validateUserSession = (session) => {
-  if (!session) return false;
-  if (!session.id) return false;
-  if (typeof session.id !== 'string') return false;
-  
-  // Add additional validation if needed (e.g., UUID format)
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  if (!uuidRegex.test(session.id)) return false;
-  
-  return true;
-};
+  const validateUserSession = (session) => {
+    if (!session) return false;
+    if (!session.id) return false;
+    if (typeof session.id !== 'string') return false;
+    
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(session.id)) return false;
+    
+    return true;
+  };
 
-const retry = () => {
+  const retry = () => {
     if (userSession?.id) {
-      fetchInvestments();
+      fetchData();
     } else {
       setError('No user session found. Please validate your beta key first.');
     }
   };
 
   const getCurrentItems = () => {
-    let filteredItems = investments;
+    let filteredItems;
     
-    // Filter by tab
-    if (activeTab !== 'All') {
-      const typeFilter = activeTab.toLowerCase().slice(0, -1); // Remove 's' and lowercase
-      filteredItems = filteredItems.filter(item => item.type === typeFilter);
+    // Handle Sold tab separately
+    if (activeTab === 'Sold') {
+      filteredItems = soldItems;
+    } else {
+      filteredItems = investments;
+      
+      // Filter by tab for non-sold items
+      if (activeTab !== 'All') {
+        const typeFilter = activeTab.toLowerCase().slice(0, -1); // Remove 's' and lowercase
+        filteredItems = filteredItems.filter(item => item.type === typeFilter);
+      }
     }
     
     // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filteredItems = filteredItems.filter(item =>
-        item.name.toLowerCase().includes(query) ||
-        (item.skin_name && item.skin_name.toLowerCase().includes(query)) ||
-        (item.condition && item.condition.toLowerCase().includes(query))
-      );
+      filteredItems = filteredItems.filter(item => {
+        if (activeTab === 'Sold') {
+          // Search in investment_sales table fields
+          const itemName = item.item_name || '';
+          const skinName = item.item_skin_name || '';
+          const condition = item.item_condition || '';
+          
+          return itemName.toLowerCase().includes(query) ||
+                skinName.toLowerCase().includes(query) ||
+                condition.toLowerCase().includes(query);
+        } else {
+          // For active items, search in original item name and skin name
+          const itemName = item.item_name || item.name || '';
+          const skinName = item.skin_name || '';
+          const condition = item.condition || '';
+          
+          return itemName.toLowerCase().includes(query) ||
+                skinName.toLowerCase().includes(query) ||
+                condition.toLowerCase().includes(query);
+        }
+      });
     }
     
     return filteredItems;
@@ -144,22 +199,47 @@ const retry = () => {
 
   // Calculate portfolio summary
   const getPortfolioSummary = () => {
-    const currentItems = getCurrentItems();
-    const totalBuyValue = currentItems.reduce((sum, item) => sum + (item.buy_price * item.quantity), 0);
-    const totalCurrentValue = currentItems.reduce((sum, item) => {
-      const price = item.sold_price || item.current_price;
-      return sum + (price * item.quantity);
-    }, 0);
-    const totalProfit = totalCurrentValue - totalBuyValue;
-    const profitPercentage = totalBuyValue > 0 ? ((totalProfit / totalBuyValue) * 100) : 0;
+    if (activeTab === 'Sold') {
+      // Handle investment_sales table structure - Updated labels
+      const totalBuyValue = soldItems.reduce((sum, sale) => 
+        sum + (sale.buy_price_per_unit * sale.quantity_sold), 0);
+      const totalSaleValue = soldItems.reduce((sum, sale) => 
+        sum + (sale.price_per_unit * sale.quantity_sold), 0);
+      const realizedProfit = totalSaleValue - totalBuyValue;
+      const profitPercentage = totalBuyValue > 0 ? ((realizedProfit / totalBuyValue) * 100) : 0;
 
-    return {
-      totalBuyValue,
-      totalCurrentValue,
-      totalProfit,
-      profitPercentage,
-      itemCount: currentItems.length
-    };
+      return {
+        totalBuyValue,
+        totalCurrentValue: totalSaleValue,
+        totalProfit: realizedProfit,
+        profitPercentage,
+        itemCount: soldItems.length // This will now be number of sales, not unique items
+      };
+    } else {
+      // Calculate active investments summary
+      const currentItems = getCurrentItems();
+      const totalBuyValue = currentItems.reduce((sum, item) => sum + (item.buy_price * item.quantity), 0);
+      const totalCurrentValue = currentItems.reduce((sum, item) => {
+        return sum + (item.current_price * item.quantity);
+      }, 0);
+      const totalProfit = totalCurrentValue - totalBuyValue;
+      const profitPercentage = totalBuyValue > 0 ? ((totalProfit / totalBuyValue) * 100) : 0;
+
+      return {
+        totalBuyValue,
+        totalCurrentValue,
+        totalProfit,
+        profitPercentage,
+        itemCount: currentItems.length
+      };
+    }
+  };
+
+  const handleItemRemove = (itemId) => {
+    // Remove item from investments list when fully sold
+    setInvestments(prev => prev.filter(inv => inv.id !== itemId));
+    // Refresh sold items to show the new sale
+    fetchData();
   };
 
   const summary = getPortfolioSummary();
@@ -204,18 +284,28 @@ const retry = () => {
         </div>
 
         {/* Portfolio Summary */}
-        {investments.length > 0 && (
+        {(investments.length > 0 || soldItems.length > 0) && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
-              <div className="text-gray-400 text-sm">Total Invested</div>
-              <div className="text-white text-xl font-semibold">${summary.totalBuyValue.toFixed(2)}</div>
+              <div className="text-gray-400 text-sm">
+                {activeTab === 'Sold' ? 'Total Sold' : 'Total Invested'}
+              </div>
+              <div className="text-white text-xl font-semibold">
+                ${activeTab === 'Sold' ? summary.totalCurrentValue.toFixed(2) : summary.totalBuyValue.toFixed(2)}
+              </div>
             </div>
             <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
-              <div className="text-gray-400 text-sm">Current Value</div>
-              <div className="text-white text-xl font-semibold">${summary.totalCurrentValue.toFixed(2)}</div>
+              <div className="text-gray-400 text-sm">
+                {activeTab === 'Sold' ? 'Total Invested' : 'Current Value'}
+              </div>
+              <div className="text-white text-xl font-semibold">
+                ${activeTab === 'Sold' ? summary.totalBuyValue.toFixed(2) : summary.totalCurrentValue.toFixed(2)}
+              </div>
             </div>
             <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
-              <div className="text-gray-400 text-sm">Total P&L</div>
+              <div className="text-gray-400 text-sm">
+                {activeTab === 'Sold' ? 'Realized P&L' : 'Total P&L'}
+              </div>
               <div className={`text-xl font-semibold flex items-center space-x-1 ${
                 summary.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'
               }`}>
@@ -224,7 +314,9 @@ const retry = () => {
               </div>
             </div>
             <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
-              <div className="text-gray-400 text-sm">Items</div>
+              <div className="text-gray-400 text-sm">
+                {activeTab === 'Sold' ? 'Sales' : 'Items'}
+              </div>
               <div className="text-white text-xl font-semibold">{summary.itemCount}</div>
             </div>
           </div>
@@ -236,7 +328,7 @@ const retry = () => {
             <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Search investments..."
+              placeholder={activeTab === 'Sold' ? "Search sold items..." : "Search investments..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
@@ -261,8 +353,8 @@ const retry = () => {
           ))}
         </div>
 
-        {/* Add Item Button */}
-        {activeTab !== 'All' && (
+        {/* Add Item Button - Don't show for Sold tab */}
+        {activeTab !== 'All' && activeTab !== 'Sold' && (
           <div className="mb-6">
             <button
               onClick={() => setShowAddForm(true)}
@@ -274,21 +366,21 @@ const retry = () => {
           </div>
         )}
 
-        {/* Items Grid - From ItemCard Component */}
+        {/* Items Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {getCurrentItems().map((item) => (
             <ItemCard 
-              key={item.id} 
+              key={activeTab === 'Sold' ? `sold-${item.id}` : item.id}
               item={item} 
               userSession={userSession}
+              isSoldItem={activeTab === 'Sold'}
               onUpdate={(itemId, updates) => {
-                // Update the item in local state
                 setInvestments(prev => prev.map(inv => 
                   inv.id === itemId ? { ...inv, ...updates } : inv
                 ));
               }}
+              onRemove={handleItemRemove}
               onDelete={(itemToDelete) => {
-                // Set the item to delete for confirmation modal
                 setItemToDelete(itemToDelete);
               }}
               isNew={newItemIds.has(item.id)}
@@ -302,12 +394,15 @@ const retry = () => {
               <DollarSign className="w-8 h-8 text-gray-600" />
             </div>
             <h3 className="text-lg font-medium text-gray-400 mb-2">
-              {searchQuery ? 'No matching investments' : 'No investments yet'}
+              {searchQuery ? 'No matching items' : 
+               activeTab === 'Sold' ? 'No sold items yet' : 'No investments yet'}
             </h3>
             <p className="text-gray-500">
               {searchQuery ? 'Try adjusting your search terms' :
                 activeTab === 'All' 
                   ? 'Start by adding some items to track your investments'
+                  : activeTab === 'Sold'
+                  ? 'Items you sell will appear here'
                   : `Add your first ${activeTab.toLowerCase()} to get started`
               }
             </p>
@@ -320,21 +415,17 @@ const retry = () => {
             type={activeTab}
             onClose={() => setShowAddForm(false)}
             onAdd={(newItem) => {
-            // Add the new item to the TOP of the investments state
-            setInvestments(prev => [newItem, ...prev]);
-            
-            // Mark this item as new for animation
-            setNewItemIds(prev => new Set([...prev, newItem.id]));
-            
-            // Remove the 'new' flag after animation completes
-            setTimeout(() => {
-              setNewItemIds(prev => {
-                const updated = new Set(prev);
-                updated.delete(newItem.id);
-                return updated;
-              });
-            }, 700); // Slightly longer than animation duration
-          }}
+              setInvestments(prev => [newItem, ...prev]);
+              setNewItemIds(prev => new Set([...prev, newItem.id]));
+              
+              setTimeout(() => {
+                setNewItemIds(prev => {
+                  const updated = new Set(prev);
+                  updated.delete(newItem.id);
+                  return updated;
+                });
+              }, 700);
+            }}
             userSession={userSession}
           />
         )}
@@ -349,11 +440,11 @@ const retry = () => {
               </div>
               <h3 className="text-lg font-semibold text-white mb-2">Delete Investment</h3>
               <p className="text-gray-400 mb-6">
-                Are you sure you want to delete "{itemToDelete.name}"? This action cannot be undone.
+                Are you sure you want to delete "{itemToDelete.item_name || itemToDelete.name}"? This action cannot be undone.
               </p>
               <div className="flex space-x-3">
                 <button
-                  onClick={() => setItemToDelete(null)} // Clear the item instead of setting false
+                  onClick={() => setItemToDelete(null)}
                   className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
                 >
                   Cancel
