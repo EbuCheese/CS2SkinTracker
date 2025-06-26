@@ -14,40 +14,39 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, onRemove, isNew = fal
   let realizedProfitLoss, unrealizedProfitLoss, totalProfitLoss;
   let totalInvestment, buyPrice, currentPrice, quantity;
 
-  if (isSoldItem) {
-    // For sold items from investment_sales table
-    // FIXED: Updated field names to match Supabase function
-    buyPrice = item.buy_price_per_unit || 0;
-    currentPrice = item.price_per_unit || 0; // This is the sale price in the sales table
-    quantity = item.quantity_sold || 0;
-    availableQuantity = 0;
-    originalQuantity = quantity;
-    isFullySold = true;
-    soldItems = 0; // This is already a sold item
-    totalProfitLoss = (item.price_per_unit - item.buy_price_per_unit) * item.quantity_sold;
-    realizedProfitLoss = totalProfitLoss;
-    unrealizedProfitLoss = 0;
-    totalInvestment = item.buy_price_per_unit * item.quantity_sold;
-  } else {
-    // For active investments from investment_summary view
-    buyPrice = item.buy_price || 0;
-    currentPrice = item.current_price || 0;
-    quantity = item.quantity || 0;
-    soldItems = item.total_sold_quantity || 0;
-    availableQuantity = item.quantity;
-    originalQuantity = item.original_quantity || item.quantity;
-    isFullySold = availableQuantity === 0;
-    realizedProfitLoss = item.realized_profit_loss || 0;
-    unrealizedProfitLoss = item.unrealized_profit_loss || 0;
-    totalProfitLoss = realizedProfitLoss + unrealizedProfitLoss;
-    totalInvestment = item.buy_price * originalQuantity;
-  }
+if (isSoldItem) {
+  // For sold items from investment_sales table
+  buyPrice = item.buy_price_per_unit || 0;
+  currentPrice = item.price_per_unit || 0;
+  quantity = item.quantity_sold || 0;
+  availableQuantity = 0;
+  originalQuantity = quantity;
+  isFullySold = true;
+  soldItems = 0;
+  totalProfitLoss = (item.price_per_unit - item.buy_price_per_unit) * item.quantity_sold;
+  realizedProfitLoss = totalProfitLoss;
+  unrealizedProfitLoss = 0;
+  totalInvestment = item.buy_price_per_unit * item.quantity_sold;
+} else {
+  // For active investments from investment_summary view
+  buyPrice = item.buy_price || 0;
+  currentPrice = item.current_price || 0;
+  quantity = item.quantity || 0;
+  soldItems = item.total_sold_quantity || 0;
+  availableQuantity = item.quantity;
+  originalQuantity = item.original_quantity || item.quantity; // ← Use original_quantity from view
+  isFullySold = availableQuantity === 0;
+  realizedProfitLoss = item.realized_profit_loss || 0; // ← From view
+  unrealizedProfitLoss = item.unrealized_profit_loss || 0; // ← From view
+  totalProfitLoss = realizedProfitLoss + unrealizedProfitLoss;
+  totalInvestment = item.buy_price * originalQuantity;
+}
   
   const profitPercentage = totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00';
 
   // Additional sales metrics from view
   const totalSaleValue = item.total_sale_value || 0;
-  const averageSalePrice = soldItems > 0 ? (totalSaleValue / soldItems) : 0;
+  const averageSalePrice = item.average_sale_price || 0;
   
   // Edit form state - FIXED: Handle both sold and active items properly
   const [editForm, setEditForm] = useState({
@@ -316,11 +315,11 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, onRemove, isNew = fal
             <div className="mt-2 text-sm">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="text-gray-400 mb-0.5">Sold For:</div>
+                  <div className="text-gray-400 mb-0.5">Sold:</div>
                   <div className="text-green-400">${item.price_per_unit?.toFixed(2)}</div>
                 </div>
                 <div>
-                  <div className="text-gray-400 mb-0.5">Bought At:</div>
+                  <div className="text-gray-400 mb-0.5">Bought:</div>
                   <div className="text-white">${item.buy_price_per_unit?.toFixed(2)}</div>
                 </div>
               </div>

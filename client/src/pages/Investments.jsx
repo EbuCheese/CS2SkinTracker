@@ -29,75 +29,73 @@ const InvestmentsPage = ({ userSession }) => {
     }
   }, [userSession]);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+const fetchData = async () => {
+  try {
+    setLoading(true);
+    setError(null);
 
-      if (!userSession?.id || typeof userSession.id !== 'string') {
-        setError('Invalid user session. Please re-validate your beta key.');
-        return;
-      }
-
-      console.log('Fetching data for user:', userSession.id);
-
-      // Fetch both investments and sold items in parallel
-      const [investmentsResult, soldItemsResult] = await Promise.all([
-        supabase.rpc('fetch_user_investments', {
-          context_user_id: userSession.id
-        }),
-        supabase.rpc('fetch_user_investment_sales', {
-          context_user_id: userSession.id
-        })
-      ]);
-
-      if (investmentsResult.error) {
-        console.error('Investments query failed:', investmentsResult.error);
-        setError('Access denied. Please verify your beta key is valid and active.');
-        return;
-      }
-
-      if (soldItemsResult.error) {
-        console.error('Sold items query failed:', soldItemsResult.error);
-        // Don't fail completely if sold items can't be fetched
-        console.warn('Could not fetch sold items, continuing with investments only');
-      }
-
-      // Parse the results
-      const investmentsArray = Array.isArray(investmentsResult.data) 
-        ? investmentsResult.data 
-        : JSON.parse(investmentsResult.data || '[]');
-      
-      let soldItemsArray = soldItemsResult.data || [];
-
-      // Enhance sold items with image URLs from investments
-      if (soldItemsArray.length > 0 && investmentsArray.length > 0) {
-        soldItemsArray = soldItemsArray.map(soldItem => {
-          // Find matching investment to get image_url
-          const matchingInvestment = investmentsArray.find(inv => 
-            inv.name === soldItem.item_name && 
-            inv.skin_name === soldItem.item_skin_name
-          );
-          
-          return {
-            ...soldItem,
-            image_url: matchingInvestment?.image_url || null
-          };
-        });
-      }
-
-      console.log(`Successfully loaded ${investmentsArray.length} investments and ${soldItemsArray.length} sold items`);
-      
-      setInvestments(investmentsArray);
-      setSoldItems(soldItemsArray);
-
-    } catch (err) {
-      console.error('Unexpected error:', err);
-      setError('An unexpected error occurred. Please try again.');
-    } finally {
-      setLoading(false);
+    if (!userSession?.id || typeof userSession.id !== 'string') {
+      setError('Invalid user session. Please re-validate your beta key.');
+      return;
     }
-  };
+
+    console.log('Fetching data for user:', userSession.id);
+
+    // FIXED: Use fetch_user_investment_summary instead of fetch_user_investments
+    const [investmentsResult, soldItemsResult] = await Promise.all([
+      supabase.rpc('fetch_user_investment_summary', {  // ← Changed this
+        context_user_id: userSession.id
+      }),
+      supabase.rpc('fetch_user_investment_sales', {
+        context_user_id: userSession.id
+      })
+    ]);
+
+    if (investmentsResult.error) {
+      console.error('Investments query failed:', investmentsResult.error);
+      setError('Access denied. Please verify your beta key is valid and active.');
+      return;
+    }
+
+    if (soldItemsResult.error) {
+      console.error('Sold items query failed:', soldItemsResult.error);
+      console.warn('Could not fetch sold items, continuing with investments only');
+    }
+
+    // Parse the results - these should already be JSON arrays
+    const investmentsArray = Array.isArray(investmentsResult.data) 
+      ? investmentsResult.data 
+      : JSON.parse(investmentsResult.data || '[]');
+    
+    let soldItemsArray = soldItemsResult.data || [];
+
+    // Enhance sold items with image URLs from investments
+    if (soldItemsArray.length > 0 && investmentsArray.length > 0) {
+      soldItemsArray = soldItemsArray.map(soldItem => {
+        const matchingInvestment = investmentsArray.find(inv => 
+          inv.name === soldItem.item_name && 
+          inv.skin_name === soldItem.item_skin_name
+        );
+        
+        return {
+          ...soldItem,
+          image_url: matchingInvestment?.image_url || null
+        };
+      });
+    }
+
+    console.log(`Successfully loaded ${investmentsArray.length} investments and ${soldItemsArray.length} sold items`);
+    
+    setInvestments(investmentsArray);
+    setSoldItems(soldItemsArray);
+
+  } catch (err) {
+    console.error('Unexpected error:', err);
+    setError('An unexpected error occurred. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleDeleteItem = async () => {  
     if (!itemToDelete) return;
@@ -152,50 +150,52 @@ const InvestmentsPage = ({ userSession }) => {
     }
   };
 
-  const getCurrentItems = () => {
-    let filteredItems;
+const getCurrentItems = () => {
+  let filteredItems;
+  
+  // Handle Sold tab separately - only show sold items
+  if (activeTab === 'Sold') {
+    filteredItems = soldItems;
+  } else {
+    // For all other tabs (All, Liquids, Crafts, Cases), only show active investments
+    // Filter out fully sold items (quantity = 0)
+    filteredItems = investments.filter(item => item.quantity > 0);
     
-    // Handle Sold tab separately
-    if (activeTab === 'Sold') {
-      filteredItems = soldItems;
-    } else {
-      filteredItems = investments;
-      
-      // Filter by tab for non-sold items
-      if (activeTab !== 'All') {
-        const typeFilter = activeTab.toLowerCase().slice(0, -1); // Remove 's' and lowercase
-        filteredItems = filteredItems.filter(item => item.type === typeFilter);
+    // Filter by tab for non-sold items
+    if (activeTab !== 'All') {
+      const typeFilter = activeTab.toLowerCase().slice(0, -1); // Remove 's' and lowercase
+      filteredItems = filteredItems.filter(item => item.type === typeFilter);
+    }
+  }
+  
+  // Filter by search query
+  if (searchQuery) {
+    const query = searchQuery.toLowerCase();
+    filteredItems = filteredItems.filter(item => {
+      if (activeTab === 'Sold') {
+        // Search in investment_sales table fields
+        const itemName = item.item_name || '';
+        const skinName = item.item_skin_name || '';
+        const condition = item.item_condition || '';
+        
+        return itemName.toLowerCase().includes(query) ||
+              skinName.toLowerCase().includes(query) ||
+              condition.toLowerCase().includes(query);
+      } else {
+        // For active items, search in original item name and skin name
+        const itemName = item.item_name || item.name || '';
+        const skinName = item.skin_name || '';
+        const condition = item.condition || '';
+        
+        return itemName.toLowerCase().includes(query) ||
+              skinName.toLowerCase().includes(query) ||
+              condition.toLowerCase().includes(query);
       }
-    }
-    
-    // Filter by search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filteredItems = filteredItems.filter(item => {
-        if (activeTab === 'Sold') {
-          // Search in investment_sales table fields
-          const itemName = item.item_name || '';
-          const skinName = item.item_skin_name || '';
-          const condition = item.item_condition || '';
-          
-          return itemName.toLowerCase().includes(query) ||
-                skinName.toLowerCase().includes(query) ||
-                condition.toLowerCase().includes(query);
-        } else {
-          // For active items, search in original item name and skin name
-          const itemName = item.item_name || item.name || '';
-          const skinName = item.skin_name || '';
-          const condition = item.condition || '';
-          
-          return itemName.toLowerCase().includes(query) ||
-                skinName.toLowerCase().includes(query) ||
-                condition.toLowerCase().includes(query);
-        }
-      });
-    }
-    
-    return filteredItems;
-  };
+    });
+  }
+  
+  return filteredItems;
+};
 
   // Calculate portfolio summary
   const getPortfolioSummary = () => {
