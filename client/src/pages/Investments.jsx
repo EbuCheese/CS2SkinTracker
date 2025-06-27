@@ -87,7 +87,8 @@ const fetchData = async () => {
     console.log(`Successfully loaded ${investmentsArray.length} investments and ${soldItemsArray.length} sold items`);
     
     setInvestments(investmentsArray);
-    setSoldItems(soldItemsArray);
+    const groupedSoldItems = groupSoldItems(soldItemsArray);
+    setSoldItems(groupedSoldItems);
 
   } catch (err) {
     console.error('Unexpected error:', err);
@@ -97,6 +98,54 @@ const fetchData = async () => {
   }
 };
 
+const groupSoldItems = (soldItems) => {
+  const groups = {};
+ 
+  soldItems.forEach(item => {
+    const dateOnly = item.sale_date.split('T')[0]; // Split on 'T' to get date part
+    
+    // Normalize null/undefined values to empty strings for consistent grouping
+    const itemSkinName = item.item_skin_name || '';
+    const itemCondition = item.item_condition || '';
+    
+    // Create a unique key for items that should be grouped (using date only, not full timestamp)
+    const groupKey = `${item.item_name}-${itemSkinName}-${itemCondition}-${item.buy_price_per_unit}-${item.price_per_unit}-${dateOnly}`;
+    
+    // Debug log to see what's happening
+    console.log('Processing item:', {
+      item_name: item.item_name,
+      item_skin_name: itemSkinName,
+      item_condition: itemCondition,
+      buy_price_per_unit: item.buy_price_per_unit,
+      price_per_unit: item.price_per_unit,
+      dateOnly: dateOnly,
+      groupKey: groupKey
+    });
+   
+    if (groups[groupKey]) {
+      // Add to existing group
+      groups[groupKey].quantity_sold += item.quantity_sold;
+      groups[groupKey].total_sale_value += item.total_sale_value;
+      groups[groupKey].sale_ids.push(item.id);
+      
+      // Keep the earliest sale time for display purposes (optional)
+      const existingDate = new Date(groups[groupKey].sale_date);
+      const currentDate = new Date(item.sale_date);
+      if (currentDate < existingDate) {
+        groups[groupKey].sale_date = item.sale_date;
+      }
+    } else {
+      // Create new group
+      groups[groupKey] = {
+        ...item,
+        sale_ids: [item.id], // Keep track of original sale IDs
+        // quantity_sold and total_sale_value already set from item
+      };
+    }
+  });
+ 
+  return Object.values(groups);
+};
   const handleDeleteItem = async () => {  
     if (!itemToDelete) return;
     
