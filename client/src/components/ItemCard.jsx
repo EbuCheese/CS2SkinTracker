@@ -159,7 +159,8 @@ const handleConfirmedSale = async () => {
     // Show success popup instead of alert
     setPopupMessage(`Successfully sold ${quantity} units for $${totalSaleValue.toFixed(2)}\nProfit/Loss: ${profitLoss >= 0 ? '+' : ''}$${profitLoss.toFixed(2)}\nRemaining quantity: ${remainingQuantity}`);
     setShowSuccessPopup(true);
-    
+    props.onRefresh();
+
     setIsEditing(false);
     setSoldPrice('');
     setSoldQuantity(1);
@@ -234,6 +235,7 @@ const handleEditFormSubmit = async () => {
     
     onUpdate(item.id, updateData);
     setIsEditingItem(false);
+    props.onRefresh();
   } catch (err) {
     console.error('Error updating item:', err);
     

@@ -29,6 +29,10 @@ const InvestmentsPage = ({ userSession }) => {
     }
   }, [userSession]);
 
+const refreshData = () => {
+  fetchData();
+};
+
 const fetchData = async () => {
   try {
     setLoading(true);
@@ -353,7 +357,7 @@ const getCurrentItems = () => {
             </div>
             <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
               <div className="text-gray-400 text-sm">
-                {activeTab === 'Sold' ? 'Realized P&L' : 'Total P&L'}
+                {activeTab === 'Sold' ? 'Realized P&L' : 'Unrealized P&L'}
               </div>
               <div className={`text-xl font-semibold flex items-center space-x-1 ${
                 summary.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'
@@ -427,12 +431,14 @@ const getCurrentItems = () => {
                 setInvestments(prev => prev.map(inv => 
                   inv.id === itemId ? { ...inv, ...updates } : inv
                 ));
+                fetchData();
               }}
               onRemove={handleItemRemove}
               onDelete={(itemToDelete) => {
                 setItemToDelete(itemToDelete);
               }}
               isNew={newItemIds.has(item.id)}
+              onRefresh={refreshData}
             />
           ))}
         </div>
