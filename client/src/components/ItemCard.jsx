@@ -119,9 +119,6 @@ const handleConfirmedSale = async () => {
     setUpdating(true);
     setShowConfirmSale(false);
     
-    console.log('Starting sale process for investment:', item.id);
-    console.log('User session:', userSession);
-    
     const { data: saleResult, error: saleError } = await supabase.rpc('process_investment_sale', {
       p_investment_id: item.id,
       p_user_id: userSession.id,
@@ -129,37 +126,34 @@ const handleConfirmedSale = async () => {
       p_price_per_unit: pricePerUnit
     });
     
-    if (saleError) {
-      console.error('Sale processing error:', saleError);
-      throw new Error(`Sale failed: ${saleError.message}`);
-    }
-    
-    console.log('Sale processed successfully:', saleResult);
+    if (saleError) throw new Error(`Sale failed: ${saleError.message}`);
     
     const remainingQuantity = saleResult.remaining_quantity;
     
     if (remainingQuantity === 0) {
       if (onRemove) {
         onRemove(item.id);
-      } else {
-        onUpdate(item.id, { 
-          quantity: 0,
-          total_sold_quantity: soldItems + quantity,
-          total_sale_value: (item.total_sale_value || 0) + totalSaleValue
-        });
       }
     } else {
-      onUpdate(item.id, { 
+      // FIXED: Update with properly calculated remaining values
+      const updatedItem = {
+        ...item,
         quantity: remainingQuantity,
-        total_sold_quantity: soldItems + quantity,
-        total_sale_value: (item.total_sale_value || 0) + totalSaleValue
-      });
+        total_sold_quantity: (item.total_sold_quantity || 0) + quantity,
+        total_sale_value: (item.total_sale_value || 0) + totalSaleValue,
+        // Recalculate unrealized profit for remaining quantity
+        unrealized_profit_loss: (item.current_price - item.buy_price) * remainingQuantity,    
+      };
+      onUpdate(item.id, updatedItem);
     }
     
-    // Show success popup instead of alert
     setPopupMessage(`Successfully sold ${quantity} units for $${totalSaleValue.toFixed(2)}\nProfit/Loss: ${profitLoss >= 0 ? '+' : ''}$${profitLoss.toFixed(2)}\nRemaining quantity: ${remainingQuantity}`);
     setShowSuccessPopup(true);
-    props.onRefresh();
+    
+    // Refresh to get updated data from server
+    if (onRefresh) {
+      onRefresh();
+    }
 
     setIsEditing(false);
     setSoldPrice('');
@@ -187,7 +181,14 @@ const handleQuantityUpdate = async (newQuantity) => {
 
     if (error) throw error;
     
-    onUpdate(item.id, { quantity: newQuantity });
+    const updatedItem = {
+      ...item,
+      quantity: newQuantity,
+      // FIX: Only recalculate unrealized P&L for remaining quantity
+      unrealized_profit_loss: (item.current_price - item.buy_price) * newQuantity,
+    };
+
+    onUpdate(item.id, updatedItem);
   } catch (err) {
     console.error('Error updating quantity:', err);
     
@@ -233,9 +234,15 @@ const handleEditFormSubmit = async () => {
 
     if (error) throw error;
     
-    onUpdate(item.id, updateData);
+    const updatedItem = {
+      ...item,
+      ...updateData,
+      unrealized_profit_loss: (item.current_price - updateData.buy_price) * updateData.quantity,
+      original_quantity: Math.max(item.original_quantity || item.quantity, updateData.quantity)
+    };
+
+    onUpdate(item.id, updatedItem);
     setIsEditingItem(false);
-    props.onRefresh();
   } catch (err) {
     console.error('Error updating item:', err);
     
@@ -252,15 +259,15 @@ const handleEditFormSubmit = async () => {
   }
 };
 
-  const handleEditFormCancel = () => {
-    setEditForm({
-      condition: isSoldItem ? (item.item_condition || '') : (item.condition || ''),
-      variant: item.variant || 'normal',
-      quantity: isSoldItem ? item.quantity_sold : (item.quantity || 1),
-      buy_price: isSoldItem ? item.buy_price_per_unit : (item.buy_price || 0)
-    });
-    setIsEditingItem(false);
-  };
+const handleEditFormCancel = () => {
+  setEditForm({
+    condition: isSoldItem ? (item.item_condition || '') : (item.condition || ''),
+    variant: item.variant || 'normal',
+    quantity: isSoldItem ? item.quantity_sold : (item.quantity || 1),
+    buy_price: isSoldItem ? item.buy_price_per_unit : (item.buy_price || 0)
+  });
+  setIsEditingItem(false);
+};
 
   const handleEditFormChange = (field, value) => {
     setEditForm(prev => ({
@@ -427,9 +434,9 @@ const handleEditFormSubmit = async () => {
                     <div>
                       <div className="text-gray-400 mb-0.5">Realized:</div>
                       <div className={realizedProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
-                        ${Math.abs(realizedProfitLoss).toFixed(2)}
+                        {realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(realizedProfitLoss).toFixed(2)}
                       </div>
-                    </div>
+                  </div>
                   </div>
                 </div>
               )}
@@ -471,8 +478,8 @@ const handleEditFormSubmit = async () => {
           {/* Show breakdown for items with both realized and unrealized gains */}
           {soldItems > 0 && availableQuantity > 0 && (
             <div className="text-xs text-gray-400 mt-1">
-              <div>Realized: ${Math.abs(realizedProfitLoss).toFixed(2)}</div>
-              <div>Unrealized: ${Math.abs(unrealizedProfitLoss).toFixed(2)}</div>
+              <div>Realized: {realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(realizedProfitLoss).toFixed(2)}</div>
+              <div>Unrealized: {unrealizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(unrealizedProfitLoss).toFixed(2)}</div>
             </div>
           )}
           
