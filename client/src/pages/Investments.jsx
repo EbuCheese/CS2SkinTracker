@@ -45,9 +45,8 @@ const fetchData = async () => {
 
     console.log('Fetching data for user:', userSession.id);
 
-    // FIXED: Use fetch_user_investment_summary instead of fetch_user_investments
     const [investmentsResult, soldItemsResult] = await Promise.all([
-      supabase.rpc('fetch_user_investment_summary', {  // ← Changed this
+      supabase.rpc('fetch_user_investment_summary', {
         context_user_id: userSession.id
       }),
       supabase.rpc('fetch_user_investment_sales', {
@@ -72,21 +71,6 @@ const fetchData = async () => {
       : JSON.parse(investmentsResult.data || '[]');
     
     let soldItemsArray = soldItemsResult.data || [];
-
-    // Enhance sold items with image URLs from investments
-    if (soldItemsArray.length > 0 && investmentsArray.length > 0) {
-      soldItemsArray = soldItemsArray.map(soldItem => {
-        const matchingInvestment = investmentsArray.find(inv => 
-          inv.name === soldItem.item_name && 
-          inv.skin_name === soldItem.item_skin_name
-        );
-        
-        return {
-          ...soldItem,
-          image_url: matchingInvestment?.image_url || null
-        };
-      });
-    }
 
     console.log(`Successfully loaded ${investmentsArray.length} investments and ${soldItemsArray.length} sold items`);
     
@@ -169,7 +153,6 @@ const groupSoldItems = (soldItems) => {
       
       // Update local state - remove from both investments and sold items
       setInvestments(prev => prev.filter(inv => inv.id !== itemToDelete.id));
-      setSoldItems(prev => prev.filter(item => item.investment_id !== itemToDelete.id));
       setItemToDelete(null);
     } catch (err) {
       console.error('Error deleting investment:', err);
