@@ -349,8 +349,10 @@ const OptimizedSearchResultItem = React.memo(({
   const [imageError, setImageError] = useState(false);
   const imgRef = useRef(null);
 
+  const currentVariant = selectedVariant || 'normal';
   // Get the current variant item for display
   const currentVariantItem = item.variants[selectedVariant] || item.variants.normal || item;
+
 
   // Setup intersection observer for this image
   useEffect(() => {
@@ -419,7 +421,7 @@ const OptimizedSearchResultItem = React.memo(({
   };
 
   const handleItemClick = () => {
-    onClick(selectedVariant);
+    onClick(currentVariant);
   };
 
   return (
@@ -480,7 +482,7 @@ const OptimizedSearchResultItem = React.memo(({
               key={variant}
               onClick={(e) => handleVariantButtonClick(e, variant)}
               className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                selectedVariant === variant
+                currentVariant === variant
                   ? variant === 'stattrak' 
                     ? 'bg-orange-600 text-white' 
                     : variant === 'souvenir'
