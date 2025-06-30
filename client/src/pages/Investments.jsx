@@ -15,7 +15,8 @@ const InvestmentsPage = ({ userSession }) => {
   const [itemToDelete, setItemToDelete] = useState(null);
   const [newItemIds, setNewItemIds] = useState(new Set());
 
-  const tabs = ['All', 'Liquids', 'Crafts', 'Cases', 'Sold'];
+  const mainTabs = ['All', 'Liquids', 'Crafts', 'Cases', 'Agents', 'Keychains', 'Graffiti', 'Patches'];
+  const soldTab = 'Sold';
 
   // Fetch investments and sold items from Supabase
   useEffect(() => {
@@ -186,6 +187,17 @@ const groupSoldItems = (soldItems) => {
     }
   };
 
+  // Helper function to get search placeholder text
+  const getSearchPlaceholder = () => {
+    if (activeTab === 'All') {
+      return 'Search all investments...';
+    } else if (activeTab === 'Sold') {
+      return 'Search sold items...';
+    } else {
+      return `Search ${activeTab.toLowerCase()}...`;
+    }
+  };
+
 const getCurrentItems = () => {
   let filteredItems;
   
@@ -193,7 +205,6 @@ const getCurrentItems = () => {
   if (activeTab === 'Sold') {
     filteredItems = soldItems;
   } else {
-    // For all other tabs (All, Liquids, Crafts, Cases), only show active investments
     // Filter out fully sold items (quantity = 0)
     filteredItems = investments.filter(item => item.quantity > 0);
     
@@ -312,11 +323,11 @@ const getCurrentItems = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 p-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent mb-2">
             My Investments
           </h1>
-          <p className="text-gray-400">Track your CS:GO skin investments and performance</p>
+          <p className="text-gray-400">Track your Counter-Strike skin investments and performance</p>
         </div>
 
         {/* Portfolio Summary */}
@@ -358,13 +369,13 @@ const getCurrentItems = () => {
           </div>
         )}
 
-        {/* Search Bar */}
-        <div className="mb-6">
-          <div className="relative max-w-md">
+        {/* Search Bar - Centered */}
+        <div className="mb-6 flex justify-center">
+          <div className="relative max-w-md w-full">
             <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
             <input
               type="text"
-              placeholder={activeTab === 'Sold' ? "Search sold items..." : "Search investments..."}
+              placeholder={getSearchPlaceholder()}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
@@ -372,32 +383,55 @@ const getCurrentItems = () => {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          {tabs.map((tab) => (
+        {/* Tabs - Centered */}
+        <div className="mb-6">
+          {/* Main Category Tabs */}
+          <div className="flex flex-wrap justify-center gap-2 mb-4">
+            {mainTabs.map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                  activeTab === tab
+                    ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/25'
+                    : 'bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+          
+          {/* Sold Tab - Visually Separated and Centered */}
+          <div className="flex items-center justify-center gap-4">
+            <div className="flex-1 border-t border-gray-700"></div>
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => setActiveTab(soldTab)}
               className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
-                activeTab === tab
-                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/25'
-                  : 'bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700'
+                activeTab === soldTab
+                  ? 'bg-gradient-to-r from-green-600 to-emerald-700 text-white shadow-lg shadow-green-500/25'
+                  : 'bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700 border border-gray-600'
               }`}
             >
-              {tab}
+              {soldTab}
             </button>
-          ))}
+            <div className="flex-1 border-t border-gray-700"></div>
+          </div>
         </div>
 
-        {/* Add Item Button - Don't show for Sold tab */}
+        {/* Add Item Button - Don't show for All or Sold tabs, Centered */}
         {activeTab !== 'All' && activeTab !== 'Sold' && (
-          <div className="mb-6">
+          <div className="mb-6 flex justify-center">
             <button
               onClick={() => setShowAddForm(true)}
               className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-6 py-3 rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium flex items-center space-x-2 shadow-lg"
             >
               <Plus className="w-5 h-5" />
-              <span>Add {activeTab.slice(0, -1)}</span>
+              <span>Add {
+                activeTab === 'Graffiti' ? 'Graffiti' : 
+                activeTab === 'Patches' ? 'Patch' : 
+                activeTab.slice(0, -1)
+              }</span>
             </button>
           </div>
         )}
@@ -441,7 +475,11 @@ const getCurrentItems = () => {
                   ? 'Start by adding some items to track your investments'
                   : activeTab === 'Sold'
                   ? 'Items you sell will appear here'
-                  : `Add your first ${activeTab.toLowerCase()} to get started`
+                  : `Add your first ${
+                      activeTab === 'Graffiti' ? 'graffiti' : 
+                      activeTab === 'Patches' ? 'patch' : 
+                      activeTab.toLowerCase().slice(0, -1)
+                    } to get started`
               }
             </p>
           </div>
