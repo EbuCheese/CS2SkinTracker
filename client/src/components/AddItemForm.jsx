@@ -57,6 +57,19 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
     return true;
   };
 
+  const getItemType = (displayType) => {
+    const typeMap = {
+      'Liquids': 'liquid',
+      'Cases': 'case', 
+      'Crafts': 'craft',
+      'Agents': 'agent',
+      'Keychains': 'keychain',
+      'Graffiti': 'graffiti',
+      'Patches': 'patch'
+    };
+    return typeMap[displayType] || displayType.toLowerCase();
+  };
+
   const handleSubmit = async () => {
     if (!validateFormData()) return;
 
@@ -75,7 +88,7 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
       
       const newInvestment = {
         user_id: userSession.id,
-        type: type.toLowerCase().slice(0, -1),
+        type: getItemType(type),
         name: formData.name.trim(),
         skin_name: formData.skin_name?.trim() || null,
         condition: formData.condition?.trim() || null,
