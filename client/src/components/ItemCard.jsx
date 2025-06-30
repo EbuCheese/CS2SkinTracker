@@ -42,12 +42,21 @@ if (isSoldItem) {
   quantity = item.quantity || 0;
   soldItems = item.total_sold_quantity || 0;
   availableQuantity = item.quantity;
-  originalQuantity = item.original_quantity || item.quantity; // ← Use original_quantity from view
+  originalQuantity = item.original_quantity || item.quantity;
   isFullySold = availableQuantity === 0;
-  realizedProfitLoss = item.realized_profit_loss || 0; // ← From view
-  unrealizedProfitLoss = item.unrealized_profit_loss || 0; // ← From view
+  
+  if (item.realized_profit_loss !== undefined && item.unrealized_profit_loss !== undefined) {
+    // Existing item with summary data from view
+    realizedProfitLoss = item.realized_profit_loss || 0;
+    unrealizedProfitLoss = item.unrealized_profit_loss || 0;
+  } else {
+    // Newly added item - calculate P&L manually
+    realizedProfitLoss = 0; // No sales yet
+    unrealizedProfitLoss = (currentPrice - buyPrice) * quantity;
+  }
+  
   totalProfitLoss = realizedProfitLoss + unrealizedProfitLoss;
-  totalInvestment = item.buy_price * originalQuantity;
+  totalInvestment = buyPrice * originalQuantity;
 }
   
   const profitPercentage = totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00';
