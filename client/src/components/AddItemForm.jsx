@@ -8,7 +8,7 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
     name: '',
     skin_name: '',
     condition: '',
-    variant: '',
+    variant: 'normal',
     buy_price: '',
     quantity: 1,
     image_url: ''
@@ -198,10 +198,11 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
                     ...prev, 
                     name: item.name,
                     image_url: item.image || '',
-                    // Store variant information
-                    stattrak: item.stattrak || false,
-                    souvenir: item.souvenir || false,
-                    selectedVariant: item.selectedVariant || 'normal',
+                    // Store variant information and ensure normal is default
+                    stattrak: false, // Default to false
+                    souvenir: false, // Default to false
+                    selectedVariant: 'normal', // Always default to normal
+                    variant: 'normal', // Set variant to normal by default
                     hasStatTrak: item.hasStatTrak || false,
                     hasSouvenir: item.hasSouvenir || false
                   }))}
@@ -235,6 +236,12 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
                           Souvenir
                         </span>
                       )}
+                      {/* Show normal variant when neither stattrak nor souvenir */}
+                      {!formData.stattrak && !formData.souvenir && (
+                        <span className="inline-block px-2 py-0.5 bg-blue-600 text-white rounded text-xs mt-1">
+                          Normal
+                        </span>
+                      )}
                     </div>
                   </div>
                   
@@ -253,7 +260,7 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
                             variant: 'normal'
                           }))}
                           className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                            !formData.stattrak && !formData.souvenir
+                            (!formData.stattrak && !formData.souvenir) || formData.variant === 'normal'
                               ? 'bg-blue-600 text-white' 
                               : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
                           }`}
@@ -272,7 +279,7 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
                               variant: 'stattrak'
                             }))}
                             className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                              formData.stattrak
+                              formData.stattrak || formData.variant === 'stattrak'
                                 ? 'bg-orange-600 text-white' 
                                 : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
                             }`}
@@ -292,7 +299,7 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
                               variant: 'souvenir'
                             }))}
                             className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                              formData.souvenir
+                              formData.souvenir || formData.variant === 'souvenir'
                                 ? 'bg-yellow-600 text-white' 
                                 : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
                             }`}
