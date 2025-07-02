@@ -70,7 +70,8 @@ if (isSoldItem) {
     condition: isSoldItem ? (item.item_condition || '') : (item.condition || ''),
     variant: item.variant || 'normal',
     quantity: isSoldItem ? item.quantity_sold : (item.quantity || 1),
-    buy_price: isSoldItem ? item.buy_price_per_unit : (item.buy_price || 0)
+    buy_price: isSoldItem ? item.buy_price_per_unit : (item.buy_price || 0),
+    notes: item.notes || ''
   });
 
   // Handle new item animation
@@ -220,7 +221,8 @@ const handleEditFormSubmit = async () => {
       condition: editForm.condition,
       variant: editForm.variant,
       quantity: parseInt(editForm.quantity),
-      buy_price: parseFloat(editForm.buy_price)
+      buy_price: parseFloat(editForm.buy_price),
+      notes: editForm.notes?.trim() || null
     };
 
     if (updateData.quantity < 1 || updateData.quantity > 9999) {
@@ -273,7 +275,8 @@ const handleEditFormCancel = () => {
     condition: isSoldItem ? (item.item_condition || '') : (item.condition || ''),
     variant: item.variant || 'normal',
     quantity: isSoldItem ? item.quantity_sold : (item.quantity || 1),
-    buy_price: isSoldItem ? item.buy_price_per_unit : (item.buy_price || 0)
+    buy_price: isSoldItem ? item.buy_price_per_unit : (item.buy_price || 0),
+    notes: item.notes || ''
   });
   setIsEditingItem(false);
 };
@@ -399,6 +402,15 @@ const handleEditFormCancel = () => {
                   </div>
                 )}
               </div>
+
+              {/* ADD NOTES DISPLAY HERE */}
+              {item.notes && (
+                <div className="mt-1">
+                  <p className="text-xs text-gray-400 italic truncate" title={item.notes}>
+                    note: {item.notes}
+                  </p>
+                </div>
+              )}
               
               {/* Price Display */}
               <div className="mt-2 text-sm">
@@ -604,6 +616,21 @@ const handleEditFormCancel = () => {
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
               />
             </div>
+          </div>
+
+          <div className="mt-3">
+            <label className="block text-xs font-medium text-gray-400 mb-1">
+              Notes (Optional)
+            </label>
+            <textarea
+              placeholder="Add any additional details (e.g., 95% fade, 0.16 float, special stickers, etc.)"
+              value={editForm.notes}
+              onChange={(e) => handleEditFormChange('notes', e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none resize-none"
+              rows={2}
+              maxLength={300}
+            />
+            <p className="text-gray-400 text-xs mt-1">{editForm.notes.length}/300 characters</p>
           </div>
 
           <div className="flex items-center justify-end space-x-2 mt-4">
