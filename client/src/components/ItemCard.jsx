@@ -133,7 +133,8 @@ const handleConfirmedSale = async () => {
       p_investment_id: item.id,
       p_user_id: userSession.id,
       p_quantity_to_sell: quantity,
-      p_price_per_unit: pricePerUnit
+      p_price_per_unit: pricePerUnit,
+      p_sale_notes: null
     });
     
     if (saleError) throw new Error(`Sale failed: ${saleError.message}`);
@@ -366,6 +367,15 @@ const handleEditFormCancel = () => {
                   <div className="text-white">${item.buy_price_per_unit?.toFixed(2)}</div>
                 </div>
               </div>
+
+              {item.notes && (
+                <div className="mt-1">
+                  <p className="text-xs text-gray-400 italic truncate" title={item.notes}>
+                    note: {item.notes}
+                  </p>
+                </div>
+              )}
+
               <div className="mt-1">
                 <span className="text-gray-400">Quantity: </span>
                 <span className="text-white">{item.quantity_sold}</span>
