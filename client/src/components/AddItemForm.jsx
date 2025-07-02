@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Upload, Plus, Minus, Loader2 } from 'lucide-react';
+import { X, Upload, Plus, Minus, Loader2, FileText } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import CSItemSearch from './CSItemSearch';
 
@@ -11,7 +11,8 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
     variant: 'normal',
     buy_price: '',
     quantity: 1,
-    image_url: ''
+    image_url: '',
+    notes: '' // Add notes field
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -96,7 +97,8 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
         buy_price: buyPrice,
         current_price: Math.max(0.01, currentPrice),
         quantity: Math.max(1, parseInt(formData.quantity)),
-        image_url: formData.image_url || null
+        image_url: formData.image_url || null,
+        notes: formData.notes?.trim() || null // Add notes to the investment data
       };
 
       console.log('Attempting to insert investment:', newInvestment);
@@ -193,6 +195,25 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
                   className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors"
                   maxLength={100}
                 />
+              </div>
+              
+              {/* Notes field for crafts */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <div className="flex items-center space-x-2">
+                    <FileText className="w-4 h-4" />
+                    <span>Notes (Optional)</span>
+                  </div>
+                </label>
+                <textarea
+                  placeholder="Add any additional details (e.g., 95% fade, 0.16 float, special pattern, etc.)"
+                  value={formData.notes}
+                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors resize-none"
+                  rows={3}
+                  maxLength={300}
+                />
+                <p className="text-gray-400 text-xs mt-1">{formData.notes.length}/300 characters</p>
               </div>
             </>
           ) : (
@@ -326,6 +347,25 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
                       </p>
                     </div>
                   )}
+                  
+                  {/* Notes field for selected items */}
+                  <div className="border-t border-gray-600 pt-3 mt-3">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      <div className="flex items-center space-x-2">
+                        <FileText className="w-4 h-4" />
+                        <span>Notes (Optional)</span>
+                      </div>
+                    </label>
+                    <textarea
+                      placeholder="Add any additional details (e.g., 95% fade, 0.16 float, special stickers, etc.)"
+                      value={formData.notes}
+                      onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors resize-none text-sm"
+                      rows={2}
+                      maxLength={300}
+                    />
+                    <p className="text-gray-400 text-xs mt-1">{formData.notes.length}/300 characters</p>
+                  </div>
                 </div>
               )}
                           
@@ -388,6 +428,27 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
                     </button>
                   </div>
                   <p className="text-gray-400 text-xs text-center mt-2">Current quantity: {formData.quantity}</p>
+                </div>
+              )}
+              
+              {/* Notes field for items without variants - show outside the selected item box */}
+              {formData.name && !formData.image_url && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <div className="flex items-center space-x-2">
+                      <FileText className="w-4 h-4" />
+                      <span>Notes (Optional)</span>
+                    </div>
+                  </label>
+                  <textarea
+                    placeholder="Add any additional details (e.g., 95% fade, 0.16 float, special stickers, etc.)"
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors resize-none"
+                    rows={3}
+                    maxLength={300}
+                  />
+                  <p className="text-gray-400 text-xs mt-1">{formData.notes.length}/300 characters</p>
                 </div>
               )}
             </>
