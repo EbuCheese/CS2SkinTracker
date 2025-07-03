@@ -310,19 +310,20 @@ const handleEditFormCancel = () => {
     <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/30 transition-all duration-200 ${animationClass} ${isFullySold ? 'opacity-75' : ''}`}>
       <div className="flex items-start space-x-4">
         {/* Image Container with Variant Badges */}
-        <div className="relative w-20 h-16 bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+        <div className="relative w-20 h-16 bg-gray-700 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
           {item.image_url ? (
             <img 
               src={item.image_url} 
               alt={isSoldItem ? item.item_name : item.name} 
-              className="w-full h-full object-contain"
+              className="max-w-full max-h-full object-contain"
             />
           ) : (
             <div className="text-gray-400 text-xs text-center">No Image</div>
           )}
           
+          {/* Variant badges */}
           {item.variant && item.variant !== 'normal' && (
-            <div className="absolute top-0 right-0 flex flex-col gap-0.5">
+            <div className="absolute top-0 right-0 flex flex-col gap-0.5 p-1">
               {item.variant === 'stattrak' && (
                 <span className="text-[10px] px-1 py-0.5 rounded-sm bg-orange-500 text-white font-medium shadow-sm">
                   ST

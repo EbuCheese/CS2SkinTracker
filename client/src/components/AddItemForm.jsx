@@ -15,30 +15,96 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
     notes: '' // Add notes field
   });
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingImage, setIsUploading] = useState(false);
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        alert('Please select a valid image file');
-        return;
+  const compressImage = (file, maxWidth = 800, maxHeight = 600, quality = 0.8) => {
+  return new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    
+    img.onload = () => {
+      // Calculate new dimensions while maintaining aspect ratio
+      let { width, height } = img;
+      
+      if (width > height) {
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = (width * maxHeight) / height;
+          height = maxHeight;
+        }
       }
       
-      // Validate file size (5MB limit)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Image file size must be less than 5MB');
-        return;
-      }
+      canvas.width = width;
+      canvas.height = height;
+      
+      // Draw and compress
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // Convert to blob with compression
+      canvas.toBlob(resolve, 'image/jpeg', quality);
+    };
+    
+    img.src = URL.createObjectURL(file);
+  });
+};
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setFormData(prev => ({ ...prev, image_url: e.target.result }));
-      };
-      reader.readAsDataURL(file);
+const blobToBase64 = (blob) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(blob);
+  });
+};
+
+const handleImageUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    alert('Please select a valid image file');
+    return;
+  }
+  
+  // Initial size check (before compression)
+  if (file.size > 10 * 1024 * 1024) { // 10MB limit for original
+    alert('Original image file size must be less than 10MB');
+    return;
+  }
+  
+  try {
+    // Show loading state
+    setIsUploading(true);
+    
+    // Compress the image
+    const compressedBlob = await compressImage(file, 800, 600, 0.8);
+    
+    // Check compressed size (aim for under 200KB)
+    if (compressedBlob.size > 200 * 1024) {
+      // Try with lower quality if still too large
+      const recompressedBlob = await compressImage(file, 600, 450, 0.6);
+      const base64 = await blobToBase64(recompressedBlob);
+      setFormData(prev => ({ ...prev, image_url: base64 }));
+    } else {
+      const base64 = await blobToBase64(compressedBlob);
+      setFormData(prev => ({ ...prev, image_url: base64 }));
     }
-  };
-
+    
+    console.log(`Original size: ${(file.size / 1024).toFixed(2)}KB`);
+    console.log(`Compressed size: ${(compressedBlob.size / 1024).toFixed(2)}KB`);
+    
+  } catch (error) {
+    console.error('Error compressing image:', error);
+    alert('Error processing image. Please try again.');
+  } finally {
+    setIsUploading(false);
+  }
+};
   const validateFormData = () => {
     if (!formData.name.trim()) {
       alert('Please enter a name for the item');
