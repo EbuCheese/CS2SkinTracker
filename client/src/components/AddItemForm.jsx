@@ -151,8 +151,205 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
         <div className="space-y-6">
           {type === 'Crafts' ? (
             <>
+              {/* Base Skin Search */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-3">Upload Image</label>
+                <label className="block text-sm font-medium text-gray-300 mb-3">
+                  Search Base Skin
+                </label>
+                <CSItemSearch
+                  type="liquids" // Use liquids as base for skins
+                  placeholder="Search base skins..."
+                  value={formData.skin_name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, skin_name: e.target.value }))}
+                  onSelect={(item) => setFormData(prev => ({ 
+                    ...prev, 
+                    skin_name: item.name,
+                    image_url: item.image || '',
+                    // Store variant information and ensure normal is default
+                    stattrak: false, // Default to false
+                    souvenir: false, // Default to false
+                    selectedVariant: 'normal', // Always default to normal
+                    variant: 'normal', // Set variant to normal by default
+                    hasStatTrak: item.hasStatTrak || false,
+                    hasSouvenir: item.hasSouvenir || false
+                  }))}
+                  className="w-full"
+                  showLargeView={true}
+                  maxResults={15}
+                />
+              </div>
+
+              {/* Selected base skin preview with variant controls */}
+              {formData.image_url && (
+                <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Selected Base Skin</label>
+                  <div className="flex items-center space-x-3 mb-3">
+                    <img 
+                      src={formData.image_url} 
+                      alt={formData.skin_name}
+                      className="w-16 h-16 object-contain bg-gray-700 rounded"
+                    />
+                    <div className="flex-1">
+                      <p className="text-white font-medium">{formData.skin_name}</p>
+                      <p className="text-gray-400 text-sm">Base skin selected</p>
+                      {/* Show current variant */}
+                      {formData.stattrak && (
+                        <span className="inline-block px-2 py-0.5 bg-orange-600 text-white rounded text-xs mt-1 mr-1">
+                          StatTrak™
+                        </span>
+                      )}
+                      {formData.souvenir && (
+                        <span className="inline-block px-2 py-0.5 bg-yellow-600 text-white rounded text-xs mt-1">
+                          Souvenir
+                        </span>
+                      )}
+                      {/* Show normal variant when neither stattrak nor souvenir */}
+                      {!formData.stattrak && !formData.souvenir && (
+                        <span className="inline-block px-2 py-0.5 bg-blue-600 text-white rounded text-xs mt-1">
+                          Normal
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Variant toggle controls - only show if variants are available */}
+                  {(formData.hasStatTrak || formData.hasSouvenir) && (
+                    <div className="border-t border-gray-600 pt-3">
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Skin Variant</label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ 
+                            ...prev, 
+                            stattrak: false, 
+                            souvenir: false,
+                            selectedVariant: 'normal',
+                            variant: 'normal'
+                          }))}
+                          className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                            (!formData.stattrak && !formData.souvenir) || formData.variant === 'normal'
+                              ? 'bg-blue-600 text-white' 
+                              : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                          }`}
+                        >
+                          Normal
+                        </button>
+                        
+                        {formData.hasStatTrak && (
+                          <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ 
+                              ...prev, 
+                              stattrak: true, 
+                              souvenir: false,
+                              selectedVariant: 'stattrak',
+                              variant: 'stattrak'
+                            }))}
+                            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                              formData.stattrak || formData.variant === 'stattrak'
+                                ? 'bg-orange-600 text-white' 
+                                : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                            }`}
+                          >
+                            StatTrak™
+                          </button>
+                        )}
+                        
+                        {formData.hasSouvenir && (
+                          <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ 
+                              ...prev, 
+                              stattrak: false, 
+                              souvenir: true,
+                              selectedVariant: 'souvenir',
+                              variant: 'souvenir'
+                            }))}
+                            className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                              formData.souvenir || formData.variant === 'souvenir'
+                                ? 'bg-yellow-600 text-white' 
+                                : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                            }`}
+                          >
+                            Souvenir
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-gray-400 text-xs mt-2">
+                        Select the variant for your base skin
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Condition Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Condition</label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {[
+                    { short: 'FN', full: 'Factory New' },
+                    { short: 'MW', full: 'Minimal Wear' },
+                    { short: 'FT', full: 'Field-Tested' },
+                    { short: 'WW', full: 'Well-Worn' },
+                    { short: 'BS', full: 'Battle-Scarred' }
+                  ].map(({ short, full }) => (
+                    <button
+                      key={short}
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, condition: full }))}
+                      className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
+                        formData.condition === full
+                          ? 'bg-blue-600 text-white' 
+                          : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                      }`}
+                    >
+                      {short}
+                    </button>
+                  ))}
+                </div>
+                {formData.condition && (
+                  <p className="text-gray-400 text-xs mt-2">Selected: {formData.condition}</p>
+                )}
+              </div>
+
+              {/* Custom Name */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Custom Craft Name</label>
+                <input
+                  type="text"
+                  placeholder="Enter your custom craft name"
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors"
+                  required
+                  maxLength={100}
+                />
+                <p className="text-gray-400 text-xs mt-1">Give your craft a unique name</p>
+              </div>
+              
+              {/* Notes field for crafts */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  <div className="flex items-center space-x-2">
+                    <FileText className="w-4 h-4" />
+                    <span>Craft Details (Optional)</span>
+                  </div>
+                </label>
+                <textarea
+                  placeholder="Add craft details (e.g., 4x Katowice 2014, specific sticker placements, float value, etc.)"
+                  value={formData.notes}
+                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors resize-none"
+                  rows={3}
+                  maxLength={300}
+                />
+                <p className="text-gray-400 text-xs mt-1">{formData.notes.length}/300 characters</p>
+              </div>
+
+              {/* Upload Image - moved to end as optional */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-3">Upload Custom Image (Optional)</label>
                 <div className="border-2 border-dashed border-orange-500/30 rounded-lg p-6 text-center hover:border-orange-500/50 transition-colors">
                   <input
                     type="file"
@@ -162,58 +359,17 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
                     id="image-upload"
                   />
                   <label htmlFor="image-upload" className="cursor-pointer flex flex-col items-center">
-                    {formData.image_url ? (
+                    {formData.image_url && !formData.skin_name ? (
                       <img src={formData.image_url} alt="Preview" className="w-24 h-24 object-cover rounded mb-2" />
                     ) : (
                       <>
                         <Upload className="w-10 h-10 text-orange-500 mb-3" />
-                        <span className="text-sm text-gray-400">Click to upload image</span>
+                        <span className="text-sm text-gray-400">Click to upload custom image</span>
+                        <span className="text-xs text-gray-500 mt-1">Overrides base skin image</span>
                       </>
                     )}
                   </label>
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Custom Name</label>
-                <input
-                  type="text"
-                  placeholder="Enter custom name"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors"
-                  required
-                  maxLength={100}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Base Skin Name</label>
-                <input
-                  type="text"
-                  placeholder="Enter base skin name"
-                  value={formData.skin_name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, skin_name: e.target.value }))}
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors"
-                  maxLength={100}
-                />
-              </div>
-              
-              {/* Notes field for crafts */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  <div className="flex items-center space-x-2">
-                    <FileText className="w-4 h-4" />
-                    <span>Notes (Optional)</span>
-                  </div>
-                </label>
-                <textarea
-                  placeholder="Add any additional details (e.g., 95% fade, 0.16 float, special pattern, etc.)"
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors resize-none"
-                  rows={3}
-                  maxLength={300}
-                />
-                <p className="text-gray-400 text-xs mt-1">{formData.notes.length}/300 characters</p>
               </div>
             </>
           ) : (
