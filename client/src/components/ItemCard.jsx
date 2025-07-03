@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Minus, Plus, Loader2, Edit2, Save, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import NotePopup from './NotePopup';
 
 const ItemCard = ({ item, userSession, onUpdate, onDelete, onRemove, isNew = false, isSoldItem = false }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -16,6 +17,7 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, onRemove, isNew = fal
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [popupMessage, setPopupMessage] = useState('');
   const [salePreview, setSalePreview] = useState(null);
+  const [showNotePopup, setShowNotePopup] = useState(false);
 
   // sale variables for supabase
   let soldItems, availableQuantity, originalQuantity, isFullySold;
@@ -370,9 +372,13 @@ const handleEditFormCancel = () => {
 
               {item.notes && (
                 <div className="mt-1">
-                  <p className="text-xs text-gray-400 italic truncate" title={item.notes}>
+                  <button
+                    onClick={() => setShowNotePopup(true)}
+                    className="text-xs text-gray-400 italic truncate hover:text-orange-400 transition-colors text-left w-full"
+                    title="Click to view full note"
+                  >
                     note: {item.notes}
-                  </p>
+                  </button>
                 </div>
               )}
 
@@ -416,9 +422,13 @@ const handleEditFormCancel = () => {
               {/* ADD NOTES DISPLAY HERE */}
               {item.notes && (
                 <div className="mt-1">
-                  <p className="text-xs text-gray-400 italic truncate" title={item.notes}>
+                  <button
+                    onClick={() => setShowNotePopup(true)}
+                    className="text-xs text-gray-400 italic truncate hover:text-orange-400 transition-colors text-left w-full"
+                    title="Click to view full note"
+                  >
                     note: {item.notes}
-                  </p>
+                  </button>
                 </div>
               )}
               
@@ -801,6 +811,13 @@ const handleEditFormCancel = () => {
             </div>
           </div>
         )}
+
+        {/* Note Popup */}
+        <NotePopup 
+        isOpen={showNotePopup}
+        onClose={() => setShowNotePopup(false)}
+        note={item.notes}
+        />
     </div>
   );
 };
