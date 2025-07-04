@@ -136,24 +136,35 @@ const handleImageUpload = async (e) => {
   await processImageFile(file);
 };
 
-  const validateFormData = () => {
-    if (!formData.name.trim()) {
-      alert('Please enter a name for the item');
-      return false;
-    }
-    
-    if (!formData.buy_price || isNaN(parseFloat(formData.buy_price)) || parseFloat(formData.buy_price) <= 0) {
-      alert('Please enter a valid buy price greater than 0');
-      return false;
-    }
-    
-    if (formData.quantity < 1) {
-      alert('Quantity must be at least 1');
-      return false;
-    }
-    
-    return true;
-  };
+const validateFormData = () => {
+  if (!formData.name.trim()) {
+    alert('Please enter a name for the item');
+    return false;
+  }
+  
+  // Add validation for crafts requiring base skin
+  if (type === 'Crafts' && !formData.skin_name?.trim()) {
+    alert('Please select a base skin for your craft');
+    return false;
+  }
+  
+  if ((type === 'Liquids' || type === 'Crafts') && !formData.condition) {
+    alert('Please select a condition');
+    return false;
+  }
+  
+  if (!formData.buy_price || isNaN(parseFloat(formData.buy_price)) || parseFloat(formData.buy_price) <= 0) {
+    alert('Please enter a valid buy price greater than 0');
+    return false;
+  }
+  
+  if (formData.quantity < 1) {
+    alert('Quantity must be at least 1');
+    return false;
+  }
+  
+  return true;
+};
 
   const getItemType = (displayType) => {
     const typeMap = {
@@ -253,7 +264,7 @@ const handleImageUpload = async (e) => {
               {/* Base Skin Search */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-3">
-                  Search Base Skin
+                  Search Base Skin <span className="text-red-400">*</span>
                 </label>
                 <CSItemSearch
                   type="liquids" // Use liquids as base for skins
@@ -384,7 +395,9 @@ const handleImageUpload = async (e) => {
 
               {/* Condition Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Condition</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Condition <span className="text-red-400">*</span>
+                </label>
                 <div className="flex items-center gap-2 flex-wrap">
                   {[
                     { short: 'FN', full: 'Factory New' },
@@ -414,7 +427,9 @@ const handleImageUpload = async (e) => {
 
               {/* Custom Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Custom Craft Name</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Custom Craft Name <span className="text-red-400">*</span>
+                </label>
                 <input
                   type="text"
                   placeholder="Enter your custom craft name"
@@ -508,7 +523,7 @@ const handleImageUpload = async (e) => {
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-3">
-                  Search {type}
+                  Search {type} <span className="text-red-400">*</span>
                 </label>
                 {/* Enhanced search with larger view */}
                 <CSItemSearch
@@ -659,7 +674,9 @@ const handleImageUpload = async (e) => {
                           
               {type === 'Liquids' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Condition</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Condition <span className="text-red-400">*</span>
+                  </label>
                   <div className="flex items-center gap-2 flex-wrap">
                     {[
                       { short: 'FN', full: 'Factory New' },
@@ -743,7 +760,9 @@ const handleImageUpload = async (e) => {
           )}
           
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Buy Price</label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Buy Price <span className="text-red-400">*</span>
+            </label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
               <input
@@ -763,7 +782,15 @@ const handleImageUpload = async (e) => {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || !formData.name || !formData.buy_price}
+            disabled={
+              submitting || 
+              !formData.name || 
+              !formData.buy_price ||
+              // Add condition check for items that require it
+              ((type === 'Liquids' || type === 'Crafts') && !formData.condition) ||
+              // Add base skin check for crafts
+              (type === 'Crafts' && !formData.skin_name?.trim())
+            }
             className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
           >
             {submitting ? (
