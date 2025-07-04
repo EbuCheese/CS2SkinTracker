@@ -12,10 +12,32 @@ const AddItemForm = ({ type, onClose, onAdd, userSession }) => {
     buy_price: '',
     quantity: 1,
     image_url: '',
-    notes: '' // Add notes field
+    notes: ''
   });
   const [submitting, setSubmitting] = useState(false);
   const [uploadingImage, setIsUploading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      await processImageFile(file);
+    }
+  };
 
   const compressImage = (file, maxWidth = 800, maxHeight = 600, quality = 0.8) => {
   return new Promise((resolve) => {
@@ -61,8 +83,7 @@ const blobToBase64 = (blob) => {
   });
 };
 
-const handleImageUpload = async (e) => {
-  const file = e.target.files[0];
+const processImageFile = async (file) => {
   if (!file) return;
   
   // Validate file type
@@ -78,21 +99,25 @@ const handleImageUpload = async (e) => {
   }
   
   try {
-    // Show loading state
     setIsUploading(true);
     
-    // Compress the image
     const compressedBlob = await compressImage(file, 800, 600, 0.8);
     
-    // Check compressed size (aim for under 200KB)
     if (compressedBlob.size > 200 * 1024) {
-      // Try with lower quality if still too large
       const recompressedBlob = await compressImage(file, 600, 450, 0.6);
       const base64 = await blobToBase64(recompressedBlob);
-      setFormData(prev => ({ ...prev, image_url: base64 }));
+      setFormData(prev => ({ 
+        ...prev, 
+        custom_image_url: base64,
+        image_url: base64 // Also update the base image to show custom image in preview
+      }));
     } else {
       const base64 = await blobToBase64(compressedBlob);
-      setFormData(prev => ({ ...prev, image_url: base64 }));
+      setFormData(prev => ({ 
+        ...prev, 
+        custom_image_url: base64,
+        image_url: base64 // Also update the base image to show custom image in preview
+      }));
     }
     
     console.log(`Original size: ${(file.size / 1024).toFixed(2)}KB`);
@@ -105,6 +130,12 @@ const handleImageUpload = async (e) => {
     setIsUploading(false);
   }
 };
+
+const handleImageUpload = async (e) => {
+  const file = e.target.files[0];
+  await processImageFile(file);
+};
+
   const validateFormData = () => {
     if (!formData.name.trim()) {
       alert('Please enter a name for the item');
@@ -153,6 +184,8 @@ const handleImageUpload = async (e) => {
       const priceVariation = (Math.random() * 0.4 - 0.2);
       const currentPrice = buyPrice * (1 + priceVariation);
       
+      const finalImageUrl = formData.custom_image_url || formData.image_url || null;
+
       const newInvestment = {
         user_id: userSession.id,
         type: getItemType(type),
@@ -163,7 +196,7 @@ const handleImageUpload = async (e) => {
         buy_price: buyPrice,
         current_price: Math.max(0.01, currentPrice),
         quantity: Math.max(1, parseInt(formData.quantity)),
-        image_url: formData.image_url || null,
+        image_url: finalImageUrl,
         notes: formData.notes?.trim() || null // Add notes to the investment data
       };
 
@@ -416,25 +449,58 @@ const handleImageUpload = async (e) => {
               {/* Upload Image - moved to end as optional */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-3">Upload Custom Image (Optional)</label>
-                <div className="border-2 border-dashed border-orange-500/30 rounded-lg p-6 text-center hover:border-orange-500/50 transition-colors">
+                <div 
+                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                    isDragOver 
+                      ? 'border-orange-500 bg-orange-500/10' 
+                      : 'border-orange-500/30 hover:border-orange-500/50'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
                   <input
                     type="file"
                     accept="image/*"
                     onChange={handleImageUpload}
                     className="hidden"
                     id="image-upload"
+                    disabled={uploadingImage}
                   />
-                  <label htmlFor="image-upload" className="cursor-pointer flex flex-col items-center">
-                    {formData.image_url && !formData.skin_name ? (
-                      <img src={formData.image_url} alt="Preview" className="w-24 h-24 object-cover rounded mb-2" />
-                    ) : (
-                      <>
-                        <Upload className="w-10 h-10 text-orange-500 mb-3" />
-                        <span className="text-sm text-gray-400">Click to upload custom image</span>
-                        <span className="text-xs text-gray-500 mt-1">Overrides base skin image</span>
-                      </>
-                    )}
-                  </label>
+                  
+                  {uploadingImage ? (
+                    <div className="flex flex-col items-center">
+                      <Loader2 className="w-10 h-10 text-orange-500 mb-3 animate-spin" />
+                      <span className="text-sm text-gray-400">Processing image...</span>
+                    </div>
+                  ) : formData.custom_image_url ? (
+                    <div className="flex flex-col items-center">
+                      <img 
+                        src={formData.custom_image_url} 
+                        alt="Custom preview" 
+                        className="w-96 h-40 object-contain rounded mb-2" 
+                      />
+                      <span className="text-sm text-green-400 mb-2">Custom image uploaded</span>
+                      <label htmlFor="image-upload" className="text-sm text-orange-400 hover:text-orange-300 cursor-pointer">
+                        Click to change image
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, custom_image_url: '' }))}
+                        className="text-xs text-gray-500 hover:text-gray-400 mt-1"
+                      >
+                        Remove custom image
+                      </button>
+                    </div>
+                  ) : (
+                    <label htmlFor="image-upload" className="cursor-pointer flex flex-col items-center">
+                      <Upload className="w-10 h-10 text-orange-500 mb-3" />
+                      <span className="text-sm text-gray-400">Click to upload or drag & drop</span>
+                      <span className="text-xs text-gray-500 mt-1">
+                        {formData.image_url ? 'Overrides base skin image' : 'No base image selected'}
+                      </span>
+                    </label>
+                  )}
                 </div>
               </div>
             </>
