@@ -24,14 +24,18 @@ const Navbar = ({ userSession, onLogout }) => {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
-              <TrendingUp className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-lg">
+              <img 
+                src="/skinwatchLOGO.png" 
+                alt="SkinWatch Logo" 
+                className="w-10 h-10 object-contain rounded-lg"
+              />
             </div>
             <div className="hidden sm:block">
               <h1 className="text-xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">
-                SkinTracker
+                SkinWatch
               </h1>
-              <p className="text-xs text-gray-400 -mt-1">CS Investment App</p>
+              <p className="text-xs text-gray-400 -mt-1">CS Investment Tracker</p>
             </div>
           </div>
 
