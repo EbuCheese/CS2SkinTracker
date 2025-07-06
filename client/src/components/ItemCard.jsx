@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Minus, Plus, Loader2, Edit2, Save, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
-import NotePopup from './NotePopup';
+import PopupManager from './PopupManager';
 
 const ItemCard = ({ item, userSession, onUpdate, onDelete, onRemove, isNew = false, isSoldItem = false }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -11,13 +11,39 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, onRemove, isNew = fal
   const [updating, setUpdating] = useState(false);
   const [animationClass, setAnimationClass] = useState('');
   
-  // custom popup states
-  const [showConfirmSale, setShowConfirmSale] = useState(false);
-  const [showErrorPopup, setShowErrorPopup] = useState(false);
-  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
-  const [popupMessage, setPopupMessage] = useState('');
-  const [salePreview, setSalePreview] = useState(null);
-  const [showNotePopup, setShowNotePopup] = useState(false);
+  // Consolidated popup state
+  const [popup, setPopup] = useState({
+    isOpen: false,
+    type: 'info',
+    title: '',
+    message: '',
+    onConfirm: null,
+    onCancel: null,
+    confirmText: 'OK',
+    cancelText: 'Cancel',
+    data: null
+  });
+
+  // Helper function to show popup
+  const showPopup = (config) => {
+    setPopup({
+      isOpen: true,
+      type: 'info',
+      title: '',
+      message: '',
+      onConfirm: null,
+      onCancel: null,
+      confirmText: 'OK',
+      cancelText: 'Cancel',
+      data: null,
+      ...config
+    });
+  };
+
+  // Helper function to close popup
+  const closePopup = () => {
+    setPopup(prev => ({ ...prev, isOpen: false }));
+  };
 
   // sale variables for supabase
   let soldItems, availableQuantity, originalQuantity, isFullySold;
@@ -100,14 +126,20 @@ const handlePartialSale = async () => {
   const quantity = parseInt(soldQuantity);
  
   if (!soldPrice || isNaN(pricePerUnit) || pricePerUnit <= 0) {
-    setPopupMessage('Please enter a valid price per unit greater than 0');
-    setShowErrorPopup(true);
+    showPopup({
+        type: 'error',
+        title: 'Error',
+        message: 'Please enter a valid price per unit greater than 0'
+      });
     return;
   }
  
   if (!quantity || quantity < 1 || quantity > availableQuantity) {
-    setPopupMessage(`Please enter a valid quantity between 1 and ${availableQuantity}`);
-    setShowErrorPopup(true);
+    showPopup({
+        type: 'error',
+        title: 'Error',
+        message: `Please enter a valid quantity between 1 and ${availableQuantity}`
+      });
     return;
   }
  
@@ -115,174 +147,196 @@ const handlePartialSale = async () => {
   const profitLoss = (pricePerUnit - item.buy_price) * quantity;
   
   // Show confirmation popup instead of alert
-  setSalePreview({
-    quantity,
-    pricePerUnit,
-    totalSaleValue,
-    profitLoss
-  });
-  setShowConfirmSale(true);
+  showPopup({
+      type: 'confirm',
+      title: 'Confirm Sale',
+      message: `Sell ${quantity} units at $${pricePerUnit.toFixed(2)} each?`,
+      data: {
+        quantity,
+        pricePerUnit,
+        totalSaleValue,
+        profitLoss
+      },
+      onConfirm: () => handleConfirmedSale(quantity, pricePerUnit, totalSaleValue, profitLoss),
+      confirmText: 'Confirm Sale',
+      cancelText: 'Cancel'
+    });
 };
 
-const handleConfirmedSale = async () => {
-  const { quantity, pricePerUnit, totalSaleValue, profitLoss } = salePreview;
-  
-  try {
-    setUpdating(true);
-    setShowConfirmSale(false);
-    
-    const { data: saleResult, error: saleError } = await supabase.rpc('process_investment_sale', {
-      p_investment_id: item.id,
-      p_user_id: userSession.id,
-      p_quantity_to_sell: quantity,
-      p_price_per_unit: pricePerUnit,
-      p_sale_notes: null
-    });
-    
-    if (saleError) throw new Error(`Sale failed: ${saleError.message}`);
-    
-    const remainingQuantity = saleResult.remaining_quantity;
-    
-    if (remainingQuantity === 0) {
-      if (onRemove) {
-        onRemove(item.id);
+// Updated handleConfirmedSale
+  const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profitLoss) => {
+    try {
+      setUpdating(true);
+      closePopup();
+      
+      const { data: saleResult, error: saleError } = await supabase.rpc('process_investment_sale', {
+        p_investment_id: item.id,
+        p_user_id: userSession.id,
+        p_quantity_to_sell: quantity,
+        p_price_per_unit: pricePerUnit,
+        p_sale_notes: null
+      });
+      
+      if (saleError) throw new Error(`Sale failed: ${saleError.message}`);
+      
+      const remainingQuantity = saleResult.remaining_quantity;
+      
+      if (remainingQuantity === 0) {
+        if (onRemove) {
+          onRemove(item.id);
+        }
+      } else {
+        const updatedItem = {
+          ...item,
+          quantity: remainingQuantity,
+          total_sold_quantity: (item.total_sold_quantity || 0) + quantity,
+          total_sale_value: (item.total_sale_value || 0) + totalSaleValue,
+          unrealized_profit_loss: (item.current_price - item.buy_price) * remainingQuantity,    
+        };
+        onUpdate(item.id, updatedItem);
       }
-    } else {
-      // FIXED: Update with properly calculated remaining values
+      
+      showPopup({
+        type: 'success',
+        title: 'Success',
+        message: `Successfully sold ${quantity} units for $${totalSaleValue.toFixed(2)}\nProfit/Loss: ${profitLoss >= 0 ? '+' : ''}$${profitLoss.toFixed(2)}\nRemaining quantity: ${remainingQuantity}`
+      });
+      
+      // Refresh to get updated data from server
+      if (onRefresh) {
+        onRefresh();
+      }
+
+      setIsEditing(false);
+      setSoldPrice('');
+      setSoldQuantity(1);
+      
+    } catch (err) {
+      console.error('Error processing sale:', err);
+      showPopup({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to process sale: ' + err.message
+      });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleQuantityUpdate = async (newQuantity) => {
+    if (newQuantity < 1 || newQuantity > 9999) return;
+    
+    try {
+      const { error } = await supabase.rpc('update_investment_with_context', {
+        investment_id: item.id,
+        investment_data: { quantity: newQuantity },
+        context_user_id: userSession.id
+      });
+
+      if (error) throw error;
+      
       const updatedItem = {
         ...item,
-        quantity: remainingQuantity,
-        total_sold_quantity: (item.total_sold_quantity || 0) + quantity,
-        total_sale_value: (item.total_sale_value || 0) + totalSaleValue,
-        // Recalculate unrealized profit for remaining quantity
-        unrealized_profit_loss: (item.current_price - item.buy_price) * remainingQuantity,    
+        quantity: newQuantity,
+        unrealized_profit_loss: (item.current_price - item.buy_price) * newQuantity,
       };
+
       onUpdate(item.id, updatedItem);
+    } catch (err) {
+      console.error('Error updating quantity:', err);
+      
+      let errorMessage = 'Failed to update quantity: ' + err.message;
+      if (err.message.includes('Invalid user context')) {
+        errorMessage = 'Authentication error: Please refresh the page and re-enter your beta key.';
+      } else if (err.message.includes('not found or access denied')) {
+        errorMessage = 'Access denied: You can only update your own investments.';
+      }
+      
+      showPopup({
+        type: 'error',
+        title: 'Error',
+        message: errorMessage
+      });
     }
-    
-    setPopupMessage(`Successfully sold ${quantity} units for $${totalSaleValue.toFixed(2)}\nProfit/Loss: ${profitLoss >= 0 ? '+' : ''}$${profitLoss.toFixed(2)}\nRemaining quantity: ${remainingQuantity}`);
-    setShowSuccessPopup(true);
-    
-    // Refresh to get updated data from server
-    if (onRefresh) {
-      onRefresh();
+  };
+
+  const handleEditFormSubmit = async () => {
+    try {
+      setUpdating(true);
+      
+      const updateData = {
+        condition: editForm.condition,
+        variant: editForm.variant,
+        quantity: parseInt(editForm.quantity),
+        buy_price: parseFloat(editForm.buy_price),
+        notes: editForm.notes?.trim() || null
+      };
+
+      if (updateData.quantity < 1 || updateData.quantity > 9999) {
+        showPopup({
+          type: 'error',
+          title: 'Error',
+          message: 'Quantity must be between 1 and 9999'
+        });
+        return;
+      }
+      
+      if (updateData.buy_price <= 0) {
+        showPopup({
+          type: 'error',
+          title: 'Error',
+          message: 'Buy price must be greater than 0'
+        });
+        return;
+      }
+
+      const { error } = await supabase.rpc('update_investment_with_context', {
+        investment_id: item.id,
+        investment_data: updateData,
+        context_user_id: userSession.id
+      });
+
+      if (error) throw error;
+      
+      const updatedItem = {
+        ...item,
+        ...updateData,
+        unrealized_profit_loss: (item.current_price - updateData.buy_price) * updateData.quantity,
+        original_quantity: Math.max(item.original_quantity || item.quantity, updateData.quantity)
+      };
+
+      onUpdate(item.id, updatedItem);
+      setIsEditingItem(false);
+    } catch (err) {
+      console.error('Error updating item:', err);
+      
+      let errorMessage = 'Failed to update item: ' + err.message;
+      if (err.message.includes('Invalid user context')) {
+        errorMessage = 'Authentication error: Please refresh the page and re-enter your beta key.';
+      } else if (err.message.includes('not found or access denied')) {
+        errorMessage = 'Access denied: You can only update your own investments.';
+      }
+      
+      showPopup({
+        type: 'error',
+        title: 'Error',
+        message: errorMessage
+      });
+    } finally {
+      setUpdating(false);
     }
+  };
 
-    setIsEditing(false);
-    setSoldPrice('');
-    setSoldQuantity(1);
-    setSalePreview(null);
-    
-  } catch (err) {
-    console.error('Error processing sale:', err);
-    setPopupMessage('Failed to process sale: ' + err.message);
-    setShowErrorPopup(true);
-  } finally {
-    setUpdating(false);
-  }
-};
-
-const handleQuantityUpdate = async (newQuantity) => {
-  if (newQuantity < 1 || newQuantity > 9999) return;
-  
-  try {
-    const { error } = await supabase.rpc('update_investment_with_context', {
-      investment_id: item.id,
-      investment_data: { quantity: newQuantity },
-      context_user_id: userSession.id
+  const handleEditFormCancel = () => {
+    setEditForm({
+      condition: isSoldItem ? (item.item_condition || '') : (item.condition || ''),
+      variant: item.variant || 'normal',
+      quantity: isSoldItem ? item.quantity_sold : (item.quantity || 1),
+      buy_price: isSoldItem ? item.buy_price_per_unit : (item.buy_price || 0),
+      notes: item.notes || ''
     });
-
-    if (error) throw error;
-    
-    const updatedItem = {
-      ...item,
-      quantity: newQuantity,
-      // FIX: Only recalculate unrealized P&L for remaining quantity
-      unrealized_profit_loss: (item.current_price - item.buy_price) * newQuantity,
-    };
-
-    onUpdate(item.id, updatedItem);
-  } catch (err) {
-    console.error('Error updating quantity:', err);
-    
-    if (err.message.includes('Invalid user context')) {
-      setPopupMessage('Authentication error: Please refresh the page and re-enter your beta key.');
-    } else if (err.message.includes('not found or access denied')) {
-      setPopupMessage('Access denied: You can only update your own investments.');
-    } else {
-      setPopupMessage('Failed to update quantity: ' + err.message);
-    }
-    setShowErrorPopup(true);
-  }
-};
-
-const handleEditFormSubmit = async () => {
-  try {
-    setUpdating(true);
-    
-    const updateData = {
-      condition: editForm.condition,
-      variant: editForm.variant,
-      quantity: parseInt(editForm.quantity),
-      buy_price: parseFloat(editForm.buy_price),
-      notes: editForm.notes?.trim() || null
-    };
-
-    if (updateData.quantity < 1 || updateData.quantity > 9999) {
-      setPopupMessage('Quantity must be between 1 and 9999');
-      setShowErrorPopup(true);
-      return;
-    }
-    
-    if (updateData.buy_price <= 0) {
-      setPopupMessage('Buy price must be greater than 0');
-      setShowErrorPopup(true);
-      return;
-    }
-
-    const { error } = await supabase.rpc('update_investment_with_context', {
-      investment_id: item.id,
-      investment_data: updateData,
-      context_user_id: userSession.id
-    });
-
-    if (error) throw error;
-    
-    const updatedItem = {
-      ...item,
-      ...updateData,
-      unrealized_profit_loss: (item.current_price - updateData.buy_price) * updateData.quantity,
-      original_quantity: Math.max(item.original_quantity || item.quantity, updateData.quantity)
-    };
-
-    onUpdate(item.id, updatedItem);
     setIsEditingItem(false);
-  } catch (err) {
-    console.error('Error updating item:', err);
-    
-    if (err.message.includes('Invalid user context')) {
-      setPopupMessage('Authentication error: Please refresh the page and re-enter your beta key.');
-    } else if (err.message.includes('not found or access denied')) {
-      setPopupMessage('Access denied: You can only update your own investments.');
-    } else {
-      setPopupMessage('Failed to update item: ' + err.message);
-    }
-    setShowErrorPopup(true);
-  } finally {
-    setUpdating(false);
-  }
-};
-
-const handleEditFormCancel = () => {
-  setEditForm({
-    condition: isSoldItem ? (item.item_condition || '') : (item.condition || ''),
-    variant: item.variant || 'normal',
-    quantity: isSoldItem ? item.quantity_sold : (item.quantity || 1),
-    buy_price: isSoldItem ? item.buy_price_per_unit : (item.buy_price || 0),
-    notes: item.notes || ''
-  });
-  setIsEditingItem(false);
-};
+  };
 
   const handleEditFormChange = (field, value) => {
     setEditForm(prev => ({
@@ -374,7 +428,12 @@ const handleEditFormCancel = () => {
               {item.notes && (
                 <div className="mt-1">
                   <button
-                    onClick={() => setShowNotePopup(true)}
+                    onClick={() => showPopup({
+                      type: 'note',
+                      title: 'Item Note',
+                      message: item.notes,
+                      confirmText: 'Close'
+                    })}
                     className="text-xs text-gray-400 italic truncate hover:text-orange-400 transition-colors text-left w-full"
                     title="Click to view full note"
                   >
@@ -424,7 +483,12 @@ const handleEditFormCancel = () => {
               {item.notes && (
                 <div className="mt-1">
                   <button
-                    onClick={() => setShowNotePopup(true)}
+                    onClick={() => showPopup({
+                      type: 'note',
+                      title: 'Item Note',
+                      message: item.notes,
+                      confirmText: 'Close'
+                    })}
                     className="text-xs text-gray-400 italic truncate hover:text-orange-400 transition-colors text-left w-full"
                     title="Click to view full note"
                   >
@@ -745,80 +809,19 @@ const handleEditFormCancel = () => {
         </div>
       )}
 
-      {/* Confirm Sale Popup */}
-        {showConfirmSale && salePreview && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 max-w-md w-full mx-4">
-              <h3 className="text-lg font-semibold text-white mb-4">Confirm Sale</h3>
-              <div className="text-gray-300 mb-6">
-                <p className="mb-2">
-                  Sell {salePreview.quantity} units at ${salePreview.pricePerUnit.toFixed(2)} each?
-                </p>
-                <div className="bg-gray-700/50 p-3 rounded">
-                  <div>Total sale value: ${salePreview.totalSaleValue.toFixed(2)}</div>
-                  <div className={salePreview.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
-                    Profit/Loss: {salePreview.profitLoss >= 0 ? '+' : ''}${salePreview.profitLoss.toFixed(2)}
-                  </div>
-                </div>
-              </div>
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => setShowConfirmSale(false)}
-                  className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmedSale}
-                  disabled={updating}
-                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors disabled:opacity-50 flex items-center justify-center space-x-1"
-                >
-                  {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  <span>Confirm Sale</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Error Popup */}
-        {showErrorPopup && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-gray-800 border border-red-500 rounded-lg p-6 max-w-md w-full mx-4">
-              <h3 className="text-lg font-semibold text-red-400 mb-4">Error</h3>
-              <p className="text-gray-300 mb-6 whitespace-pre-line">{popupMessage}</p>
-              <button
-                onClick={() => setShowErrorPopup(false)}
-                className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Success Popup */}
-        {showSuccessPopup && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-gray-800 border border-green-500 rounded-lg p-6 max-w-md w-full mx-4">
-              <h3 className="text-lg font-semibold text-green-400 mb-4">Success</h3>
-              <p className="text-gray-300 mb-6 whitespace-pre-line">{popupMessage}</p>
-              <button
-                onClick={() => setShowSuccessPopup(false)}
-                className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Note Popup */}
-        <NotePopup 
-        isOpen={showNotePopup}
-        onClose={() => setShowNotePopup(false)}
-        note={item.notes}
-        />
+        <PopupManager
+        isOpen={popup.isOpen}
+        onClose={closePopup}
+        type={popup.type}
+        title={popup.title}
+        message={popup.message}
+        onConfirm={popup.onConfirm}
+        onCancel={popup.onCancel}
+        confirmText={popup.confirmText}
+        cancelText={popup.cancelText}
+        isLoading={updating}
+        data={popup.data}
+      />
     </div>
   );
 };
