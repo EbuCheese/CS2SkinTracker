@@ -1,16 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TrendingUp, TrendingDown, Minus, Plus, Loader2, Edit2, Save, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import PopupManager from './PopupManager';
 
-const ItemCard = ({ item, userSession, onUpdate, onDelete, onRemove, isNew = false, isSoldItem = false }) => {
+  const CONDITION_OPTIONS = [
+    { value: '', label: 'Select condition' },
+    { value: 'Factory New', label: 'Factory New' },
+    { value: 'Minimal Wear', label: 'Minimal Wear' },
+    { value: 'Field-Tested', label: 'Field-Tested' },
+    { value: 'Well-Worn', label: 'Well-Worn' },
+    { value: 'Battle-Scarred', label: 'Battle-Scarred' }
+  ];
+
+  const VARIANT_OPTIONS = [
+    { value: 'normal', label: 'Normal' },
+    { value: 'stattrak', label: 'StatTrak™' },
+    { value: 'souvenir', label: 'Souvenir' }
+  ];
+
+const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, isNew = false, isSoldItem = false }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingItem, setIsEditingItem] = useState(false);
   const [soldPrice, setSoldPrice] = useState('');
   const [soldQuantity, setSoldQuantity] = useState(1);
-  const [updating, setUpdating] = useState(false);
   const [animationClass, setAnimationClass] = useState('');
-  
+
+  const conditionOptions = CONDITION_OPTIONS;
+  const variantOptions = VARIANT_OPTIONS;
+
   // Consolidated popup state
   const [popup, setPopup] = useState({
     isOpen: false,
@@ -45,62 +62,112 @@ const ItemCard = ({ item, userSession, onUpdate, onDelete, onRemove, isNew = fal
     setPopup(prev => ({ ...prev, isOpen: false }));
   };
 
-  // sale variables for supabase
-  let soldItems, availableQuantity, originalQuantity, isFullySold;
-  let realizedProfitLoss, unrealizedProfitLoss, totalProfitLoss;
-  let totalInvestment, buyPrice, currentPrice, quantity;
+  const [asyncState, setAsyncState] = useState({
+  isLoading: false,
+  operation: null,
+  error: null
+});
 
-if (isSoldItem) {
-  // For sold items from investment_sales table
-  buyPrice = item.buy_price_per_unit || 0;
-  currentPrice = item.price_per_unit || 0;
-  quantity = item.quantity_sold || 0;
-  availableQuantity = 0;
-  originalQuantity = quantity;
-  isFullySold = true;
-  soldItems = 0;
-  totalProfitLoss = (item.price_per_unit - item.buy_price_per_unit) * item.quantity_sold;
-  realizedProfitLoss = totalProfitLoss;
-  unrealizedProfitLoss = 0;
-  totalInvestment = item.buy_price_per_unit * item.quantity_sold;
-} else {
-  // For active investments from investment_summary view
-  buyPrice = item.buy_price || 0;
-  currentPrice = item.current_price || 0;
-  quantity = item.quantity || 0;
-  soldItems = item.total_sold_quantity || 0;
-  availableQuantity = item.quantity;
-  originalQuantity = item.original_quantity || item.quantity;
-  isFullySold = availableQuantity === 0;
+const handleAsyncOperation = useCallback(async (operation, operationFn, ...args) => {
+  setAsyncState({ isLoading: true, operation, error: null });
   
-  if (item.realized_profit_loss !== undefined && item.unrealized_profit_loss !== undefined) {
-    // Existing item with summary data from view
-    realizedProfitLoss = item.realized_profit_loss || 0;
-    unrealizedProfitLoss = item.unrealized_profit_loss || 0;
-  } else {
-    // Newly added item - calculate P&L manually
-    realizedProfitLoss = 0; // No sales yet
-    unrealizedProfitLoss = (currentPrice - buyPrice) * quantity;
+  try {
+    const result = await operationFn(...args);
+    setAsyncState({ isLoading: false, operation: null, error: null });
+    return result;
+  } catch (error) {
+    setAsyncState({ isLoading: false, operation: null, error });
+    throw error;
   }
-  
-  totalProfitLoss = realizedProfitLoss + unrealizedProfitLoss;
-  totalInvestment = buyPrice * originalQuantity;
-}
-  
-  const profitPercentage = totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00';
+}, []);
 
-  // Additional sales metrics from view
-  const totalSaleValue = item.total_sale_value || 0;
-  const averageSalePrice = item.average_sale_price || 0;
+  const itemMetrics = useMemo(() => {
+  // sale variables for supabase
+    let soldItems, availableQuantity, originalQuantity, isFullySold;
+    let realizedProfitLoss, unrealizedProfitLoss, totalProfitLoss;
+    let totalInvestment, buyPrice, currentPrice, quantity;
+
+    if (isSoldItem) {
+      // For sold items from investment_sales table
+      buyPrice = item.buy_price_per_unit || 0;
+      currentPrice = item.price_per_unit || 0;
+      quantity = item.quantity_sold || 0;
+      availableQuantity = 0;
+      originalQuantity = quantity;
+      isFullySold = true;
+      soldItems = 0;
+      totalProfitLoss = (item.price_per_unit - item.buy_price_per_unit) * item.quantity_sold;
+      realizedProfitLoss = totalProfitLoss;
+      unrealizedProfitLoss = 0;
+      totalInvestment = item.buy_price_per_unit * item.quantity_sold;
+    } else {
+      // For active investments from investment_summary view
+      buyPrice = item.buy_price || 0;
+      currentPrice = item.current_price || 0;
+      quantity = item.quantity || 0;
+      soldItems = item.total_sold_quantity || 0;
+      availableQuantity = item.quantity;
+      originalQuantity = item.original_quantity || item.quantity;
+      isFullySold = availableQuantity === 0;
+      
+      if (item.realized_profit_loss !== undefined && item.unrealized_profit_loss !== undefined) {
+        // Existing item with summary data from view
+        realizedProfitLoss = item.realized_profit_loss || 0;
+        unrealizedProfitLoss = item.unrealized_profit_loss || 0;
+      } else {
+        // Newly added item - calculate P&L manually
+        realizedProfitLoss = 0; // No sales yet
+        unrealizedProfitLoss = (currentPrice - buyPrice) * quantity;
+      }
+      
+      totalProfitLoss = realizedProfitLoss + unrealizedProfitLoss;
+      totalInvestment = buyPrice * originalQuantity;
+    }
+      
+      const profitPercentage = totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00';
+
+      // Additional sales metrics from view
+      const totalSaleValue = item.total_sale_value || 0;
+      const averageSalePrice = item.average_sale_price || 0;
+
+      return {
+        soldItems, availableQuantity, originalQuantity, isFullySold,
+        realizedProfitLoss, unrealizedProfitLoss, totalProfitLoss,
+        totalInvestment, buyPrice, currentPrice, quantity, profitPercentage,
+        totalSaleValue, averageSalePrice
+    };
+}, [item, isSoldItem]);
   
-  // Edit form state - FIXED: Handle both sold and active items properly
-  const [editForm, setEditForm] = useState({
-    condition: isSoldItem ? (item.item_condition || '') : (item.condition || ''),
-    variant: item.variant || 'normal',
-    quantity: isSoldItem ? item.quantity_sold : (item.quantity || 1),
-    buy_price: isSoldItem ? item.buy_price_per_unit : (item.buy_price || 0),
-    notes: item.notes || ''
-  });
+// destructure itemMetrics
+  const {
+    soldItems, availableQuantity, originalQuantity, isFullySold,
+    realizedProfitLoss, unrealizedProfitLoss, totalProfitLoss,
+    totalInvestment, buyPrice, currentPrice, quantity, profitPercentage,
+    totalSaleValue, averageSalePrice
+  } = itemMetrics;
+
+const editFormDefaults = useMemo(() => ({
+  condition: isSoldItem ? (item.item_condition || '') : (item.condition || ''),
+  variant: item.variant || 'normal',
+  quantity: isSoldItem ? item.quantity_sold : (item.quantity || 1),
+  buy_price: isSoldItem ? item.buy_price_per_unit : (item.buy_price || 0),
+  notes: item.notes || ''
+}), [item, isSoldItem]);
+
+const [editForm, setEditForm] = useState(editFormDefaults);
+
+const handleStartEdit = useCallback(() => {
+  setEditForm(editFormDefaults);
+  setIsEditingItem(true);
+  setIsEditing(false); // Close sell form
+}, [editFormDefaults]);
+
+const handleStartSell = useCallback(() => {
+  setIsEditing(true);
+  setIsEditingItem(false); // Close edit form if open
+  setSoldQuantity(Math.min(1, availableQuantity));
+  setSoldPrice('');
+}, [availableQuantity]);
 
   // Handle new item animation
   useEffect(() => {
@@ -115,58 +182,54 @@ if (isSoldItem) {
 
   // Reset sold quantity when editing starts
   useEffect(() => {
-    if (isEditing) {
-      setSoldQuantity(Math.min(1, availableQuantity));
-      setSoldPrice('');
-    }
-  }, [isEditing, availableQuantity]);
+  if (isEditing) {
+    setSoldQuantity(Math.min(1, availableQuantity));
+    setSoldPrice('');
+  }
+}, [isEditing, availableQuantity]); // Update dependency
 
-const handlePartialSale = async () => {
+const handlePartialSale = useCallback(async () => {
   const pricePerUnit = parseFloat(soldPrice);
   const quantity = parseInt(soldQuantity);
  
   if (!soldPrice || isNaN(pricePerUnit) || pricePerUnit <= 0) {
     showPopup({
-        type: 'error',
-        title: 'Error',
-        message: 'Please enter a valid price per unit greater than 0'
-      });
+      type: 'error',
+      title: 'Error',
+      message: 'Please enter a valid price per unit greater than 0'
+    });
     return;
   }
  
-  if (!quantity || quantity < 1 || quantity > availableQuantity) {
+  if (!quantity || quantity < 1 || quantity > itemMetrics.availableQuantity) {
     showPopup({
-        type: 'error',
-        title: 'Error',
-        message: `Please enter a valid quantity between 1 and ${availableQuantity}`
-      });
+      type: 'error',
+      title: 'Error',
+      message: `Please enter a valid quantity between 1 and ${itemMetrics.availableQuantity}`
+    });
     return;
   }
  
   const totalSaleValue = pricePerUnit * quantity;
   const profitLoss = (pricePerUnit - item.buy_price) * quantity;
   
-  // Show confirmation popup instead of alert
   showPopup({
-      type: 'confirm',
-      title: 'Confirm Sale',
-      message: `Sell ${quantity} units at $${pricePerUnit.toFixed(2)} each?`,
-      data: {
-        quantity,
-        pricePerUnit,
-        totalSaleValue,
-        profitLoss
-      },
-      onConfirm: () => handleConfirmedSale(quantity, pricePerUnit, totalSaleValue, profitLoss),
-      confirmText: 'Confirm Sale',
-      cancelText: 'Cancel'
-    });
-};
+    type: 'confirm',
+    title: 'Confirm Sale',
+    message: `Sell ${quantity} units at $${pricePerUnit.toFixed(2)} each?`,
+    data: { quantity, pricePerUnit, totalSaleValue, profitLoss },
+    onConfirm: () => handleAsyncOperation(
+      'PARTIAL_SALE',
+      handleConfirmedSale,
+      quantity, pricePerUnit, totalSaleValue, profitLoss
+    ),
+    confirmText: 'Confirm Sale',
+    cancelText: 'Cancel'
+  });
+}, [soldPrice, soldQuantity, itemMetrics.availableQuantity, item.buy_price, handleAsyncOperation]);
 
-// Updated handleConfirmedSale
   const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profitLoss) => {
     try {
-      setUpdating(true);
       closePopup();
       
       const { data: saleResult, error: saleError } = await supabase.rpc('process_investment_sale', {
@@ -218,147 +281,110 @@ const handlePartialSale = async () => {
         title: 'Error',
         message: 'Failed to process sale: ' + err.message
       });
-    } finally {
-      setUpdating(false);
     }
   };
 
-  const handleQuantityUpdate = async (newQuantity) => {
-    if (newQuantity < 1 || newQuantity > 9999) return;
-    
-    try {
-      const { error } = await supabase.rpc('update_investment_with_context', {
-        investment_id: item.id,
-        investment_data: { quantity: newQuantity },
-        context_user_id: userSession.id
-      });
-
-      if (error) throw error;
-      
-      const updatedItem = {
-        ...item,
-        quantity: newQuantity,
-        unrealized_profit_loss: (item.current_price - item.buy_price) * newQuantity,
-      };
-
-      onUpdate(item.id, updatedItem);
-    } catch (err) {
-      console.error('Error updating quantity:', err);
-      
-      let errorMessage = 'Failed to update quantity: ' + err.message;
-      if (err.message.includes('Invalid user context')) {
-        errorMessage = 'Authentication error: Please refresh the page and re-enter your beta key.';
-      } else if (err.message.includes('not found or access denied')) {
-        errorMessage = 'Access denied: You can only update your own investments.';
-      }
-      
-      showPopup({
-        type: 'error',
-        title: 'Error',
-        message: errorMessage
-      });
-    }
-  };
-
-  const handleEditFormSubmit = async () => {
-    try {
-      setUpdating(true);
-      
-      const updateData = {
-        condition: editForm.condition,
-        variant: editForm.variant,
-        quantity: parseInt(editForm.quantity),
-        buy_price: parseFloat(editForm.buy_price),
-        notes: editForm.notes?.trim() || null
-      };
-
-      if (updateData.quantity < 1 || updateData.quantity > 9999) {
-        showPopup({
-          type: 'error',
-          title: 'Error',
-          message: 'Quantity must be between 1 and 9999'
-        });
-        return;
-      }
-      
-      if (updateData.buy_price <= 0) {
-        showPopup({
-          type: 'error',
-          title: 'Error',
-          message: 'Buy price must be greater than 0'
-        });
-        return;
-      }
-
-      const { error } = await supabase.rpc('update_investment_with_context', {
-        investment_id: item.id,
-        investment_data: updateData,
-        context_user_id: userSession.id
-      });
-
-      if (error) throw error;
-      
-      const updatedItem = {
-        ...item,
-        ...updateData,
-        unrealized_profit_loss: (item.current_price - updateData.buy_price) * updateData.quantity,
-        original_quantity: Math.max(item.original_quantity || item.quantity, updateData.quantity)
-      };
-
-      onUpdate(item.id, updatedItem);
-      setIsEditingItem(false);
-    } catch (err) {
-      console.error('Error updating item:', err);
-      
-      let errorMessage = 'Failed to update item: ' + err.message;
-      if (err.message.includes('Invalid user context')) {
-        errorMessage = 'Authentication error: Please refresh the page and re-enter your beta key.';
-      } else if (err.message.includes('not found or access denied')) {
-        errorMessage = 'Access denied: You can only update your own investments.';
-      }
-      
-      showPopup({
-        type: 'error',
-        title: 'Error',
-        message: errorMessage
-      });
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  const handleEditFormCancel = () => {
-    setEditForm({
-      condition: isSoldItem ? (item.item_condition || '') : (item.condition || ''),
-      variant: item.variant || 'normal',
-      quantity: isSoldItem ? item.quantity_sold : (item.quantity || 1),
-      buy_price: isSoldItem ? item.buy_price_per_unit : (item.buy_price || 0),
-      notes: item.notes || ''
+const handleQuantityUpdate = useCallback(async (newQuantity) => {
+  if (newQuantity < 1 || newQuantity > 9999) return;
+  
+  await handleAsyncOperation('QUANTITY_UPDATE', async () => {
+    const { error } = await supabase.rpc('update_investment_with_context', {
+      investment_id: item.id,
+      investment_data: { quantity: newQuantity },
+      context_user_id: userSession.id
     });
+
+    if (error) throw error;
+    
+    const updatedItem = {
+      ...item,
+      quantity: newQuantity,
+      unrealized_profit_loss: (item.current_price - item.buy_price) * newQuantity,
+    };
+
+    onUpdate(item.id, updatedItem);
+  }).catch(err => {
+    console.error('Error updating quantity:', err);
+    
+    let errorMessage = 'Failed to update quantity: ' + err.message;
+    if (err.message.includes('Invalid user context')) {
+      errorMessage = 'Authentication error: Please refresh the page and re-enter your beta key.';
+    } else if (err.message.includes('not found or access denied')) {
+      errorMessage = 'Access denied: You can only update your own investments.';
+    }
+    
+    showPopup({
+      type: 'error',
+      title: 'Error',
+      message: errorMessage
+    });
+  });
+}, [handleAsyncOperation, item, userSession.id, onUpdate]);
+
+const handleEditFormSubmit = useCallback(async () => {
+  await handleAsyncOperation('EDIT_SUBMIT', async () => {
+    const updateData = {
+      condition: editForm.condition,
+      variant: editForm.variant,
+      quantity: parseInt(editForm.quantity),
+      buy_price: parseFloat(editForm.buy_price),
+      notes: editForm.notes?.trim() || null
+    };
+
+    if (updateData.quantity < 1 || updateData.quantity > 9999) {
+      throw new Error('Quantity must be between 1 and 9999');
+    }
+    
+    if (updateData.buy_price <= 0) {
+      throw new Error('Buy price must be greater than 0');
+    }
+
+    const { error } = await supabase.rpc('update_investment_with_context', {
+      investment_id: item.id,
+      investment_data: updateData,
+      context_user_id: userSession.id
+    });
+
+    if (error) throw error;
+    
+    const updatedItem = {
+      ...item,
+      ...updateData,
+      unrealized_profit_loss: (item.current_price - updateData.buy_price) * updateData.quantity,
+      original_quantity: Math.max(item.original_quantity || item.quantity, updateData.quantity)
+    };
+
+    onUpdate(item.id, updatedItem);
     setIsEditingItem(false);
-  };
+  }).catch(err => {
+    console.error('Error updating item:', err);
+    
+    let errorMessage = 'Failed to update item: ' + err.message;
+    if (err.message.includes('Invalid user context')) {
+      errorMessage = 'Authentication error: Please refresh the page and re-enter your beta key.';
+    } else if (err.message.includes('not found or access denied')) {
+      errorMessage = 'Access denied: You can only update your own investments.';
+    }
+    
+    showPopup({
+      type: 'error',
+      title: 'Error',
+      message: errorMessage
+    });
+  });
+}, [handleAsyncOperation, editForm, item, userSession.id, onUpdate]);
 
-  const handleEditFormChange = (field, value) => {
-    setEditForm(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
+  const handleEditFormCancel = useCallback(() => {
+  setEditForm(editFormDefaults);
+  setIsEditingItem(false);
+}, [editFormDefaults]);
 
-  const conditionOptions = [
-    { value: '', label: 'Select condition' },
-    { value: 'Factory New', label: 'Factory New' },
-    { value: 'Minimal Wear', label: 'Minimal Wear' },
-    { value: 'Field-Tested', label: 'Field-Tested' },
-    { value: 'Well-Worn', label: 'Well-Worn' },
-    { value: 'Battle-Scarred', label: 'Battle-Scarred' }
-  ];
-
-  const variantOptions = [
-    { value: 'normal', label: 'Normal' },
-    { value: 'stattrak', label: 'StatTrak™' },
-    { value: 'souvenir', label: 'Souvenir' }
-  ];
+const handleEditFormChange = useCallback((field, value) => {
+  setEditForm(prev => ({
+    ...prev,
+    [field]: value
+  }));
+}, []);
 
   return (
     <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/30 transition-all duration-200 ${animationClass} ${isFullySold ? 'opacity-75' : ''}`}>
@@ -377,7 +403,7 @@ const handlePartialSale = async () => {
           
           {/* Variant badges */}
           {item.variant && item.variant !== 'normal' && (
-            <div className="absolute top-0 right-0 flex flex-col gap-0.5 p-1">
+            <div className="absolute top-0 right-0 flex flex-col gap-0.5">
               {item.variant === 'stattrak' && (
                 <span className="text-[10px] px-1 py-0.5 rounded-sm bg-orange-500 text-white font-medium shadow-sm">
                   ST
@@ -594,7 +620,7 @@ const handlePartialSale = async () => {
             <div className="mt-2 space-y-1">
               {/* Edit Button */}
               <button
-                onClick={() => setIsEditingItem(true)}
+                onClick={handleStartEdit}
                 className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded hover:bg-blue-500/30 transition-colors block w-full flex items-center justify-center space-x-1"
               >
                 <Edit2 className="w-3 h-3" />
@@ -604,7 +630,7 @@ const handlePartialSale = async () => {
               {/* Sell Button - show different states */}
               {!isFullySold ? (
                 <button
-                  onClick={() => setIsEditing(true)}
+                  onClick={handleStartSell}
                   className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded hover:bg-orange-500/30 transition-colors block w-full"
                 >
                   {soldItems === 0 ? 'Mark Sold' : 'Sell More'}
@@ -727,10 +753,10 @@ const handlePartialSale = async () => {
             </button>
             <button
               onClick={handleEditFormSubmit}
-              disabled={updating}
+              disabled={asyncState.isLoading}
               className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors disabled:opacity-50 flex items-center space-x-1"
             >
-              {updating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+              {asyncState.isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
               <span>Save Changes</span>
             </button>
           </div>
@@ -788,10 +814,10 @@ const handlePartialSale = async () => {
             <div className="flex items-center space-x-2">
               <button
                 onClick={handlePartialSale}
-                disabled={updating}
+                disabled={asyncState.isLoading}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors disabled:opacity-50 flex items-center space-x-1"
               >
-                {updating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                {asyncState.isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                 <span>Confirm Sale</span>
               </button>
               <button
@@ -819,11 +845,11 @@ const handlePartialSale = async () => {
         onCancel={popup.onCancel}
         confirmText={popup.confirmText}
         cancelText={popup.cancelText}
-        isLoading={updating}
+        isLoading={asyncState.isLoading}
         data={popup.data}
       />
     </div>
   );
-};
+});
 
 export default ItemCard;
