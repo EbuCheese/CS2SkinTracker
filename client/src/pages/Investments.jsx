@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, Plus, X, DollarSign, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import ItemCard from '../components/ItemCard';
@@ -18,6 +18,189 @@ const InvestmentsPage = ({ userSession }) => {
   const mainTabs = ['All', 'Liquids', 'Crafts', 'Cases', 'Agents', 'Keychains', 'Graffiti', 'Patches'];
   const soldTab = 'Sold';
 
+  // HELPER FUNCTION: Group sold items (moved before usage)
+  const groupSoldItems = useCallback((soldItems) => {
+    const groups = {};
+   
+    soldItems.forEach(item => {
+      const dateOnly = item.sale_date.split('T')[0];
+      const itemSkinName = item.item_skin_name || '';
+      const itemCondition = item.item_condition || '';
+      const groupKey = `${item.item_name}-${itemSkinName}-${itemCondition}-${item.buy_price_per_unit}-${item.price_per_unit}-${dateOnly}`;
+      
+      if (groups[groupKey]) {
+        groups[groupKey].quantity_sold += item.quantity_sold;
+        groups[groupKey].total_sale_value += item.total_sale_value;
+        groups[groupKey].sale_ids.push(item.id);
+        
+        const existingDate = new Date(groups[groupKey].sale_date);
+        const currentDate = new Date(item.sale_date);
+        if (currentDate < existingDate) {
+          groups[groupKey].sale_date = item.sale_date;
+        }
+      } else {
+        groups[groupKey] = {
+          ...item,
+          sale_ids: [item.id],
+        };
+      }
+    });
+   
+    return Object.values(groups);
+  }, []);
+
+  // MEMOIZED: Filter active investments (quantity > 0)
+  const activeInvestments = useMemo(() => {
+    return investments.filter(item => item.quantity > 0);
+  }, [investments]);
+
+  // MEMOIZED: Group sold items (expensive operation)
+  const groupedSoldItems = useMemo(() => {
+    return groupSoldItems(soldItems);
+  }, [soldItems, groupSoldItems]);
+
+  // MEMOIZED: Get current items based on active tab and search
+  const currentItems = useMemo(() => {
+    let filteredItems;
+    
+    if (activeTab === 'Sold') {
+      filteredItems = groupedSoldItems;
+    } else {
+      filteredItems = activeInvestments;
+      
+      if (activeTab !== 'All') {
+        const typeFilter = activeTab.toLowerCase().slice(0, -1);
+        filteredItems = filteredItems.filter(item => item.type === typeFilter);
+      }
+    }
+
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filteredItems = filteredItems.filter(item => {
+        if (activeTab === 'Sold') {
+          const itemName = item.item_name || '';
+          const skinName = item.item_skin_name || '';
+          const condition = item.item_condition || '';
+          
+          return itemName.toLowerCase().includes(query) ||
+                skinName.toLowerCase().includes(query) ||
+                condition.toLowerCase().includes(query);
+        } else {
+          const itemName = item.item_name || item.name || '';
+          const skinName = item.skin_name || '';
+          const condition = item.condition || '';
+          
+          return itemName.toLowerCase().includes(query) ||
+                skinName.toLowerCase().includes(query) ||
+                condition.toLowerCase().includes(query);
+        }
+      });
+    }
+    
+    return filteredItems;
+  }, [activeTab, groupedSoldItems, activeInvestments, searchQuery]);
+
+  // MEMOIZED: Portfolio summary calculation
+  const portfolioSummary = useMemo(() => {
+    if (activeTab === 'Sold') {
+      const totalBuyValue = groupedSoldItems.reduce((sum, sale) => 
+        sum + (sale.buy_price_per_unit * sale.quantity_sold), 0);
+      const totalSaleValue = groupedSoldItems.reduce((sum, sale) => 
+        sum + (sale.price_per_unit * sale.quantity_sold), 0);
+      const realizedProfit = totalSaleValue - totalBuyValue;
+      const profitPercentage = totalBuyValue > 0 ? ((realizedProfit / totalBuyValue) * 100) : 0;
+
+      return {
+        totalBuyValue,
+        totalCurrentValue: totalSaleValue,
+        totalProfit: realizedProfit,
+        profitPercentage,
+        itemCount: groupedSoldItems.length
+      };
+    } else {
+      const totalBuyValue = currentItems.reduce((sum, item) => sum + (item.buy_price * item.quantity), 0);
+      const totalCurrentValue = currentItems.reduce((sum, item) => {
+        return sum + (item.current_price * item.quantity);
+      }, 0);
+      const totalProfit = totalCurrentValue - totalBuyValue;
+      const profitPercentage = totalBuyValue > 0 ? ((totalProfit / totalBuyValue) * 100) : 0;
+
+      return {
+        totalBuyValue,
+        totalCurrentValue,
+        totalProfit,
+        profitPercentage,
+        itemCount: currentItems.length
+      };
+    }
+  }, [activeTab, groupedSoldItems, currentItems]);
+
+  // MEMOIZED: Search placeholder text
+  const searchPlaceholder = useMemo(() => {
+    if (activeTab === 'All') {
+      return 'Search all investments...';
+    } else if (activeTab === 'Sold') {
+      return 'Search sold items...';
+    } else {
+      return `Search ${activeTab.toLowerCase()}...`;
+    }
+  }, [activeTab]);
+
+  // STABLE CALLBACKS: Prevent unnecessary re-renders
+  const handleItemUpdate = useCallback((itemId, updates) => {
+    setInvestments(prev => prev.map(inv => 
+      inv.id === itemId ? { ...inv, ...updates } : inv
+    ));
+    fetchData();
+  }, []);
+
+  const handleItemRemove = useCallback((itemId) => {
+    setInvestments(prev => prev.filter(inv => inv.id !== itemId));
+    fetchData();
+  }, []);
+
+  const handleItemDelete = useCallback((itemToDelete) => {
+    setItemToDelete(itemToDelete);
+  }, []);
+
+  const handleRefreshData = useCallback(() => {
+    fetchData();
+  }, []);
+
+  const handleAddItem = useCallback((newItem) => {
+    setInvestments(prev => [newItem, ...prev]);
+    setNewItemIds(prev => new Set([...prev, newItem.id]));
+    
+    setTimeout(() => {
+      setNewItemIds(prev => {
+        const updated = new Set(prev);
+        updated.delete(newItem.id);
+        return updated;
+      });
+    }, 700);
+  }, []);
+
+  // STABLE CALLBACKS: Tab and form handlers
+  const handleTabChange = useCallback((tab) => {
+    setActiveTab(tab);
+  }, []);
+
+  const handleSearchChange = useCallback((e) => {
+    setSearchQuery(e.target.value);
+  }, []);
+
+  const handleShowAddForm = useCallback(() => {
+    setShowAddForm(true);
+  }, []);
+
+  const handleCloseAddForm = useCallback(() => {
+    setShowAddForm(false);
+  }, []);
+
+  const handleCancelDelete = useCallback(() => {
+    setItemToDelete(null);
+  }, []);
+
   // Fetch investments and sold items from Supabase
   useEffect(() => {
     if (!userSession) return;
@@ -30,116 +213,67 @@ const InvestmentsPage = ({ userSession }) => {
     }
   }, [userSession]);
 
-const refreshData = () => {
-  fetchData();
-};
+  const refreshData = () => {
+    fetchData();
+  };
 
-const fetchData = async () => {
-  try {
-    setLoading(true);
-    setError(null);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-    if (!userSession?.id || typeof userSession.id !== 'string') {
-      setError('Invalid user session. Please re-validate your beta key.');
-      return;
-    }
-
-    console.log('Fetching data for user:', userSession.id);
-
-    const [investmentsResult, soldItemsResult] = await Promise.all([
-      supabase.rpc('fetch_user_investment_summary', {
-        context_user_id: userSession.id
-      }),
-      supabase.rpc('fetch_user_investment_sales', {
-        context_user_id: userSession.id
-      })
-    ]);
-
-    if (investmentsResult.error) {
-      console.error('Investments query failed:', investmentsResult.error);
-      setError('Access denied. Please verify your beta key is valid and active.');
-      return;
-    }
-
-    if (soldItemsResult.error) {
-      console.error('Sold items query failed:', soldItemsResult.error);
-      console.warn('Could not fetch sold items, continuing with investments only');
-    }
-
-    // Parse the results - these should already be JSON arrays
-    const investmentsArray = Array.isArray(investmentsResult.data) 
-      ? investmentsResult.data 
-      : JSON.parse(investmentsResult.data || '[]');
-    
-    let soldItemsArray = soldItemsResult.data || [];
-
-    console.log(`Successfully loaded ${investmentsArray.length} investments and ${soldItemsArray.length} sold items`);
-    
-    setInvestments(investmentsArray);
-    const groupedSoldItems = groupSoldItems(soldItemsArray);
-    setSoldItems(groupedSoldItems);
-
-  } catch (err) {
-    console.error('Unexpected error:', err);
-    setError('An unexpected error occurred. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-};
-
-const groupSoldItems = (soldItems) => {
-  const groups = {};
- 
-  soldItems.forEach(item => {
-    const dateOnly = item.sale_date.split('T')[0]; // Split on 'T' to get date part
-    
-    // Normalize null/undefined values to empty strings for consistent grouping
-    const itemSkinName = item.item_skin_name || '';
-    const itemCondition = item.item_condition || '';
-    
-    // Create a unique key for items that should be grouped (using date only, not full timestamp)
-    const groupKey = `${item.item_name}-${itemSkinName}-${itemCondition}-${item.buy_price_per_unit}-${item.price_per_unit}-${dateOnly}`;
-    
-    // Debug log to see what's happening
-    console.log('Processing item:', {
-      item_name: item.item_name,
-      item_skin_name: itemSkinName,
-      item_condition: itemCondition,
-      buy_price_per_unit: item.buy_price_per_unit,
-      price_per_unit: item.price_per_unit,
-      dateOnly: dateOnly,
-      groupKey: groupKey
-    });
-   
-    if (groups[groupKey]) {
-      // Add to existing group
-      groups[groupKey].quantity_sold += item.quantity_sold;
-      groups[groupKey].total_sale_value += item.total_sale_value;
-      groups[groupKey].sale_ids.push(item.id);
-      
-      // Keep the earliest sale time for display purposes (optional)
-      const existingDate = new Date(groups[groupKey].sale_date);
-      const currentDate = new Date(item.sale_date);
-      if (currentDate < existingDate) {
-        groups[groupKey].sale_date = item.sale_date;
+      if (!userSession?.id || typeof userSession.id !== 'string') {
+        setError('Invalid user session. Please re-validate your beta key.');
+        return;
       }
-    } else {
-      // Create new group
-      groups[groupKey] = {
-        ...item,
-        sale_ids: [item.id], // Keep track of original sale IDs
-        // quantity_sold and total_sale_value already set from item
-      };
+
+      console.log('Fetching data for user:', userSession.id);
+
+      const [investmentsResult, soldItemsResult] = await Promise.all([
+        supabase.rpc('fetch_user_investment_summary', {
+          context_user_id: userSession.id
+        }),
+        supabase.rpc('fetch_user_investment_sales', {
+          context_user_id: userSession.id
+        })
+      ]);
+
+      if (investmentsResult.error) {
+        console.error('Investments query failed:', investmentsResult.error);
+        setError('Access denied. Please verify your beta key is valid and active.');
+        return;
+      }
+
+      if (soldItemsResult.error) {
+        console.error('Sold items query failed:', soldItemsResult.error);
+        console.warn('Could not fetch sold items, continuing with investments only');
+      }
+
+      const investmentsArray = Array.isArray(investmentsResult.data) 
+        ? investmentsResult.data 
+        : JSON.parse(investmentsResult.data || '[]');
+      
+      let soldItemsArray = soldItemsResult.data || [];
+
+      console.log(`Successfully loaded ${investmentsArray.length} investments and ${soldItemsArray.length} sold items`);
+      
+      setInvestments(investmentsArray);
+      setSoldItems(soldItemsArray);
+
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
-  });
- 
-  return Object.values(groups);
-};
+  };
+
+
+
   const handleDeleteItem = async () => {  
     if (!itemToDelete) return;
     
     try {
-      // Use the new context-aware function
       const { data, error } = await supabase.rpc('delete_investment_with_context', {
         investment_id: itemToDelete.id,
         context_user_id: userSession.id
@@ -152,7 +286,6 @@ const groupSoldItems = (soldItems) => {
       
       console.log('Investment deleted successfully');
       
-      // Update local state - remove from both investments and sold items
       setInvestments(prev => prev.filter(inv => inv.id !== itemToDelete.id));
       setItemToDelete(null);
     } catch (err) {
@@ -186,110 +319,6 @@ const groupSoldItems = (soldItems) => {
       setError('No user session found. Please validate your beta key first.');
     }
   };
-
-  // Helper function to get search placeholder text
-  const getSearchPlaceholder = () => {
-    if (activeTab === 'All') {
-      return 'Search all investments...';
-    } else if (activeTab === 'Sold') {
-      return 'Search sold items...';
-    } else {
-      return `Search ${activeTab.toLowerCase()}...`;
-    }
-  };
-
-const getCurrentItems = () => {
-  let filteredItems;
-  
-  // Handle Sold tab separately - only show sold items
-  if (activeTab === 'Sold') {
-    filteredItems = soldItems;
-  } else {
-    // Filter out fully sold items (quantity = 0)
-    filteredItems = investments.filter(item => item.quantity > 0);
-    
-    // Filter by tab for non-sold items
-    if (activeTab !== 'All') {
-      const typeFilter = activeTab.toLowerCase().slice(0, -1); // Remove 's' and lowercase
-      filteredItems = filteredItems.filter(item => item.type === typeFilter);
-    }
-  }
-  
-  // Filter by search query
-  if (searchQuery) {
-    const query = searchQuery.toLowerCase();
-    filteredItems = filteredItems.filter(item => {
-      if (activeTab === 'Sold') {
-        // Search in investment_sales table fields
-        const itemName = item.item_name || '';
-        const skinName = item.item_skin_name || '';
-        const condition = item.item_condition || '';
-        
-        return itemName.toLowerCase().includes(query) ||
-              skinName.toLowerCase().includes(query) ||
-              condition.toLowerCase().includes(query);
-      } else {
-        // For active items, search in original item name and skin name
-        const itemName = item.item_name || item.name || '';
-        const skinName = item.skin_name || '';
-        const condition = item.condition || '';
-        
-        return itemName.toLowerCase().includes(query) ||
-              skinName.toLowerCase().includes(query) ||
-              condition.toLowerCase().includes(query);
-      }
-    });
-  }
-  
-  return filteredItems;
-};
-
-  // Calculate portfolio summary
-  const getPortfolioSummary = () => {
-    if (activeTab === 'Sold') {
-      // Handle investment_sales table structure - Updated labels
-      const totalBuyValue = soldItems.reduce((sum, sale) => 
-        sum + (sale.buy_price_per_unit * sale.quantity_sold), 0);
-      const totalSaleValue = soldItems.reduce((sum, sale) => 
-        sum + (sale.price_per_unit * sale.quantity_sold), 0);
-      const realizedProfit = totalSaleValue - totalBuyValue;
-      const profitPercentage = totalBuyValue > 0 ? ((realizedProfit / totalBuyValue) * 100) : 0;
-
-      return {
-        totalBuyValue,
-        totalCurrentValue: totalSaleValue,
-        totalProfit: realizedProfit,
-        profitPercentage,
-        itemCount: soldItems.length // This will now be number of sales, not unique items
-      };
-    } else {
-      // Calculate active investments summary
-      const currentItems = getCurrentItems();
-      const totalBuyValue = currentItems.reduce((sum, item) => sum + (item.buy_price * item.quantity), 0);
-      const totalCurrentValue = currentItems.reduce((sum, item) => {
-        return sum + (item.current_price * item.quantity);
-      }, 0);
-      const totalProfit = totalCurrentValue - totalBuyValue;
-      const profitPercentage = totalBuyValue > 0 ? ((totalProfit / totalBuyValue) * 100) : 0;
-
-      return {
-        totalBuyValue,
-        totalCurrentValue,
-        totalProfit,
-        profitPercentage,
-        itemCount: currentItems.length
-      };
-    }
-  };
-
-  const handleItemRemove = (itemId) => {
-    // Remove item from investments list when fully sold
-    setInvestments(prev => prev.filter(inv => inv.id !== itemId));
-    // Refresh sold items to show the new sale
-    fetchData();
-  };
-
-  const summary = getPortfolioSummary();
 
   if (loading) {
     return (
@@ -338,7 +367,7 @@ const getCurrentItems = () => {
                 {activeTab === 'Sold' ? 'Total Sold' : 'Total Invested'}
               </div>
               <div className="text-white text-xl font-semibold">
-                ${activeTab === 'Sold' ? summary.totalCurrentValue.toFixed(2) : summary.totalBuyValue.toFixed(2)}
+                ${activeTab === 'Sold' ? portfolioSummary.totalCurrentValue.toFixed(2) : portfolioSummary.totalBuyValue.toFixed(2)}
               </div>
             </div>
             <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
@@ -346,7 +375,7 @@ const getCurrentItems = () => {
                 {activeTab === 'Sold' ? 'Total Invested' : 'Current Value'}
               </div>
               <div className="text-white text-xl font-semibold">
-                ${activeTab === 'Sold' ? summary.totalBuyValue.toFixed(2) : summary.totalCurrentValue.toFixed(2)}
+                ${activeTab === 'Sold' ? portfolioSummary.totalBuyValue.toFixed(2) : portfolioSummary.totalCurrentValue.toFixed(2)}
               </div>
             </div>
             <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
@@ -354,17 +383,17 @@ const getCurrentItems = () => {
                 {activeTab === 'Sold' ? 'Realized P&L' : 'Unrealized P&L'}
               </div>
               <div className={`text-xl font-semibold flex items-center space-x-1 ${
-                summary.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'
+                portfolioSummary.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'
               }`}>
-                {summary.totalProfit >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                <span>${Math.abs(summary.totalProfit).toFixed(2)} ({summary.profitPercentage.toFixed(2)}%)</span>
+                {portfolioSummary.totalProfit >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                <span>${Math.abs(portfolioSummary.totalProfit).toFixed(2)} ({portfolioSummary.profitPercentage.toFixed(2)}%)</span>
               </div>
             </div>
             <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
               <div className="text-gray-400 text-sm">
                 {activeTab === 'Sold' ? 'Sales' : 'Items'}
               </div>
-              <div className="text-white text-xl font-semibold">{summary.itemCount}</div>
+              <div className="text-white text-xl font-semibold">{portfolioSummary.itemCount}</div>
             </div>
           </div>
         )}
@@ -375,9 +404,9 @@ const getCurrentItems = () => {
             <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
             <input
               type="text"
-              placeholder={getSearchPlaceholder()}
+              placeholder={searchPlaceholder}
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={handleSearchChange}
               className="w-full pl-10 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
             />
           </div>
@@ -390,7 +419,7 @@ const getCurrentItems = () => {
             {mainTabs.map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => handleTabChange(tab)}
                 className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
                   activeTab === tab
                     ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/25'
@@ -406,7 +435,7 @@ const getCurrentItems = () => {
           <div className="flex items-center justify-center gap-4">
             <div className="flex-1 border-t border-gray-700"></div>
             <button
-              onClick={() => setActiveTab(soldTab)}
+              onClick={() => handleTabChange(soldTab)}
               className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
                 activeTab === soldTab
                   ? 'bg-gradient-to-r from-green-600 to-emerald-700 text-white shadow-lg shadow-green-500/25'
@@ -423,7 +452,7 @@ const getCurrentItems = () => {
         {activeTab !== 'All' && activeTab !== 'Sold' && (
           <div className="mb-6 flex justify-center">
             <button
-              onClick={() => setShowAddForm(true)}
+              onClick={handleShowAddForm}
               className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-6 py-3 rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium flex items-center space-x-2 shadow-lg"
             >
               <Plus className="w-5 h-5" />
@@ -438,29 +467,22 @@ const getCurrentItems = () => {
 
         {/* Items Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {getCurrentItems().map((item) => (
+          {currentItems.map((item) => (
             <ItemCard 
               key={activeTab === 'Sold' ? `sold-${item.id}` : item.id}
               item={item} 
               userSession={userSession}
               isSoldItem={activeTab === 'Sold'}
-              onUpdate={(itemId, updates) => {
-                setInvestments(prev => prev.map(inv => 
-                  inv.id === itemId ? { ...inv, ...updates } : inv
-                ));
-                fetchData();
-              }}
+              onUpdate={handleItemUpdate}
               onRemove={handleItemRemove}
-              onDelete={(itemToDelete) => {
-                setItemToDelete(itemToDelete);
-              }}
+              onDelete={handleItemDelete}
               isNew={newItemIds.has(item.id)}
-              onRefresh={refreshData}
+              onRefresh={handleRefreshData}
             />
           ))}
         </div>
 
-        {getCurrentItems().length === 0 && (
+        {currentItems.length === 0 && (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
               <DollarSign className="w-8 h-8 text-gray-600" />
@@ -489,19 +511,8 @@ const getCurrentItems = () => {
         {showAddForm && (
           <AddItemForm
             type={activeTab}
-            onClose={() => setShowAddForm(false)}
-            onAdd={(newItem) => {
-              setInvestments(prev => [newItem, ...prev]);
-              setNewItemIds(prev => new Set([...prev, newItem.id]));
-              
-              setTimeout(() => {
-                setNewItemIds(prev => {
-                  const updated = new Set(prev);
-                  updated.delete(newItem.id);
-                  return updated;
-                });
-              }, 700);
-            }}
+            onClose={handleCloseAddForm}
+            onAdd={handleAddItem}
             userSession={userSession}
           />
         )}
@@ -520,7 +531,7 @@ const getCurrentItems = () => {
               </p>
               <div className="flex space-x-3">
                 <button
-                  onClick={() => setItemToDelete(null)}
+                  onClick={handleCancelDelete}
                   className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
                 >
                   Cancel
