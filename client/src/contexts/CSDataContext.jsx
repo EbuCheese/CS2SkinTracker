@@ -75,10 +75,25 @@ export const CSDataProvider = ({ children }) => {
   }, []);
 
  // Helper functions
-  const extractBaseItemInfo = (item) => {
-    let baseName = item.name;
-    let variant = 'normal';
-    
+const extractBaseItemInfo = (item) => {
+  let baseName = item.name;
+  let variant = 'normal';
+  
+  // Check properties first, then fallback to name prefixes
+  if (item.stattrak === true) {
+    variant = 'stattrak';
+    // Remove StatTrak™ prefix if it exists in the name
+    if (baseName.startsWith('StatTrak™ ')) {
+      baseName = baseName.replace('StatTrak™ ', '');
+    }
+  } else if (item.souvenir === true) {
+    variant = 'souvenir';
+    // Remove Souvenir prefix if it exists in the name
+    if (baseName.startsWith('Souvenir ')) {
+      baseName = baseName.replace('Souvenir ', '');
+    }
+  } else {
+    // Fallback to checking name prefixes (for backward compatibility)
     if (baseName.startsWith('StatTrak™ ')) {
       baseName = baseName.replace('StatTrak™ ', '');
       variant = 'stattrak';
@@ -86,14 +101,15 @@ export const CSDataProvider = ({ children }) => {
       baseName = baseName.replace('Souvenir ', '');
       variant = 'souvenir';
     }
-    
-    return {
-      baseName,
-      variant,
-      category: item.category || '',
-      pattern: item.pattern || ''
-    };
+  }
+  
+  return {
+    baseName,
+    variant,
+    category: item.category || '',
+    pattern: item.pattern || ''
   };
+};
 
   const createSearchTokens = (baseInfo) => {
     const tokens = new Set();
