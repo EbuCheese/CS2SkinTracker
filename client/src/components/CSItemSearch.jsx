@@ -1,4 +1,4 @@
-// CSItemSearch.jsx - Enhanced version with smart image loading and variant handling
+// CSItemSearch.jsx - Updated to work with preprocessed CSDataContext
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Search } from 'lucide-react';
 import { debounce } from 'lodash';
@@ -13,14 +13,18 @@ const CSItemSearch = ({
   maxResults = 20,
   className = '',
   disabled = false,
-  showLargeView = false // New prop for larger search results
+  showLargeView = false
 }) => {
-  const { data, loading: globalLoading, error: globalError, getDataForType } = useCSData();
-  const [searchIndex, setSearchIndex] = useState(null);
+  const { searchIndices, loading: globalLoading, error: globalError, getSearchIndexForType } = useCSData();
   const [results, setResults] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedVariant, setSelectedVariant] = useState({}); // Track selected variant for each item
-  const intersectionObserver = useRef(null); // For lazy loading visible images
+  const [selectedVariant, setSelectedVariant] = useState({});
+  const intersectionObserver = useRef(null);
+
+  // Get processed data for current type
+  const typeData = useMemo(() => {
+    return getSearchIndexForType(type);
+  }, [type, searchIndices, getSearchIndexForType]);
 
   // Setup intersection observer for smart image loading
   useEffect(() => {
@@ -38,7 +42,7 @@ const CSItemSearch = ({
         });
       },
       {
-        rootMargin: '50px', // Start loading images 50px before they come into view
+        rootMargin: '50px',
         threshold: 0.1
       }
     );
@@ -48,105 +52,9 @@ const CSItemSearch = ({
     };
   }, []);
 
-  useEffect(() => {
-    const createSearchIndex = () => {
-      const typeData = getDataForType(type);
-      if (!typeData || typeData.length === 0) return;
-
-      console.log(`Creating search index for ${type} with ${typeData.length} items`);
-      
-      // Group items by base name (removing StatTrak™ and Souvenir prefixes)
-      const baseItemsMap = new Map();
-      
-      typeData.forEach(item => {
-        // Create base name by removing StatTrak™ and Souvenir prefixes
-        let baseName = item.name;
-        if (baseName.startsWith('StatTrak™ ')) {
-          baseName = baseName.replace('StatTrak™ ', '');
-        }
-        if (baseName.startsWith('Souvenir ')) {
-          baseName = baseName.replace('Souvenir ', '');
-        }
-        
-        const baseKey = `${baseName}_${item.category || ''}_${item.pattern || ''}`;
-        
-        if (!baseItemsMap.has(baseKey)) {
-          // Create base item with all variants
-          const baseItem = {
-            ...item,
-            name: baseName,
-            baseKey,
-            variants: {
-              normal: !item.stattrak && !item.souvenir ? item : null,
-              stattrak: item.stattrak ? item : null,
-              souvenir: item.souvenir ? item : null
-            }
-          };
-          baseItemsMap.set(baseKey, baseItem);
-        } else {
-          // Add variant to existing base item
-          const existingItem = baseItemsMap.get(baseKey);
-          if (item.stattrak) {
-            existingItem.variants.stattrak = item;
-          } else if (item.souvenir) {
-            existingItem.variants.souvenir = item;
-          } else {
-            existingItem.variants.normal = item;
-          }
-        }
-      });
-
-      // Convert to array and create search data
-      const baseItems = Array.from(baseItemsMap.values());
-      const searchData = baseItems.map(item => {
-        const searchText = item.name.toLowerCase()
-          .replace(/[★]/g, 'star')
-          .replace(/[|]/g, ' ')
-          .replace(/[^\w\s\-]/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim();
-
-        return { ...item, searchText };
-      });
-
-      // Create comprehensive search index
-      const index = new Map();
-      searchData.forEach((item, idx) => {
-        // Index full name
-        const fullName = item.searchText;
-        if (!index.has(fullName)) index.set(fullName, []);
-        index.get(fullName).push(idx);
-
-        // Index individual words (minimum 2 characters)
-        const words = fullName.split(/[\s\-]+/).filter(w => w.length >= 2);
-        words.forEach(word => {
-          if (!index.has(word)) index.set(word, []);
-          index.get(word).push(idx);
-        });
-
-        // Index additional fields based on item type
-        const fieldsToIndex = ['weapon', 'category', 'pattern', 'team', 'tournamentEvent', 'tournamentTeam'];
-        fieldsToIndex.forEach(field => {
-          if (item[field]) {
-            const fieldValue = item[field].toLowerCase();
-            if (!index.has(fieldValue)) index.set(fieldValue, []);
-            index.get(fieldValue).push(idx);
-          }
-        });
-      });
-
-      setSearchIndex({ index, items: searchData });
-      console.log(`Search index created with ${index.size} entries for ${baseItems.length} base items`);
-    };
-
-    if (!globalLoading && data) {
-      createSearchIndex();
-    }
-  }, [data, type, globalLoading, getDataForType]);
-
-  // Enhanced search function
+  // Enhanced search function using preprocessed data
   const performSearch = useCallback((query) => {
-    if (!query || !searchIndex || query.length < 2) {
+    if (!query || !typeData || query.length < 2) {
       setResults([]);
       setIsOpen(false);
       return;
@@ -159,19 +67,21 @@ const CSItemSearch = ({
       .replace(/\s+/g, ' ')
       .trim();
 
-    const words = normalizedQuery.split(/\s+/).filter(w => w.length >= 2);
+    const queryWords = normalizedQuery.split(/\s+/).filter(w => w.length >= 2);
+    const { items, searchIndex } = typeData;
     let matchingIndices = [];
 
-    words.forEach((word, wordIndex) => {
+    // Use the inverted index for efficient searching
+    queryWords.forEach((word, wordIndex) => {
       const wordMatches = [];
       
-      // Look for matches in the search index
-      for (let [indexWord, indices] of searchIndex.index) {
-        if (indexWord === word) {
-          // Exact word match
+      // Look for exact matches and partial matches in the inverted index
+      for (let [token, indices] of searchIndex) {
+        if (token === word) {
+          // Exact match - highest priority
           wordMatches.push(...indices);
-        } else if (indexWord.includes(word) || word.includes(indexWord)) {
-          // Partial match
+        } else if (token.includes(word) || word.includes(token)) {
+          // Partial match - lower priority
           wordMatches.push(...indices);
         }
       }
@@ -188,20 +98,20 @@ const CSItemSearch = ({
     const uniqueIndices = [...new Set(matchingIndices)];
     const searchResults = uniqueIndices
       .slice(0, maxResults)
-      .map(idx => searchIndex.items[idx])
+      .map(idx => items[idx])
       .filter(Boolean);
 
     // Sort results by relevance
     searchResults.sort((a, b) => {
-      const aExact = a.searchText.includes(normalizedQuery) ? 1 : 0;
-      const bExact = b.searchText.includes(normalizedQuery) ? 1 : 0;
+      const aExact = a.searchTokens.some(token => token === normalizedQuery) ? 1 : 0;
+      const bExact = b.searchTokens.some(token => token === normalizedQuery) ? 1 : 0;
       return bExact - aExact;
     });
 
     console.log(`Search for "${query}" returned ${searchResults.length} results`);
     setResults(searchResults);
     setIsOpen(searchResults.length > 0);
-  }, [searchIndex, maxResults]);
+  }, [typeData, maxResults]);
 
   const debouncedSearch = useMemo(
     () => debounce(performSearch, 200),
@@ -215,27 +125,28 @@ const CSItemSearch = ({
   }, [onChange, debouncedSearch]);
 
   const handleItemSelect = useCallback((item, variant = 'normal') => {
-    // Get the appropriate variant item
-    const selectedItem = item.variants[variant] || item.variants.normal || item;
+    // Get the appropriate variant item from the Map
+    const selectedItem = item.variants.get(variant) || item.variants.get('normal') || Array.from(item.variants.values())[0];
     
     // Add variant info to the selected item for form handling
     const itemWithVariant = {
       ...selectedItem,
       selectedVariant: variant,
-      hasStatTrak: !!item.variants.stattrak,
-      hasSouvenir: !!item.variants.souvenir
+      hasStatTrak: item.variants.has('stattrak'),
+      hasSouvenir: item.variants.has('souvenir'),
+      baseName: item.baseName
     };
     
     onSelect?.(itemWithVariant);
     setIsOpen(false);
     setResults([]);
-    setSelectedVariant({}); // Reset variant selections
+    setSelectedVariant({});
   }, [onSelect]);
 
-  const handleVariantChange = useCallback((itemKey, variant) => {
+  const handleVariantChange = useCallback((itemId, variant) => {
     setSelectedVariant(prev => ({
       ...prev,
-      [itemKey]: variant
+      [itemId]: variant
     }));
   }, []);
 
@@ -276,7 +187,7 @@ const CSItemSearch = ({
     );
   }
 
-  if (!searchIndex) {
+  if (!typeData) {
     return (
       <div className={`relative ${className}`}>
         <div className="flex items-center justify-center p-3 bg-gray-800 rounded-lg">
@@ -312,11 +223,11 @@ const CSItemSearch = ({
         }`}>
           {results.map(item => (
             <OptimizedSearchResultItem
-              key={item.baseKey}
+              key={item.id}
               item={item}
               type={type}
-              selectedVariant={selectedVariant[item.baseKey] || 'normal'}
-              onVariantChange={(variant) => handleVariantChange(item.baseKey, variant)}
+              selectedVariant={selectedVariant[item.id] || 'normal'}
+              onVariantChange={(variant) => handleVariantChange(item.id, variant)}
               onClick={(variant) => handleItemSelect(item, variant)}
               showLargeView={showLargeView}
               intersectionObserver={intersectionObserver.current}
@@ -335,7 +246,7 @@ const CSItemSearch = ({
   );
 };
 
-// Enhanced SearchResultItem with variant selection
+// Updated SearchResultItem to work with new data structure
 const OptimizedSearchResultItem = React.memo(({ 
   item, 
   type, 
@@ -350,15 +261,16 @@ const OptimizedSearchResultItem = React.memo(({
   const imgRef = useRef(null);
 
   const currentVariant = selectedVariant || 'normal';
-  // Get the current variant item for display
-  const currentVariantItem = item.variants[selectedVariant] || item.variants.normal || item;
-
+  
+  // Get the current variant item from the Map
+  const currentVariantItem = item.variants.get(currentVariant) || 
+                           item.variants.get('normal') || 
+                           Array.from(item.variants.values())[0];
 
   // Setup intersection observer for this image
   useEffect(() => {
     const imgElement = imgRef.current;
-    if (imgElement && intersectionObserver) {
-      // Set data-src for lazy loading
+    if (imgElement && intersectionObserver && currentVariantItem?.image) {
       imgElement.dataset.src = currentVariantItem.image;
       intersectionObserver.observe(imgElement);
 
@@ -368,29 +280,13 @@ const OptimizedSearchResultItem = React.memo(({
         }
       };
     }
-  }, [currentVariantItem.image, intersectionObserver]);
+  }, [currentVariantItem?.image, intersectionObserver]);
 
   const getRarityColor = (rarity, rarityColor) => {
     return rarityColor || '#6B7280';
   };
 
-  const getMetadataText = () => {
-    switch (type) {
-      case 'skins':
-      case 'liquids':
-        return [currentVariantItem.weapon, currentVariantItem.category, currentVariantItem.pattern].filter(Boolean);
-      case 'agents':
-        return [currentVariantItem.team].filter(Boolean);
-      case 'stickers':
-        return [currentVariantItem.tournamentEvent, currentVariantItem.tournamentTeam, currentVariantItem.type].filter(Boolean);
-      case 'cases':
-        return [currentVariantItem.type, currentVariantItem.firstSaleDate].filter(Boolean);
-      default:
-        return [];
-    }
-  };
-
-  const metadata = getMetadataText();
+  const metadata = item.metadata || [];
   const imageSize = showLargeView ? 'w-16 h-16' : 'w-12 h-12';
   const paddingSize = showLargeView ? 'p-4' : 'p-3';
 
@@ -402,18 +298,14 @@ const OptimizedSearchResultItem = React.memo(({
   const handleImageError = (e) => {
     setImageLoading(false);
     setImageError(true);
-    // Only set fallback once to prevent infinite loops
     if (!e.target.dataset.fallback) {
       e.target.dataset.fallback = 'true';
       e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjMzc0MTUxIi8+CjxwYXRoIGQ9Ik0yNCAzNkMzMC42Mjc0IDM2IDM2IDMwLjYyNzQgMzYgMjRDMzYgMTcuMzcyNiAzMC42Mjc0IDEyIDI0IDEyQzE3LjM3MjYgMTIgMTIgMTcuMzcyNiAxMiAyNEMxMiAzMC42Mjc0IDE3LjM3MjYgMzYgMjQgMzZaIiBzdHJva2U9IiM2QjczODAiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMjQgMjBWMjgiIHN0cm9rZT0iIzZCNzM4MCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4K';
     }
   };
 
-  // Get available variants
-  const availableVariants = [];
-  if (item.variants.normal) availableVariants.push('normal');
-  if (item.variants.stattrak) availableVariants.push('stattrak');
-  if (item.variants.souvenir) availableVariants.push('souvenir');
+  // Get available variants from the Map
+  const availableVariants = Array.from(item.variants.keys());
 
   const handleVariantButtonClick = (e, variant) => {
     e.stopPropagation();
@@ -423,6 +315,10 @@ const OptimizedSearchResultItem = React.memo(({
   const handleItemClick = () => {
     onClick(currentVariant);
   };
+
+  if (!currentVariantItem) {
+    return null; // Skip rendering if no variant item found
+  }
 
   return (
     <div className={`${paddingSize} hover:bg-gray-700 cursor-pointer transition-colors border-b border-gray-700 last:border-b-0`}>
@@ -436,7 +332,7 @@ const OptimizedSearchResultItem = React.memo(({
           )}
           <img 
             ref={imgRef}
-            alt={currentVariantItem.name}
+            alt={item.baseName}
             className={`w-full h-full object-contain transition-opacity duration-200 ${
               imageLoading ? 'opacity-0' : 'opacity-100'
             }`}
@@ -451,7 +347,7 @@ const OptimizedSearchResultItem = React.memo(({
           {metadata.length > 0 && (
             <div className={`flex items-center space-x-2 ${showLargeView ? 'text-sm mt-1' : 'text-xs'}`}>
               {metadata.map((text, index) => (
-                <React.Fragment key={text}>
+                <React.Fragment key={`${text}-${index}`}>
                   {index > 0 && <span className="text-gray-500">•</span>}
                   <span className="text-gray-400">{text}</span>
                 </React.Fragment>
