@@ -26,7 +26,7 @@ const Navbar = ({ userSession, onLogout }) => {
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-lg">
               <img 
-                src="/skinwatchLOGO.png" 
+                src="/logoTEST10.png" 
                 alt="SkinWatch Logo" 
                 className="w-10 h-10 object-contain rounded-lg"
               />
