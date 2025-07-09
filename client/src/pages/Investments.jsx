@@ -103,17 +103,23 @@ const InvestmentsPage = ({ userSession }) => {
   // MEMOIZED: Portfolio summary calculation
   const portfolioSummary = useMemo(() => {
     if (activeTab === 'Sold') {
-      const totalBuyValue = groupedSoldItems.reduce((sum, sale) => 
-        sum + (sale.buy_price_per_unit * sale.quantity_sold), 0);
-      const totalSaleValue = groupedSoldItems.reduce((sum, sale) => 
-        sum + (sale.price_per_unit * sale.quantity_sold), 0);
-      const realizedProfit = totalSaleValue - totalBuyValue;
-      const profitPercentage = totalBuyValue > 0 ? ((realizedProfit / totalBuyValue) * 100) : 0;
+      const totalRealizedPL = investments.reduce((sum, inv) => 
+        sum + parseFloat(inv.realized_profit_loss), 0);
+      
+      const totalSaleValue = investments.reduce((sum, inv) => 
+        sum + parseFloat(inv.total_sale_value), 0);
+      
+      const totalBuyValue = investments.reduce((sum, inv) => {
+        const soldQuantity = parseFloat(inv.total_sold_quantity);
+        return sum + (parseFloat(inv.buy_price) * soldQuantity);
+      }, 0);
+      
+      const profitPercentage = totalBuyValue > 0 ? ((totalRealizedPL / totalBuyValue) * 100) : 0;
 
       return {
         totalBuyValue,
         totalCurrentValue: totalSaleValue,
-        totalProfit: realizedProfit,
+        totalProfit: totalRealizedPL,
         profitPercentage,
         itemCount: groupedSoldItems.length
       };
@@ -133,7 +139,7 @@ const InvestmentsPage = ({ userSession }) => {
         itemCount: currentItems.length
       };
     }
-  }, [activeTab, groupedSoldItems, currentItems]);
+  }, [activeTab, investments, currentItems, groupedSoldItems]);
 
   // MEMOIZED: Search placeholder text
   const searchPlaceholder = useMemo(() => {
@@ -364,7 +370,7 @@ const InvestmentsPage = ({ userSession }) => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
               <div className="text-gray-400 text-sm">
-                {activeTab === 'Sold' ? 'Total Sold' : 'Total Invested'}
+                {activeTab === 'Sold' ? 'Total Sold' : 'Current Invested'}
               </div>
               <div className="text-white text-xl font-semibold">
                 ${activeTab === 'Sold' ? portfolioSummary.totalCurrentValue.toFixed(2) : portfolioSummary.totalBuyValue.toFixed(2)}
