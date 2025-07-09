@@ -9,6 +9,7 @@ const InvestmentDashboard = ({ userSession }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('MAX');
+  const [priceChangesPage, setPriceChangesPage] = useState(0);
 
     useEffect(() => {
       if (!userSession) return;
@@ -117,6 +118,7 @@ const InvestmentDashboard = ({ userSession }) => {
   // Get recent price changes sorted by most changed
   const getRecentPriceChangesSorted = (investments) => {
     return investments
+      .filter(inv => parseFloat(inv.quantity) > 0) // Only include items with quantity > 0
       .map(inv => {
         const changePercent = ((parseFloat(inv.current_price) - parseFloat(inv.buy_price)) / parseFloat(inv.buy_price)) * 100;
         return {
@@ -126,8 +128,7 @@ const InvestmentDashboard = ({ userSession }) => {
           trend: changePercent >= 0 ? 'up' : 'down'
         };
       })
-      .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent))
-      .slice(0, 5);
+      .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
   };
 
   // Generate chart data based on selected time period
@@ -281,7 +282,11 @@ const InvestmentDashboard = ({ userSession }) => {
   }
 
   const portfolioMetrics = calculatePortfolioMetrics(investments);
-  const recentChanges = getRecentPriceChangesSorted(investments);
+  
+  const allPriceChanges = getRecentPriceChangesSorted(investments);
+  const totalPages = Math.ceil(allPriceChanges.length / 5);
+  const currentPageChanges = allPriceChanges.slice(priceChangesPage * 5, (priceChangesPage + 1) * 5);
+
   const chartData = generateChartData(investments, selectedTimePeriod);
 
   const timePeriods = [
@@ -458,10 +463,15 @@ const InvestmentDashboard = ({ userSession }) => {
           {/* Recent Price Changes with Images */}
           <div className="lg:col-span-2">
             <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
-              <h2 className="text-xl font-semibold text-white mb-6">Biggest Price Changes</h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-white">Biggest Price Changes</h2>
+                <div className="text-sm text-gray-400">
+                  {allPriceChanges.length} active items
+                </div>
+              </div>
               
               <div className="space-y-4">
-                {recentChanges.map((investment) => (
+                {currentPageChanges.map((investment) => (
                   <div key={investment.id} className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-colors duration-200">
                     <div className="flex items-center space-x-4">
                       <div className="w-17 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
@@ -484,7 +494,7 @@ const InvestmentDashboard = ({ userSession }) => {
                       </div>
                       <div>
                         <h3 className="font-medium text-white">{investment.name}{investment.skin_name && ` | ${investment.skin_name}`}</h3>
-                        <p className="text-sm text-gray-400">{investment.condition}</p>
+                        <p className="text-sm text-gray-400">{investment.condition} • Qty: {investment.quantity}</p>
                       </div>
                     </div>
                     
@@ -509,6 +519,58 @@ const InvestmentDashboard = ({ userSession }) => {
                   </div>
                 ))}
               </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center mt-6 space-x-2">
+                  <button
+                    onClick={() => setPriceChangesPage(Math.max(0, priceChangesPage - 1))}
+                    disabled={priceChangesPage === 0}
+                    className="p-2 rounded-lg bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  
+                  {Array.from({ length: Math.min(totalPages, 3) }, (_, i) => {
+                    let pageIndex;
+                    if (totalPages <= 3) {
+                      pageIndex = i;
+                    } else if (priceChangesPage === 0) {
+                      pageIndex = i;
+                    } else if (priceChangesPage === totalPages - 1) {
+                      pageIndex = totalPages - 3 + i;
+                    } else {
+                      pageIndex = priceChangesPage - 1 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageIndex}
+                        onClick={() => setPriceChangesPage(pageIndex)}
+                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                          priceChangesPage === pageIndex
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 hover:text-white'
+                        }`}
+                      >
+                        {pageIndex + 1}
+                      </button>
+                    );
+                  })}
+                  
+                  <button
+                    onClick={() => setPriceChangesPage(Math.min(totalPages - 1, priceChangesPage + 1))}
+                    disabled={priceChangesPage === totalPages - 1}
+                    className="p-2 rounded-lg bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
