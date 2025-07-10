@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, TrendingDown, Plus, Search, Eye, DollarSign, Activity, Star } from 'lucide-react';
+import { TrendingUp, TrendingDown, Plus, Search, Eye, DollarSign, Activity, Star, Loader2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 const InvestmentDashboard = ({ userSession }) => {
@@ -268,7 +268,10 @@ const InvestmentDashboard = ({ userSession }) => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center">
-        <div className="text-white">Loading...</div>
+        <div className="flex items-center space-x-2 text-white">
+          <Loader2 className="w-8 h-8 animate-spin" />
+          <span>Loading Portfolio...</span>
+        </div>
       </div>
     );
   }

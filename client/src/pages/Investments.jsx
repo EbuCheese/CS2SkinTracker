@@ -331,7 +331,7 @@ const InvestmentsPage = ({ userSession }) => {
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center">
         <div className="flex items-center space-x-2 text-white">
           <Loader2 className="w-8 h-8 animate-spin" />
-          <span>Loading investments...</span>
+          <span>Loading Investments...</span>
         </div>
       </div>
     );
