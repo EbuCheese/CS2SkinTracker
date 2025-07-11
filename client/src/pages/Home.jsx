@@ -200,6 +200,19 @@ const handleTimePeriodChange = (period) => {
     };
   };
 
+  // get percentage change over time frame
+  const calculateTimeFrameChange = (chartData) => {
+  if (!chartData || chartData.length < 2) return { change: 0, percentage: 0 };
+  
+  const startValue = chartData[0].totalValue;
+  const endValue = chartData[chartData.length - 1].totalValue;
+  const change = endValue - startValue;
+  const percentage = startValue > 0 ? (change / startValue) * 100 : 0;
+  
+  return { change, percentage };
+};
+
+
   // Get recent price changes sorted by most changed
   const getRecentPriceChangesSorted = (investments) => {
     return investments
@@ -396,12 +409,43 @@ const handleTimePeriodChange = (period) => {
         {/* Chart Section */}
         <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
-            <div className="flex items-center space-x-4 mb-4 sm:mb-0">
-              <h2 className="text-xl font-semibold text-white">Portfolio Performance</h2>
-              <div className="flex items-center space-x-2 text-sm text-gray-400">
-                <div className="w-3 h-3 bg-gradient-to-r from-orange-400 to-red-500 rounded-full"></div>
-                <span>Total Value</span>
+            <div className="mb-4 sm:mb-0">
+              <div className="flex items-center space-x-4 mb-2">
+                <h2 className="text-xl font-semibold text-white">Portfolio Performance</h2>
+                <div className="flex items-center space-x-2 text-sm text-gray-400">
+                  <div className="w-3 h-3 bg-gradient-to-r from-orange-400 to-red-500 rounded-full"></div>
+                  <span>Total Value</span>
+                </div>
               </div>
+              
+              {/* Time Frame Change Display - Under Title */}
+              {chartData.length > 1 && !chartLoading && (
+                <div className="flex items-center space-x-2">
+                  {(() => {
+                    const { change, percentage } = calculateTimeFrameChange(chartData);
+                    return (
+                      <>
+                        <span className={`text-xl font-bold ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {change >= 0 ? '+' : ''}{formatPrice(change)}
+                        </span>
+                        <span className={`text-sm font-medium px-2 py-1 rounded ${
+                          change >= 0 
+                            ? 'bg-green-500/20 text-green-400' 
+                            : 'bg-red-500/20 text-red-400'
+                        }`}>
+                          {change >= 0 ? '+' : ''}{percentage.toFixed(2)}%
+                        </span>
+                        <span className="text-sm text-gray-400">({selectedTimePeriod})</span>
+                        {change >= 0 ? (
+                          <TrendingUp className="w-4 h-4 text-green-400" />
+                        ) : (
+                          <TrendingDown className="w-4 h-4 text-red-400" />
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
             
             {/* Time Period Selection */}
@@ -422,7 +466,7 @@ const handleTimePeriodChange = (period) => {
             </div>
           </div>
           
-          <div className="h-80">
+          <div className="h-[28rem]">
             {chartLoading ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
