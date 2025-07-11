@@ -10,6 +10,8 @@ const InvestmentDashboard = ({ userSession }) => {
   const [error, setError] = useState(null);
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('MAX');
   const [priceChangesPage, setPriceChangesPage] = useState(0);
+  const [chartData, setChartData] = useState([]);
+  const [chartLoading, setChartLoading] = useState(false);
 
     useEffect(() => {
       if (!userSession) return;
@@ -76,6 +78,8 @@ const InvestmentDashboard = ({ userSession }) => {
       setInvestments(investmentsArray);
       setSoldItems(soldItemsArray);
 
+      await fetchChartData(selectedTimePeriod);
+
     } catch (err) {
       console.error('Unexpected error:', err);
       setError('An unexpected error occurred. Please try again.');
@@ -87,6 +91,87 @@ const InvestmentDashboard = ({ userSession }) => {
   useEffect(() => {
     fetchData();
   }, []);
+
+// get the chart data from func
+const fetchChartData = async (timePeriod) => {
+  try {
+    setChartLoading(true);
+    
+    const { data, error } = await supabase.rpc('get_chart_data', {
+      context_user_id: userSession.id,
+      time_period: timePeriod
+    });
+
+    if (error) {
+      console.error('Chart data fetch failed:', error);
+      return;
+    }
+
+    const chartResult = typeof data === 'string' ? JSON.parse(data) : data;
+    
+    // Transform the data for the chart with proper date handling
+    const transformedData = chartResult.data.map(point => {
+      const date = new Date(point.date);
+      const isToday = date.toDateString() === new Date().toDateString();
+      
+      // Create more detailed date formatting
+      let formattedDate;
+      if (chartResult.granularity === 'hourly') {
+        if (isToday) {
+          formattedDate = date.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
+        } else {
+          formattedDate = date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            hour12: true
+          });
+        }
+      } else if (chartResult.granularity === 'daily') {
+        formattedDate = date.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric'
+        });
+      } else { // monthly
+        formattedDate = date.toLocaleDateString('en-US', {
+          month: 'short',
+          year: 'numeric'
+        });
+      }
+      
+      return {
+        date: formattedDate,
+        rawDate: date, // Keep raw date for tooltip
+        totalValue: parseFloat(point.value),
+        invested: parseFloat(point.invested),
+        profitLoss: parseFloat(point.profit_loss),
+        returnPercentage: parseFloat(point.return_percentage),
+        isCurrentValue: isToday && chartResult.granularity === 'hourly' || 
+                       (chartResult.granularity === 'daily' && isToday) ||
+                       (chartResult.granularity === 'monthly' && date.getMonth() === new Date().getMonth())
+      };
+    });
+
+    // Sort by date to ensure proper order
+    transformedData.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
+
+    setChartData(transformedData);
+    
+  } catch (err) {
+    console.error('Error fetching chart data:', err);
+  } finally {
+    setChartLoading(false);
+  }
+};
+
+const handleTimePeriodChange = (period) => {
+  setSelectedTimePeriod(period);
+  fetchChartData(period);
+};
 
   // Calculate portfolio metrics
   const calculatePortfolioMetrics = (investments) => {
@@ -131,125 +216,50 @@ const InvestmentDashboard = ({ userSession }) => {
       .sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
   };
 
-  // Generate chart data based on selected time period
-  const generateChartData = (investments, timePeriod) => {
-    const now = new Date();
-    const cutoffDate = new Date(now);
-    
-    // Calculate cutoff date based on selected period
-    switch (timePeriod) {
-      case '1D':
-        cutoffDate.setDate(now.getDate() - 1);
-        break;
-      case '5D':
-        cutoffDate.setDate(now.getDate() - 5);
-        break;
-      case '1M':
-        cutoffDate.setMonth(now.getMonth() - 1);
-        break;
-      case '6M':
-        cutoffDate.setMonth(now.getMonth() - 6);
-        break;
-      case 'YTD':
-        cutoffDate.setFullYear(now.getFullYear(), 0, 1);
-        break;
-      case '1Y':
-        cutoffDate.setFullYear(now.getFullYear() - 1);
-        break;
-      case '5Y':
-        cutoffDate.setFullYear(now.getFullYear() - 5);
-        break;
-      case 'MAX':
-      default:
-        cutoffDate.setFullYear(2020, 0, 1); // Far enough back for all data
-        break;
-    }
-    
-    // Filter investments based on selected time period and create date-based data
-    const filteredInvestments = investments.filter(inv => 
-      new Date(inv.created_at) >= cutoffDate
-    );
-    
-    // If no investments in the period, show the last investment value
-    if (filteredInvestments.length === 0 && investments.length > 0) {
-      const latestInvestment = investments[investments.length - 1];
-      return [{
-        date: new Date().toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric',
-          year: new Date().getFullYear() !== new Date(latestInvestment.created_at).getFullYear() ? 'numeric' : undefined
-        }),
-        totalValue: parseFloat(latestInvestment.current_price) * parseFloat(latestInvestment.quantity) + parseFloat(latestInvestment.total_sale_value),
-        investment: 'Current Value'
-      }];
-    }
-    
-    // Sort by date
-    const sortedInvestments = filteredInvestments.sort((a, b) => 
-      new Date(a.created_at) - new Date(b.created_at)
-    );
-    
-    // Generate cumulative data points
-    let cumulativeValue = 0;
-    const chartData = [];
-    
-    // Add starting point for non-MAX periods
-    if (timePeriod !== 'MAX' && sortedInvestments.length > 0) {
-      cumulativeValue = investments
-        .filter(inv => new Date(inv.created_at) < cutoffDate)
-        .reduce((sum, inv) => sum + parseFloat(inv.current_price) * parseFloat(inv.quantity) + parseFloat(inv.total_sale_value), 0);
-      
-      if (cumulativeValue > 0) {
-        chartData.push({
-          date: cutoffDate.toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric',
-            year: cutoffDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
-          }),
-          totalValue: cumulativeValue,
-          investment: 'Starting Value'
-        });
-      }
-    }
-    
-    // Add investment points
-    sortedInvestments.forEach((inv, index) => {
-      cumulativeValue += parseFloat(inv.current_price) * parseFloat(inv.quantity) + parseFloat(inv.total_sale_value);
-      
-      const investmentDate = new Date(inv.created_at);
-      let dateFormat;
-      
-      // Adjust date format based on time period
-      if (timePeriod === '1D' || timePeriod === '5D') {
-        dateFormat = {
-          month: 'short',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit'
-        };
-      } else if (timePeriod === '1M' || timePeriod === '6M') {
-        dateFormat = {
-          month: 'short',
-          day: 'numeric'
-        };
-      } else {
-        dateFormat = {
-          month: 'short',
-          day: 'numeric',
-          year: investmentDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
-        };
-      }
-      
-      chartData.push({
-        date: investmentDate.toLocaleDateString('en-US', dateFormat),
-        totalValue: cumulativeValue,
-        investment: inv.name
-      });
-    });
-    
-    return chartData;
-  };
 
+ const calculateYAxisDomain = (data, timePeriod) => {
+  if (!data || data.length === 0) return ['auto', 'auto'];
+  
+  const values = data.map(d => d.totalValue);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  
+  // Calculate range
+  const range = maxValue - minValue;
+  
+  // For very small ranges, add minimum padding
+  if (range < maxValue * 0.005) { // Less than 0.5% variation
+    const padding = maxValue * 0.02; // 2% padding
+    return [Math.max(0, minValue - padding), maxValue + padding];
+  }
+  
+  let paddingPercent;
+  switch (timePeriod) {
+    case '1D':
+    case '5D':
+      paddingPercent = 0.05; // 5% padding for short periods
+      break;
+    case '1M':
+    case '3M':
+      paddingPercent = 0.08; // 8% padding for medium periods
+      break;
+    case '6M':
+    case '1Y':
+      paddingPercent = 0.1; // 10% padding for longer periods
+      break;
+    case '5Y':
+    case 'MAX':
+      paddingPercent = 0.12; // 12% padding for very long periods
+      break;
+    default:
+      paddingPercent = 0.1;
+  }
+  
+  const padding = range * paddingPercent;
+  return [Math.max(0, minValue - padding), maxValue + padding];
+};
+
+// Formatting 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -258,12 +268,8 @@ const InvestmentDashboard = ({ userSession }) => {
     }).format(price);
   };
 
-  const formatTooltip = (value, name) => {
-    if (name === 'totalValue') {
-      return [formatPrice(value), 'Total Value'];
-    }
-    return [value, name];
-  };
+ 
+
 
   if (loading) {
     return (
@@ -289,8 +295,6 @@ const InvestmentDashboard = ({ userSession }) => {
   const allPriceChanges = getRecentPriceChangesSorted(investments);
   const totalPages = Math.ceil(allPriceChanges.length / 5);
   const currentPageChanges = allPriceChanges.slice(priceChangesPage * 5, (priceChangesPage + 1) * 5);
-
-  const chartData = generateChartData(investments, selectedTimePeriod);
 
   const timePeriods = [
     { label: '1D', value: '1D' },
@@ -405,7 +409,7 @@ const InvestmentDashboard = ({ userSession }) => {
               {timePeriods.map((period) => (
                 <button
                   key={period.value}
-                  onClick={() => setSelectedTimePeriod(period.value)}
+                  onClick={() => handleTimePeriodChange(period.value)}
                   className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
                     selectedTimePeriod === period.value
                       ? 'bg-orange-500 text-white shadow-lg'
@@ -419,44 +423,86 @@ const InvestmentDashboard = ({ userSession }) => {
           </div>
           
           <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis 
-                  dataKey="date" 
-                  stroke="#9CA3AF"
-                  fontSize={12}
-                />
-                <YAxis 
-                  stroke="#9CA3AF"
-                  fontSize={12}
-                  tickFormatter={(value) => `$${value}`}
-                />
-                <Tooltip 
-                  formatter={formatTooltip}
-                  contentStyle={{
-                    backgroundColor: '#1F2937',
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                    color: '#F9FAFB'
-                  }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="totalValue" 
-                  stroke="url(#gradient)" 
-                  strokeWidth={3}
-                  dot={{ fill: '#F97316', strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6, fill: '#EA580C' }}
-                />
-                <defs>
-                  <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#F97316" />
-                    <stop offset="100%" stopColor="#DC2626" />
-                  </linearGradient>
-                </defs>
-              </LineChart>
-            </ResponsiveContainer>
+            {chartLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="#9CA3AF"
+                    fontSize={12}
+                  />
+                  <YAxis 
+                    stroke="#9CA3AF"
+                    fontSize={12}
+                    tickFormatter={(value) => `$${value.toFixed(2)}`}
+                    domain={calculateYAxisDomain(chartData, selectedTimePeriod)}
+                    // Add more tick marks for short periods
+                    tickCount={['1D', '5D'].includes(selectedTimePeriod) ? 8 : 6}
+                  />
+                  <Tooltip 
+                    formatter={(value, name) => {
+                      if (name === 'totalValue') return [formatPrice(value), 'Portfolio Value'];
+                      if (name === 'invested') return [formatPrice(value), 'Total Invested'];
+                      if (name === 'profitLoss') return [formatPrice(value), 'Profit/Loss'];
+                      return [value, name];
+                    }}
+                    labelFormatter={(label, payload) => {
+                      if (payload && payload.length > 0 && payload[0].payload.rawDate) {
+                        const rawDate = payload[0].payload.rawDate;
+                        // For hourly data, show full date and time
+                        if (['1D', '5D'].includes(selectedTimePeriod)) {
+                          return rawDate.toLocaleDateString('en-US', {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                          });
+                        } else {
+                          // For other periods, show just the date
+                          return rawDate.toLocaleDateString('en-US', {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          });
+                        }
+                      }
+                      return label;
+                    }}
+                    contentStyle={{
+                      backgroundColor: '#1F2937',
+                      border: '1px solid #374151',
+                      borderRadius: '8px',
+                      color: '#F9FAFB'
+                    }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="totalValue" 
+                    stroke="url(#gradient)" 
+                    strokeWidth={['1D', '5D'].includes(selectedTimePeriod) ? 2 : 3}
+                    dot={['1D', '5D'].includes(selectedTimePeriod) ? 
+                      { fill: '#F97316', strokeWidth: 2, r: 3 } : 
+                      { fill: '#F97316', strokeWidth: 2, r: 4 }
+                    }
+                    activeDot={{ r: 6, fill: '#EA580C' }}
+                  />
+                  <defs>
+                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#F97316" />
+                      <stop offset="100%" stopColor="#DC2626" />
+                    </linearGradient>
+                  </defs>
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
