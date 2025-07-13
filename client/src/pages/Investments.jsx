@@ -69,7 +69,14 @@ const InvestmentsPage = ({ userSession }) => {
       filteredItems = activeInvestments;
       
       if (activeTab !== 'All') {
-        const typeFilter = activeTab.toLowerCase().slice(0, -1);
+        let typeFilter;
+        if (activeTab === 'Graffiti') {
+          typeFilter = 'graffiti';
+        } else if (activeTab === 'Patches') {
+          typeFilter = 'patch';
+        } else {
+          typeFilter = activeTab.toLowerCase().slice(0, -1);
+        }
         filteredItems = filteredItems.filter(item => item.type === typeFilter);
       }
     }
