@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 const PortfolioHealthPieChart = ({ portfolioHealth }) => {
-  const [activeToggle, setActiveToggle] = useState('type'); // 'type' or 'weapon'
+  const [activeToggle, setActiveToggle] = useState('type'); // 'type' or 'item'
 
   // Color palette for different types
   const typeColors = {
@@ -15,63 +15,77 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
     patch: '#EF4444'      // Red
   };
 
-  // Color palette for weapons (using a broader range)
+  // Color palette for consolidated items
+  const itemColors = {
+    'Knives': '#8B5CF6',        // Purple
+    'Gloves': '#EC4899',        // Pink
+    'Stickers': '#10B981',      // Green
+    'Patches': '#EF4444',       // Red
+    'Graffiti': '#6B7280',      // Gray
+    'Charms': '#F59E0B',        // Amber
+    'Agents': '#06B6D4',        // Cyan
+    // Weapons and cases use dynamic colors
+  };
+
+  // Color palette for weapons and cases (using a broader range)
   const weaponColors = [
     '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899', '#6B7280', '#EF4444',
     '#06B6D4', '#84CC16', '#F97316', '#A855F7', '#F472B6', '#64748B', '#DC2626',
     '#0EA5E9', '#65A30D', '#EA580C', '#9333EA', '#E11D48', '#475569', '#B91C1C'
   ];
 
-  // Extract weapon/item name from full item name
-  const extractWeaponName = (itemName) => {
-    // Handle cases first (they should show full name)
-    if (itemName.toLowerCase().includes('case')) {
+  // Smart consolidation logic for items
+  const consolidateItems = (itemName) => {
+    const lowerName = itemName.toLowerCase();
+    
+    // Check for knives (★ without 'Wraps' or 'Gloves')
+    if (itemName.startsWith('★')) {
+      if (lowerName.includes('gloves') || lowerName.includes('wraps')) {
+        return 'Gloves';
+      }
+      return 'Knives';
+    }
+    
+    // Check for collectibles before the '|'
+    const beforePipe = itemName.split(' | ')[0];
+    
+    if (lowerName.includes('sticker')) {
+      return 'Stickers';
+    }
+    
+    if (lowerName.includes('patch')) {
+      return 'Patches';
+    }
+    
+    if (lowerName.includes('sealed graffiti')) {
+      return 'Graffiti';
+    }
+    
+    if (lowerName.includes('charm')) {
+      return 'Charms';
+    }
+    
+    if (lowerName.includes('agent')) {
+      return 'Agents';
+    }
+    
+    // Cases kept individual
+    if (lowerName.includes('case')) {
       return itemName;
     }
     
-    // Handle sealed graffiti
-    if (itemName.toLowerCase().includes('sealed graffiti')) {
-      return 'Sealed Graffiti';
-    }
-    
-    // Handle patches
-    if (itemName.toLowerCase().includes('patch')) {
-      return 'Patch';
-    }
-    
-    // Handle charms/keychains
-    if (itemName.toLowerCase().includes('charm')) {
-      return 'Charm';
-    }
-    
-    // Handle stickers
-    if (itemName.toLowerCase().includes('sticker')) {
-      return 'Sticker';
-    }
-    
-    // Handle agents
-    if (itemName.toLowerCase().includes('agent')) {
-      return 'Agent';
-    }
-    
-    // Handle knives (★ prefix)
-    if (itemName.startsWith('★')) {
-      const parts = itemName.split(' | ');
-      return parts[0]; // Return "★ Bayonet", "★ Karambit", etc.
-    }
-    
-    // Handle regular weapons (extract weapon name before |)
+    // Weapons kept individual (extract weapon name before |)
     const parts = itemName.split(' | ');
     if (parts.length > 1) {
       return parts[0]; // Return "AK-47", "AWP", etc.
     }
     
-    // If no | found, return first word (fallback)
+    // Fallback
     return itemName.split(' ')[0];
   };
 
-  // Calculate weapon breakdown from investments
-  const calculateWeaponBreakdown = (investments) => {
+  // Calculate consolidated item breakdown
+  const calculateConsolidatedBreakdown = (investments) => {
     const activeInvestments = investments.filter(inv => {
       const quantity = parseFloat(inv.quantity);
       return !isNaN(quantity) && quantity > 0;
@@ -79,11 +93,11 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
 
     if (activeInvestments.length === 0) return [];
 
-    const weaponGroups = {};
+    const itemGroups = {};
     let totalValue = 0;
 
     activeInvestments.forEach(inv => {
-      const weaponName = extractWeaponName(inv.name);
+      const consolidatedName = consolidateItems(inv.name);
       const currentPrice = parseFloat(inv.current_price);
       const quantity = parseFloat(inv.quantity);
       
@@ -91,22 +105,22 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
       
       const value = currentPrice * quantity;
       
-      if (!weaponGroups[weaponName]) {
-        weaponGroups[weaponName] = {
-          name: weaponName,
+      if (!itemGroups[consolidatedName]) {
+        itemGroups[consolidatedName] = {
+          name: consolidatedName,
           count: 0,
           totalValue: 0,
           items: []
         };
       }
       
-      weaponGroups[weaponName].count += quantity;
-      weaponGroups[weaponName].totalValue += value;
-      weaponGroups[weaponName].items.push(inv);
+      itemGroups[consolidatedName].count += quantity;
+      itemGroups[consolidatedName].totalValue += value;
+      itemGroups[consolidatedName].items.push(inv);
       totalValue += value;
     });
 
-    return Object.values(weaponGroups)
+    return Object.values(itemGroups)
       .map(group => ({
         ...group,
         percentage: totalValue > 0 ? (group.totalValue / totalValue) * 100 : 0,
@@ -118,7 +132,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   // Get current data based on active toggle
   const getCurrentData = () => {
     if (activeToggle === 'item') {
-      return calculateWeaponBreakdown(portfolioHealth.investments || []);
+      return calculateConsolidatedBreakdown(portfolioHealth.investments || []);
     }
     return portfolioHealth.typeBreakdown || [];
   };
@@ -140,11 +154,15 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   const currentScore = getCurrentDiversityScore();
   const currentFeedback = getCurrentFeedback();
   const currentData = getCurrentData();
-  const currentColors = activeToggle === 'item' ? weaponColors : typeColors;
 
   // Get color for item
   const getItemColor = (item, index) => {
     if (activeToggle === 'item') {
+      // Use predefined colors for consolidated categories
+      if (itemColors[item.name]) {
+        return itemColors[item.name];
+      }
+      // Use weapon colors for weapons and cases
       return weaponColors[index % weaponColors.length];
     }
     return typeColors[item.name.toLowerCase()] || '#6B7280';
@@ -197,7 +215,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
 
   const toggleOptions = [
     { id: 'type', label: 'By Type', description: 'Investment type distribution' },
-    { id: 'item', label: 'By Item', description: 'Specific item distribution', disabled: false }
+    { id: 'item', label: 'By Item', description: 'Consolidated item distribution', disabled: false }
   ];
 
   return (
@@ -295,7 +313,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
       {/* Distribution List */}
       <div>
         <h3 className="text-sm font-medium text-white mb-3">
-          {activeToggle === 'item' ? 'Item' : 'Type'} Distribution ({currentData.length} {activeToggle === 'item' ? 'items' : 'types'})
+          {activeToggle === 'item' ? 'Item' : 'Type'} Distribution ({currentData.length} {activeToggle === 'item' ? 'categories' : 'types'})
         </h3>
         <div className="space-y-2">
           {currentData.map((item, index) => (

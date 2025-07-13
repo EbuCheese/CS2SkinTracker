@@ -190,9 +190,7 @@ const fetchChartData = async (timePeriod) => {
   }
 };
 
-// calculate the diversity score of portfolio
-// Improved diversity score calculation
-// Modified calculatePortfolioHealth function
+// calculatePortfolioHealth function
 const calculatePortfolioHealth = (investments) => {
   // Filter active investments (quantity > 0)
   const activeInvestments = investments.filter(inv => {
@@ -209,7 +207,8 @@ const calculatePortfolioHealth = (investments) => {
       typeFeedback: 'No active investments to analyze',
       itemFeedback: 'No active investments to analyze',
       totalTypes: 0,
-      totalWeaponTypes: 0
+      totalWeaponTypes: 0,
+      safeAllocationPercentage: 0
     };
   }
 
@@ -244,24 +243,64 @@ const calculatePortfolioHealth = (investments) => {
     }))
     .sort((a, b) => b.percentage - a.percentage);
 
-  // Calculate item breakdown using the same extraction logic
-  const extractWeaponName = (itemName) => {
-    if (itemName.toLowerCase().includes('case')) return itemName;
-    if (itemName.toLowerCase().includes('sealed graffiti')) return 'Sealed Graffiti';
-    if (itemName.toLowerCase().includes('patch')) return 'Patch';
-    if (itemName.toLowerCase().includes('charm')) return 'Charm';
-    if (itemName.toLowerCase().includes('sticker')) return 'Sticker';
-    if (itemName.toLowerCase().includes('agent')) return 'Agent';
-    if (itemName.startsWith('★')) return itemName.split(' | ')[0];
+  // Calculate safe allocation percentage (liquid + case types)
+  const safeTypes = ['liquid', 'case'];
+  const safeAllocation = typeBreakdown
+    .filter(type => safeTypes.includes(type.name))
+    .reduce((sum, type) => sum + type.percentage, 0);
+
+  // Smart consolidation logic for items
+  const consolidateItems = (itemName) => {
+    const lowerName = itemName.toLowerCase();
     
+    // Check for knives (★ without 'Wraps' or 'Gloves')
+    if (itemName.startsWith('★')) {
+      if (lowerName.includes('gloves') || lowerName.includes('wraps')) {
+        return 'Gloves';
+      }
+      return 'Knives';
+    }
+    
+    // Check for collectibles before the '|'
+    if (lowerName.includes('sticker')) {
+      return 'Stickers';
+    }
+    
+    if (lowerName.includes('patch')) {
+      return 'Patches';
+    }
+    
+    if (lowerName.includes('sealed graffiti')) {
+      return 'Graffiti';
+    }
+    
+    if (lowerName.includes('charm')) {
+      return 'Charms';
+    }
+    
+    if (lowerName.includes('agent')) {
+      return 'Agents';
+    }
+    
+    // Cases kept individual
+    if (lowerName.includes('case')) {
+      return itemName;
+    }
+    
+    // Weapons kept individual (extract weapon name before |)
     const parts = itemName.split(' | ');
-    if (parts.length > 1) return parts[0];
+    if (parts.length > 1) {
+      return parts[0]; // Return "AK-47", "AWP", etc.
+    }
+    
+    // Fallback
     return itemName.split(' ')[0];
   };
 
-  const weaponGroups = {};
+  // Calculate consolidated item breakdown
+  const itemGroups = {};
   activeInvestments.forEach(inv => {
-    const weaponName = extractWeaponName(inv.name);
+    const consolidatedName = consolidateItems(inv.name);
     const currentPrice = parseFloat(inv.current_price);
     const quantity = parseFloat(inv.quantity);
     
@@ -269,16 +308,16 @@ const calculatePortfolioHealth = (investments) => {
     
     const value = currentPrice * quantity;
     
-    if (!weaponGroups[weaponName]) {
-      weaponGroups[weaponName] = { name: weaponName, count: 0, totalValue: 0, items: [] };
+    if (!itemGroups[consolidatedName]) {
+      itemGroups[consolidatedName] = { name: consolidatedName, count: 0, totalValue: 0, items: [] };
     }
     
-    weaponGroups[weaponName].count += quantity;
-    weaponGroups[weaponName].totalValue += value;
-    weaponGroups[weaponName].items.push(inv);
+    itemGroups[consolidatedName].count += quantity;
+    itemGroups[consolidatedName].totalValue += value;
+    itemGroups[consolidatedName].items.push(inv);
   });
 
-  const weaponBreakdown = Object.values(weaponGroups)
+  const weaponBreakdown = Object.values(itemGroups)
     .map(group => ({
       ...group,
       percentage: totalValue > 0 ? (group.totalValue / totalValue) * 100 : 0,
@@ -286,14 +325,14 @@ const calculatePortfolioHealth = (investments) => {
     }))
     .sort((a, b) => b.percentage - a.percentage);
 
-  // TYPE DIVERSITY SCORE (for investment types - more conservative)
+  // TYPE DIVERSITY SCORE WITH SAFETY WEIGHTING
   const numTypes = typeBreakdown.length;
   const typeMaxConcentration = typeBreakdown.length > 0 ? 
     Math.max(...typeBreakdown.map(t => t.percentage)) : 0;
   
   let typeDiversityScore = 0;
   
-  // More lenient scoring for types (since there are fewer categories)
+  // Base scoring for concentration (more lenient for types)
   if (typeMaxConcentration >= 98) {
     typeDiversityScore = 5;
   } else if (typeMaxConcentration >= 90) {
@@ -321,95 +360,201 @@ const calculatePortfolioHealth = (investments) => {
   }
 
   typeDiversityScore *= typeMultiplier;
+
+  // SAFETY WEIGHTING SYSTEM
+  // Apply penalty for portfolios with <15% safe investments
+  if (safeAllocation < 15) {
+    typeDiversityScore *= 0.5; // 50% penalty for risky portfolios
+  }
+
+  // Apply bonuses for safe allocations
+  if (safeAllocation >= 70) {
+    typeDiversityScore *= 1.25; // 25% bonus for very safe portfolios
+  } else if (safeAllocation >= 50) {
+    typeDiversityScore *= 1.15; // 15% bonus for moderately safe portfolios
+  }
+
   typeDiversityScore = Math.min(100, Math.max(0, Math.round(typeDiversityScore)));
 
-  // ITEM DIVERSITY SCORE (for specific items - more strict)
+  // ITEM DIVERSITY SCORE WITH SMART CONSOLIDATION
   const numItems = weaponBreakdown.length;
-  const itemMaxConcentration = weaponBreakdown.length > 0 ? 
-    Math.max(...weaponBreakdown.map(w => w.percentage)) : 0;
-  
-  let itemDiversityScore = 0;
-  
-  // Stricter scoring for items (since there are many more possible items)
-  if (itemMaxConcentration >= 95) {
-    itemDiversityScore = 5;
-  } else if (itemMaxConcentration >= 80) {
-    itemDiversityScore = 15;
+const itemMaxConcentration = weaponBreakdown.length > 0 ? 
+  Math.max(...weaponBreakdown.map(w => w.percentage)) : 0;
+
+let itemDiversityScore = 0;
+
+if (weaponBreakdown.length === 0) {
+  itemDiversityScore = 0;
+} else {
+  // 1. CONCENTRATION PENALTY (More aggressive penalties for high concentration)
+  let concentrationScore = 0;
+  if (itemMaxConcentration >= 80) {
+    concentrationScore = 5;   // Severe penalty for 80%+ concentration
   } else if (itemMaxConcentration >= 60) {
-    itemDiversityScore = 30;
+    concentrationScore = 15;  // Heavy penalty for 60-80% concentration
   } else if (itemMaxConcentration >= 40) {
-    itemDiversityScore = 50;
+    concentrationScore = 35;  // Moderate penalty for 40-60% concentration
   } else if (itemMaxConcentration >= 25) {
-    itemDiversityScore = 70;
+    concentrationScore = 55;  // Light penalty for 25-40% concentration
   } else if (itemMaxConcentration >= 15) {
-    itemDiversityScore = 85;
+    concentrationScore = 75;  // Minimal penalty for 15-25% concentration
   } else {
-    itemDiversityScore = 95;
+    concentrationScore = 90;  // Good score for <15% max concentration
   }
 
-  // Item multiplier (rewards having many different items)
-  let itemMultiplier = 1.0;
-  if (numItems === 1) {
-    itemMultiplier = 0.1;
-  } else if (numItems <= 3) {
-    itemMultiplier = 0.5;
-  } else if (numItems <= 5) {
-    itemMultiplier = 0.7;
-  } else if (numItems <= 8) {
-    itemMultiplier = 0.9;
-  } else if (numItems <= 12) {
-    itemMultiplier = 1.0;
-  } else if (numItems <= 20) {
-    itemMultiplier = 1.1;
-  } else {
-    itemMultiplier = 1.2; // Bonus for having many different items
-  }
-
-  itemDiversityScore *= itemMultiplier;
-
-  // Additional CS:GO specific bonuses for item diversity
-  // Check for good mix of weapon categories
-  const knives = weaponBreakdown.filter(w => w.name.startsWith('★')).length;
-  const rifles = weaponBreakdown.filter(w => 
-    ['AK-47', 'M4A4', 'M4A1-S', 'AWP', 'Galil AR', 'FAMAS', 'AUG', 'SG 553'].includes(w.name)
-  ).length;
-  const pistols = weaponBreakdown.filter(w => 
-    ['Glock-18', 'USP-S', 'P2000', 'Deagle', 'Five-SeveN', 'Tec-9', 'CZ75-Auto', 'P250'].includes(w.name)
-  ).length;
+  // 2. TOP CONCENTRATION PENALTY (Look at top 2-3 holdings)
+  const sortedPercentages = weaponBreakdown
+    .map(w => w.percentage)
+    .sort((a, b) => b - a);
   
-  if (knives > 0 && rifles > 0 && pistols > 0) {
-    itemDiversityScore *= 1.1; // Bonus for having all weapon categories
+  const top2Concentration = sortedPercentages.slice(0, 2).reduce((sum, p) => sum + p, 0);
+  const top3Concentration = sortedPercentages.slice(0, 3).reduce((sum, p) => sum + p, 0);
+  
+  // Apply additional penalties for high top-N concentrations
+  if (top2Concentration >= 80) {
+    concentrationScore *= 0.6;  // 40% penalty if top 2 items = 80%+
+  } else if (top2Concentration >= 60) {
+    concentrationScore *= 0.8;  // 20% penalty if top 2 items = 60-80%
+  }
+  
+  if (top3Concentration >= 85) {
+    concentrationScore *= 0.7;  // 30% penalty if top 3 items = 85%+
   }
 
-  itemDiversityScore = Math.min(100, Math.max(0, Math.round(itemDiversityScore)));
+  // 3. DIVERSITY BONUS (Reward for having many items)
+  let diversityMultiplier = 1.0;
+  if (numItems === 1) {
+    diversityMultiplier = 0.1;  // Severe penalty for single item
+  } else if (numItems === 2) {
+    diversityMultiplier = 0.3;  // Heavy penalty for only 2 items
+  } else if (numItems === 3) {
+    diversityMultiplier = 0.5;  // Moderate penalty for 3 items
+  } else if (numItems <= 5) {
+    diversityMultiplier = 0.7;  // Light penalty for 4-5 items
+  } else if (numItems <= 8) {
+    diversityMultiplier = 0.9;  // Minimal penalty for 6-8 items
+  } else if (numItems <= 12) {
+    diversityMultiplier = 1.0;  // Neutral for 9-12 items
+  } else if (numItems <= 16) {
+    diversityMultiplier = 1.1;  // Small bonus for 13-16 items
+  } else {
+    diversityMultiplier = 1.2;  // Good bonus for 17+ items
+  }
 
-  // Generate feedback for each score
-  const generateTypeFeedback = (score, numTypes, maxConcentration) => {
+  // 4. CATEGORY BALANCE SCORING
+  const categories = {
+    weapons: weaponBreakdown.filter(w => 
+      !['Knives', 'Gloves', 'Stickers', 'Patches', 'Graffiti', 'Charms', 'Agents'].includes(w.name) && 
+      !w.name.toLowerCase().includes('case')
+    ),
+    knives: weaponBreakdown.filter(w => w.name === 'Knives'),
+    gloves: weaponBreakdown.filter(w => w.name === 'Gloves'),
+    cases: weaponBreakdown.filter(w => w.name.toLowerCase().includes('case')),
+    collectibles: weaponBreakdown.filter(w => 
+      ['Stickers', 'Patches', 'Graffiti', 'Charms', 'Agents'].includes(w.name)
+    )
+  };
+
+  // Calculate category percentages
+  const categoryPercentages = Object.entries(categories).map(([name, items]) => ({
+    name,
+    percentage: items.reduce((sum, item) => sum + item.percentage, 0)
+  }));
+
+  // Penalty for single category dominance
+  const maxCategoryPercentage = Math.max(...categoryPercentages.map(c => c.percentage));
+  if (maxCategoryPercentage >= 90) {
+    diversityMultiplier *= 0.5;  // 50% penalty for 90%+ in one category
+  } else if (maxCategoryPercentage >= 75) {
+    diversityMultiplier *= 0.7;  // 30% penalty for 75%+ in one category
+  } else if (maxCategoryPercentage >= 60) {
+    diversityMultiplier *= 0.85; // 15% penalty for 60%+ in one category
+  }
+
+  // Bonus for balanced categories
+  const activeCategories = categoryPercentages.filter(c => c.percentage > 0).length;
+  if (activeCategories >= 4) {
+    diversityMultiplier *= 1.15; // 15% bonus for 4+ categories
+  } else if (activeCategories >= 3) {
+    diversityMultiplier *= 1.05; // 5% bonus for 3+ categories
+  }
+
+  // 5. APPLY ALL MULTIPLIERS
+  itemDiversityScore = concentrationScore * diversityMultiplier;
+
+  // 6. SPECIAL CASE ADJUSTMENTS
+  // If portfolio is very concentrated in weapons vs other categories
+  const weaponPercentage = categories.weapons.reduce((sum, item) => sum + item.percentage, 0);
+  if (weaponPercentage >= 95) {
+    itemDiversityScore *= 0.8; // 20% penalty for 95%+ weapons
+  } else if (weaponPercentage >= 85) {
+    itemDiversityScore *= 0.9; // 10% penalty for 85%+ weapons
+  }
+}
+
+itemDiversityScore = Math.min(100, Math.max(0, Math.round(itemDiversityScore)));
+
+  // ENHANCED FEEDBACK GENERATION
+  const generateTypeFeedback = (score, numTypes, maxConcentration, safeAllocation) => {
+    const safeText = `Safe allocation: ${safeAllocation.toFixed(1)}%`;
+    
     if (score >= 80) {
-      return `Excellent type diversification! Well-balanced across ${numTypes} investment types.`;
+      return `Excellent type diversification! Well-balanced across ${numTypes} investment types. ${safeText} - great risk management.`;
     } else if (score >= 60) {
-      return `Good type diversification across ${numTypes} types. Consider balancing allocations further.`;
+      return `Good type diversification across ${numTypes} types. ${safeText}. Consider balancing allocations further.`;
     } else if (score >= 40) {
-      return `Moderate type diversification. Consider spreading across more investment types.`;
+      return `Moderate type diversification. ${safeText}. Consider spreading across more investment types.`;
+    } else if (safeAllocation < 15) {
+      return `High risk portfolio! ${safeText} is below recommended 15% minimum. Increase liquid/case allocations.`;
     } else if (maxConcentration >= 90) {
-      return `High concentration risk! ${maxConcentration.toFixed(1)}% in one type. Diversify across more types.`;
+      return `High concentration risk! ${maxConcentration.toFixed(1)}% in one type. ${safeText}. Diversify across more types.`;
     } else {
-      return `Low type diversification. Strongly consider spreading across multiple investment types.`;
+      return `Low type diversification. ${safeText}. Strongly consider spreading across multiple investment types.`;
     }
   };
 
-  const generateItemFeedback = (score, numItems, maxConcentration) => {
-    if (score >= 85) {
-      return `Excellent item diversification! Great spread across ${numItems} different items.`;
-    } else if (score >= 70) {
-      return `Good item diversification across ${numItems} items. Nice variety in your portfolio.`;
-    } else if (score >= 50) {
-      return `Moderate item diversification. Consider adding more variety to reduce single-item risk.`;
-    } else if (maxConcentration >= 60) {
-      return `High item concentration! ${maxConcentration.toFixed(1)}% in one item. Diversify across more items.`;
-    } else {
-      return `Low item diversification. Spread investments across more different items to reduce risk.`;
-    }
+  const generateItemFeedback = (score, numItems, maxConcentration, categoryBreakdown) => {
+  const categoryCount = Object.values(categoryBreakdown).filter(count => count > 0).length;
+  
+  // Get top holdings for specific feedback
+  const topHoldings = weaponBreakdown
+    .slice(0, 3)
+    .map(w => `${w.name} (${w.percentage.toFixed(1)}%)`)
+    .join(', ');
+  
+  const top2Concentration = weaponBreakdown
+    .slice(0, 2)
+    .reduce((sum, w) => sum + w.percentage, 0);
+
+  if (score >= 85) {
+    return `Excellent item diversification! Well-balanced across ${numItems} items in ${categoryCount} categories. Low concentration risk.`;
+  } else if (score >= 70) {
+    return `Good item diversification with ${numItems} items across ${categoryCount} categories. Top holdings: ${topHoldings}`;
+  } else if (score >= 50) {
+    return `Moderate diversification across ${numItems} items. Consider reducing concentration in top holdings: ${topHoldings}`;
+  } else if (score >= 30) {
+    return `Low diversification! High concentration risk with ${maxConcentration.toFixed(1)}% in top item. Top holdings: ${topHoldings}`;
+  } else if (top2Concentration >= 80) {
+    return `Very high concentration risk! Top 2 items represent ${top2Concentration.toFixed(1)}% of portfolio. Urgent diversification needed.`;
+  } else if (maxConcentration >= 60) {
+    return `Dangerous concentration! ${maxConcentration.toFixed(1)}% in single item. Significantly diversify across more items.`;
+  } else {
+    return `Poor diversification across ${numItems} items. Spread investments more evenly to reduce single-item risk.`;
+  }
+};
+
+  // Calculate categories for feedback
+  const categoryBreakdown = {
+    weapons: weaponBreakdown.filter(w => 
+      !['Knives', 'Gloves', 'Stickers', 'Patches', 'Graffiti', 'Charms', 'Agents'].includes(w.name) && 
+      !w.name.toLowerCase().includes('case')
+    ).length,
+    knives: weaponBreakdown.filter(w => w.name === 'Knives').length,
+    gloves: weaponBreakdown.filter(w => w.name === 'Gloves').length,
+    cases: weaponBreakdown.filter(w => w.name.toLowerCase().includes('case')).length,
+    collectibles: weaponBreakdown.filter(w => 
+      ['Stickers', 'Patches', 'Graffiti', 'Charms', 'Agents'].includes(w.name)
+    ).length
   };
 
   return {
@@ -417,13 +562,14 @@ const calculatePortfolioHealth = (investments) => {
     itemDiversityScore,
     typeBreakdown,
     weaponBreakdown,
-    typeFeedback: generateTypeFeedback(typeDiversityScore, numTypes, typeMaxConcentration),
-    itemFeedback: generateItemFeedback(itemDiversityScore, numItems, itemMaxConcentration),
+    typeFeedback: generateTypeFeedback(typeDiversityScore, numTypes, typeMaxConcentration, safeAllocation),
+    itemFeedback: generateItemFeedback(itemDiversityScore, numItems, itemMaxConcentration, categoryBreakdown),
     totalTypes: numTypes,
     totalWeaponTypes: numItems,
+    safeAllocationPercentage: safeAllocation,
     investments: investments
   };
-}; 
+};
 
 // get the recent added and sold items
 const getRecentActivity = (investments, soldItems) => {
