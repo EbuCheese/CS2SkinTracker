@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Plus, Search, Eye, DollarSign, Activity, Star, Loader2 } from 'lucide-react';
+import PortfolioPerformanceChart from '../components/PortfolioPerformanceChart';
+import PortfolioHealthPieChart from '../components/PortfolioHealthPieChart';
 import { supabase } from '../supabaseClient';
 
 const InvestmentDashboard = ({ userSession }) => {
@@ -15,9 +17,11 @@ const InvestmentDashboard = ({ userSession }) => {
   const [recentActivity, setRecentActivity] = useState([]);
   const [portfolioHealth, setPortfolioHealth] = useState({
     diversityScore: 0,
-    weaponBreakdown: [],
+    typeBreakdown: [],
+    weaponBreakdown: [], 
     feedback: '',
-    totalWeaponTypes: 0
+    totalTypes: 0,
+    totalWeaponTypes: 0 
   });
 
     useEffect(() => {
@@ -187,6 +191,8 @@ const fetchChartData = async (timePeriod) => {
 };
 
 // calculate the diversity score of portfolio
+// Improved diversity score calculation
+// Modified calculatePortfolioHealth function
 const calculatePortfolioHealth = (investments) => {
   // Filter active investments (quantity > 0)
   const activeInvestments = investments.filter(inv => {
@@ -196,97 +202,228 @@ const calculatePortfolioHealth = (investments) => {
   
   if (activeInvestments.length === 0) {
     return {
-      diversityScore: 0,
+      typeDiversityScore: 0,
+      itemDiversityScore: 0,
+      typeBreakdown: [],
       weaponBreakdown: [],
-      feedback: 'No active investments to analyze',
+      typeFeedback: 'No active investments to analyze',
+      itemFeedback: 'No active investments to analyze',
+      totalTypes: 0,
       totalWeaponTypes: 0
     };
   }
 
-  // Group by weapon type (extract weapon name from item name)
-  const weaponGroups = {};
+  // Calculate type breakdown (existing logic)
+  const typeGroups = {};
   let totalValue = 0;
 
   activeInvestments.forEach(inv => {
-    // Extract weapon name (first part before " | " or first word)
-    const weaponName = inv.name.split(' | ')[0] || inv.name.split(' ')[0];
+    const type = inv.type?.toLowerCase() || 'unknown';
     const currentPrice = parseFloat(inv.current_price);
     const quantity = parseFloat(inv.quantity);
     
-    // Skip if prices are invalid
+    if (isNaN(currentPrice) || isNaN(quantity)) return;
+    
+    const value = currentPrice * quantity;
+    
+    if (!typeGroups[type]) {
+      typeGroups[type] = { name: type, count: 0, totalValue: 0, items: [] };
+    }
+    
+    typeGroups[type].count += quantity;
+    typeGroups[type].totalValue += value;
+    typeGroups[type].items.push(inv);
+    totalValue += value;
+  });
+
+  const typeBreakdown = Object.values(typeGroups)
+    .map(group => ({
+      ...group,
+      percentage: totalValue > 0 ? (group.totalValue / totalValue) * 100 : 0,
+      value: group.totalValue
+    }))
+    .sort((a, b) => b.percentage - a.percentage);
+
+  // Calculate item breakdown using the same extraction logic
+  const extractWeaponName = (itemName) => {
+    if (itemName.toLowerCase().includes('case')) return itemName;
+    if (itemName.toLowerCase().includes('sealed graffiti')) return 'Sealed Graffiti';
+    if (itemName.toLowerCase().includes('patch')) return 'Patch';
+    if (itemName.toLowerCase().includes('charm')) return 'Charm';
+    if (itemName.toLowerCase().includes('sticker')) return 'Sticker';
+    if (itemName.toLowerCase().includes('agent')) return 'Agent';
+    if (itemName.startsWith('★')) return itemName.split(' | ')[0];
+    
+    const parts = itemName.split(' | ');
+    if (parts.length > 1) return parts[0];
+    return itemName.split(' ')[0];
+  };
+
+  const weaponGroups = {};
+  activeInvestments.forEach(inv => {
+    const weaponName = extractWeaponName(inv.name);
+    const currentPrice = parseFloat(inv.current_price);
+    const quantity = parseFloat(inv.quantity);
+    
     if (isNaN(currentPrice) || isNaN(quantity)) return;
     
     const value = currentPrice * quantity;
     
     if (!weaponGroups[weaponName]) {
-      weaponGroups[weaponName] = {
-        name: weaponName,
-        count: 0,
-        totalValue: 0,
-        items: []
-      };
+      weaponGroups[weaponName] = { name: weaponName, count: 0, totalValue: 0, items: [] };
     }
     
     weaponGroups[weaponName].count += quantity;
     weaponGroups[weaponName].totalValue += value;
     weaponGroups[weaponName].items.push(inv);
-    totalValue += value;
   });
 
-  // Calculate percentages and create breakdown
   const weaponBreakdown = Object.values(weaponGroups)
     .map(group => ({
       ...group,
-      percentage: totalValue > 0 ? (group.totalValue / totalValue) * 100 : 0
+      percentage: totalValue > 0 ? (group.totalValue / totalValue) * 100 : 0,
+      value: group.totalValue
     }))
     .sort((a, b) => b.percentage - a.percentage);
 
-  // Calculate diversity score (0-100)
-  const numWeaponTypes = weaponBreakdown.length;
-  const maxConcentration = weaponBreakdown.length > 0 ? 
+  // TYPE DIVERSITY SCORE (for investment types - more conservative)
+  const numTypes = typeBreakdown.length;
+  const typeMaxConcentration = typeBreakdown.length > 0 ? 
+    Math.max(...typeBreakdown.map(t => t.percentage)) : 0;
+  
+  let typeDiversityScore = 0;
+  
+  // More lenient scoring for types (since there are fewer categories)
+  if (typeMaxConcentration >= 98) {
+    typeDiversityScore = 5;
+  } else if (typeMaxConcentration >= 90) {
+    typeDiversityScore = 20;
+  } else if (typeMaxConcentration >= 80) {
+    typeDiversityScore = 40;
+  } else if (typeMaxConcentration >= 65) {
+    typeDiversityScore = 60;
+  } else if (typeMaxConcentration >= 50) {
+    typeDiversityScore = 75;
+  } else {
+    typeDiversityScore = 90;
+  }
+
+  // Type multiplier (more forgiving since there are fewer total types)
+  let typeMultiplier = 1.0;
+  if (numTypes === 1) {
+    typeMultiplier = 0.2;
+  } else if (numTypes === 2) {
+    typeMultiplier = 0.7;
+  } else if (numTypes === 3) {
+    typeMultiplier = 0.9;
+  } else if (numTypes >= 4) {
+    typeMultiplier = 1.1;
+  }
+
+  typeDiversityScore *= typeMultiplier;
+  typeDiversityScore = Math.min(100, Math.max(0, Math.round(typeDiversityScore)));
+
+  // ITEM DIVERSITY SCORE (for specific items - more strict)
+  const numItems = weaponBreakdown.length;
+  const itemMaxConcentration = weaponBreakdown.length > 0 ? 
     Math.max(...weaponBreakdown.map(w => w.percentage)) : 0;
   
-  let diversityScore = 0;
-  if (numWeaponTypes === 1) {
-    diversityScore = 10; // Very low diversity
-  } else if (numWeaponTypes <= 3) {
-    diversityScore = Math.min(40, 20 + (numWeaponTypes - 1) * 10);
-  } else if (numWeaponTypes <= 5) {
-    diversityScore = Math.min(70, 40 + (numWeaponTypes - 3) * 15);
+  let itemDiversityScore = 0;
+  
+  // Stricter scoring for items (since there are many more possible items)
+  if (itemMaxConcentration >= 95) {
+    itemDiversityScore = 5;
+  } else if (itemMaxConcentration >= 80) {
+    itemDiversityScore = 15;
+  } else if (itemMaxConcentration >= 60) {
+    itemDiversityScore = 30;
+  } else if (itemMaxConcentration >= 40) {
+    itemDiversityScore = 50;
+  } else if (itemMaxConcentration >= 25) {
+    itemDiversityScore = 70;
+  } else if (itemMaxConcentration >= 15) {
+    itemDiversityScore = 85;
   } else {
-    diversityScore = Math.min(95, 70 + (numWeaponTypes - 5) * 5);
+    itemDiversityScore = 95;
   }
 
-  // Adjust for concentration (high concentration reduces diversity)
-  if (maxConcentration > 50) {
-    diversityScore *= 0.7;
-  } else if (maxConcentration > 30) {
-    diversityScore *= 0.85;
-  }
-
-  diversityScore = Math.round(diversityScore);
-
-  // Generate feedback based on diversity score
-  let feedback = '';
-  if (diversityScore >= 80) {
-    feedback = 'Excellent diversification! Your portfolio is well-balanced across multiple weapon types.';
-  } else if (diversityScore >= 60) {
-    feedback = 'Good diversification. Consider adding more variety to reduce risk.';
-  } else if (diversityScore >= 40) {
-    feedback = 'Moderate diversification. Your portfolio is somewhat concentrated.';
-  } else if (diversityScore >= 20) {
-    feedback = 'Low diversification. Consider spreading investments across more weapon types.';
+  // Item multiplier (rewards having many different items)
+  let itemMultiplier = 1.0;
+  if (numItems === 1) {
+    itemMultiplier = 0.1;
+  } else if (numItems <= 3) {
+    itemMultiplier = 0.5;
+  } else if (numItems <= 5) {
+    itemMultiplier = 0.7;
+  } else if (numItems <= 8) {
+    itemMultiplier = 0.9;
+  } else if (numItems <= 12) {
+    itemMultiplier = 1.0;
+  } else if (numItems <= 20) {
+    itemMultiplier = 1.1;
   } else {
-    feedback = 'Very low diversification. High concentration risk - consider diversifying.';
+    itemMultiplier = 1.2; // Bonus for having many different items
   }
+
+  itemDiversityScore *= itemMultiplier;
+
+  // Additional CS:GO specific bonuses for item diversity
+  // Check for good mix of weapon categories
+  const knives = weaponBreakdown.filter(w => w.name.startsWith('★')).length;
+  const rifles = weaponBreakdown.filter(w => 
+    ['AK-47', 'M4A4', 'M4A1-S', 'AWP', 'Galil AR', 'FAMAS', 'AUG', 'SG 553'].includes(w.name)
+  ).length;
+  const pistols = weaponBreakdown.filter(w => 
+    ['Glock-18', 'USP-S', 'P2000', 'Deagle', 'Five-SeveN', 'Tec-9', 'CZ75-Auto', 'P250'].includes(w.name)
+  ).length;
+  
+  if (knives > 0 && rifles > 0 && pistols > 0) {
+    itemDiversityScore *= 1.1; // Bonus for having all weapon categories
+  }
+
+  itemDiversityScore = Math.min(100, Math.max(0, Math.round(itemDiversityScore)));
+
+  // Generate feedback for each score
+  const generateTypeFeedback = (score, numTypes, maxConcentration) => {
+    if (score >= 80) {
+      return `Excellent type diversification! Well-balanced across ${numTypes} investment types.`;
+    } else if (score >= 60) {
+      return `Good type diversification across ${numTypes} types. Consider balancing allocations further.`;
+    } else if (score >= 40) {
+      return `Moderate type diversification. Consider spreading across more investment types.`;
+    } else if (maxConcentration >= 90) {
+      return `High concentration risk! ${maxConcentration.toFixed(1)}% in one type. Diversify across more types.`;
+    } else {
+      return `Low type diversification. Strongly consider spreading across multiple investment types.`;
+    }
+  };
+
+  const generateItemFeedback = (score, numItems, maxConcentration) => {
+    if (score >= 85) {
+      return `Excellent item diversification! Great spread across ${numItems} different items.`;
+    } else if (score >= 70) {
+      return `Good item diversification across ${numItems} items. Nice variety in your portfolio.`;
+    } else if (score >= 50) {
+      return `Moderate item diversification. Consider adding more variety to reduce single-item risk.`;
+    } else if (maxConcentration >= 60) {
+      return `High item concentration! ${maxConcentration.toFixed(1)}% in one item. Diversify across more items.`;
+    } else {
+      return `Low item diversification. Spread investments across more different items to reduce risk.`;
+    }
+  };
 
   return {
-    diversityScore,
-    weaponBreakdown: weaponBreakdown.slice(0, 6), // Show top 6 weapon types
-    feedback,
-    totalWeaponTypes: numWeaponTypes
+    typeDiversityScore,
+    itemDiversityScore,
+    typeBreakdown,
+    weaponBreakdown,
+    typeFeedback: generateTypeFeedback(typeDiversityScore, numTypes, typeMaxConcentration),
+    itemFeedback: generateItemFeedback(itemDiversityScore, numItems, itemMaxConcentration),
+    totalTypes: numTypes,
+    totalWeaponTypes: numItems,
+    investments: investments
   };
-};
+}; 
 
 // get the recent added and sold items
 const getRecentActivity = (investments, soldItems) => {
@@ -584,148 +721,7 @@ const handleTimePeriodChange = (period) => {
         </div>
 
         {/* Chart Section */}
-        <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
-            <div className="mb-4 sm:mb-0">
-              <div className="flex items-center space-x-4 mb-2">
-                <h2 className="text-xl font-semibold text-white">Portfolio Performance</h2>
-                <div className="flex items-center space-x-2 text-sm text-gray-400">
-                  <div className="w-3 h-3 bg-gradient-to-r from-orange-400 to-red-500 rounded-full"></div>
-                  <span>Total Value</span>
-                </div>
-              </div>
-              
-              {/* Time Frame Change Display - Under Title */}
-              {chartData.length > 1 && !chartLoading && (
-                <div className="flex items-center space-x-2">
-                  {(() => {
-                    const { change, percentage } = calculateTimeFrameChange(chartData);
-                    return (
-                      <>
-                        <span className={`text-xl font-bold ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {change >= 0 ? '+' : ''}{formatPrice(change)}
-                        </span>
-                        <span className={`text-sm font-medium px-2 py-1 rounded ${
-                          change >= 0 
-                            ? 'bg-green-500/20 text-green-400' 
-                            : 'bg-red-500/20 text-red-400'
-                        }`}>
-                          {change >= 0 ? '+' : ''}{percentage.toFixed(2)}%
-                        </span>
-                        <span className="text-sm text-gray-400">({selectedTimePeriod})</span>
-                        {change >= 0 ? (
-                          <TrendingUp className="w-4 h-4 text-green-400" />
-                        ) : (
-                          <TrendingDown className="w-4 h-4 text-red-400" />
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
-            
-            {/* Time Period Selection */}
-            <div className="flex flex-wrap gap-2">
-              {timePeriods.map((period) => (
-                <button
-                  key={period.value}
-                  onClick={() => handleTimePeriodChange(period.value)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
-                    selectedTimePeriod === period.value
-                      ? 'bg-orange-500 text-white shadow-lg'
-                      : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 hover:text-white'
-                  }`}
-                >
-                  {period.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          
-          <div className="h-[28rem]">
-            {chartLoading ? (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis 
-                    dataKey="date" 
-                    stroke="#9CA3AF"
-                    fontSize={12}
-                  />
-                  <YAxis 
-                    stroke="#9CA3AF"
-                    fontSize={12}
-                    tickFormatter={(value) => `$${value.toFixed(2)}`}
-                    domain={calculateYAxisDomain(chartData, selectedTimePeriod)}
-                    // Add more tick marks for short periods
-                    tickCount={['1D', '5D'].includes(selectedTimePeriod) ? 8 : 6}
-                  />
-                  <Tooltip 
-                    formatter={(value, name) => {
-                      if (name === 'totalValue') return [formatPrice(value), 'Portfolio Value'];
-                      if (name === 'invested') return [formatPrice(value), 'Total Invested'];
-                      if (name === 'profitLoss') return [formatPrice(value), 'Profit/Loss'];
-                      return [value, name];
-                    }}
-                    labelFormatter={(label, payload) => {
-                      if (payload && payload.length > 0 && payload[0].payload.rawDate) {
-                        const rawDate = payload[0].payload.rawDate;
-                        // For hourly data, show full date and time
-                        if (['1D', '5D'].includes(selectedTimePeriod)) {
-                          return rawDate.toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            hour12: true
-                          });
-                        } else {
-                          // For other periods, show just the date
-                          return rawDate.toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          });
-                        }
-                      }
-                      return label;
-                    }}
-                    contentStyle={{
-                      backgroundColor: '#1F2937',
-                      border: '1px solid #374151',
-                      borderRadius: '8px',
-                      color: '#F9FAFB'
-                    }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="totalValue" 
-                    stroke="url(#gradient)" 
-                    strokeWidth={['1D', '5D'].includes(selectedTimePeriod) ? 2 : 3}
-                    dot={['1D', '5D'].includes(selectedTimePeriod) ? 
-                      { fill: '#F97316', strokeWidth: 2, r: 3 } : 
-                      { fill: '#F97316', strokeWidth: 2, r: 4 }
-                    }
-                    activeDot={{ r: 6, fill: '#EA580C' }}
-                  />
-                  <defs>
-                    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#F97316" />
-                      <stop offset="100%" stopColor="#DC2626" />
-                    </linearGradient>
-                  </defs>
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
+        <PortfolioPerformanceChart userSession={userSession} />
 
         {/* Recent Price Changes & Quick Actions */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -980,71 +976,9 @@ const handleTimePeriodChange = (period) => {
 </div>
 
   {/* Portfolio Health */}
-  <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
-    <div className="flex items-center justify-between mb-6">
-      <h2 className="text-xl font-semibold text-white">Portfolio Health</h2>
-      <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-        portfolioHealth.diversityScore >= 80 ? 'bg-green-500/20 text-green-400' :
-        portfolioHealth.diversityScore >= 60 ? 'bg-yellow-500/20 text-yellow-400' :
-        portfolioHealth.diversityScore >= 40 ? 'bg-orange-500/20 text-orange-400' :
-        'bg-red-500/20 text-red-400'
-      }`}>
-        {portfolioHealth.diversityScore}/100
-      </div>
-    </div>
-    
-    {/* Diversity Score */}
-    <div className="mb-6">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm text-gray-400">Diversity Score</span>
-        <span className="text-sm font-medium text-white">{portfolioHealth.diversityScore}%</span>
-      </div>
-      <div className="w-full bg-gray-700 rounded-full h-2">
-        <div 
-          className={`h-2 rounded-full transition-all duration-300 ${
-            portfolioHealth.diversityScore >= 80 ? 'bg-gradient-to-r from-green-400 to-green-500' :
-            portfolioHealth.diversityScore >= 60 ? 'bg-gradient-to-r from-yellow-400 to-yellow-500' :
-            portfolioHealth.diversityScore >= 40 ? 'bg-gradient-to-r from-orange-400 to-orange-500' :
-            'bg-gradient-to-r from-red-400 to-red-500'
-          }`}
-          style={{ width: `${portfolioHealth.diversityScore}%` }}
-        ></div>
-      </div>
-    </div>
-    
-    {/* Feedback */}
-    <div className="mb-6 p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
-      <p className="text-sm text-gray-300">{portfolioHealth.feedback}</p>
-    </div>
-    
-    {/* Weapon Breakdown */}
-    <div>
-      <h3 className="text-sm font-medium text-white mb-3">
-        Weapon Distribution ({portfolioHealth.totalWeaponTypes} types)
-      </h3>
-      <div className="space-y-2">
-        {portfolioHealth.weaponBreakdown.map((weapon, index) => (
-          <div key={weapon.name} className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className={`w-2 h-2 rounded-full ${
-                index === 0 ? 'bg-orange-500' :
-                index === 1 ? 'bg-blue-500' :
-                index === 2 ? 'bg-green-500' :
-                index === 3 ? 'bg-purple-500' :
-                index === 4 ? 'bg-pink-500' :
-                'bg-gray-500'
-              }`}></div>
-              <span className="text-sm text-gray-300">{weapon.name}</span>
-            </div>
-            <div className="text-right">
-              <span className="text-sm font-medium text-white">{weapon.percentage.toFixed(1)}%</span>
-              <p className="text-xs text-gray-400">{weapon.count} items</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>
+  <div className="lg:col-span-1">
+  <PortfolioHealthPieChart portfolioHealth={portfolioHealth} />
+</div>
 </div>
 
       </div>
