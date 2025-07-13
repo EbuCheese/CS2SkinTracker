@@ -22,6 +22,7 @@ const TYPE_MAP = {
   'Cases': 'case', 
   'Crafts': 'craft',
   'Agents': 'agent',
+  'Stickers': 'sticker',
   'Keychains': 'keychain',
   'Graffiti': 'graffiti',
   'Patches': 'patch'

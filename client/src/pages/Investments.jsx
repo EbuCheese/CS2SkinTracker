@@ -15,7 +15,7 @@ const InvestmentsPage = ({ userSession }) => {
   const [itemToDelete, setItemToDelete] = useState(null);
   const [newItemIds, setNewItemIds] = useState(new Set());
 
-  const mainTabs = ['All', 'Liquids', 'Crafts', 'Cases', 'Agents', 'Keychains', 'Graffiti', 'Patches'];
+  const mainTabs = ['All', 'Liquids', 'Crafts', 'Cases', 'Stickers', 'Agents', 'Keychains', 'Graffiti', 'Patches'];
   const soldTab = 'Sold';
 
   // HELPER FUNCTION: Group sold items (moved before usage)
