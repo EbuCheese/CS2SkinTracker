@@ -576,49 +576,56 @@ const getRecentActivity = (investments, soldItems) => {
   // Create recent purchases from investments (using created_at from investments table)
   // Only include purchases that actually have a positive original_quantity
   const recentInvestments = investments
-    .filter(inv => {
-      // Only show investments that:
-      // 1. Have a valid created_at date
-      // 2. Have a positive original_quantity (the amount originally purchased)
-      // 3. Have a valid buy_price
-      return inv.created_at && 
-             parseFloat(inv.original_quantity || inv.quantity) > 0 &&
-             parseFloat(inv.buy_price) > 0;
-    })
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) // Sort by date descending
-    .slice(0, 10) // Get more items to mix with sales
-    .map(inv => {
-      // Use original_quantity for the purchase amount, not current quantity
-      const purchaseQuantity = parseFloat(inv.original_quantity || inv.quantity);
-      const purchasePrice = parseFloat(inv.buy_price);
-      
-      return {
-        ...inv,
-        type: 'purchase',
-        date: new Date(inv.created_at),
-        title: `${inv.name}${inv.skin_name ? ` | ${inv.skin_name}` : ''}`,
-        subtitle: `${inv.condition || 'Unknown'} • Qty: ${purchaseQuantity}`,
-        amount: purchasePrice * purchaseQuantity,
-        isPositive: false, // Purchases are negative (money out)
-        image_url: inv.image_url
-      };
-    });
+  .filter(inv => {
+    return inv.created_at && 
+           parseFloat(inv.original_quantity || inv.quantity) > 0 &&
+           parseFloat(inv.buy_price) > 0;
+  })
+  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  .slice(0, 10)
+  .map(inv => {
+    const purchaseQuantity = parseFloat(inv.original_quantity || inv.quantity);
+    const purchasePrice = parseFloat(inv.buy_price);
+    
+    // Updated subtitle logic
+    const subtitle = inv.condition && inv.condition.toLowerCase() !== 'unknown' 
+      ? `${inv.condition} • Qty: ${purchaseQuantity}`
+      : `Qty: ${purchaseQuantity}`;
+    
+    return {
+      ...inv,
+      type: 'purchase',
+      date: new Date(inv.created_at),
+      title: `${inv.name}${inv.skin_name ? ` (${inv.skin_name})` : ''}`,
+      subtitle: subtitle,
+      amount: purchasePrice * purchaseQuantity,
+      isPositive: false,
+      image_url: inv.image_url
+    };
+  });
 
   // Create recent sales from sold items (using sale_date from investment_sales table)
   const recentSales = soldItems
-    .filter(sale => sale.sale_date && parseFloat(sale.total_sale_value) > 0) // Ensure sale_date exists and has value
-    .sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date)) // Sort by date descending
-    .slice(0, 10) // Get more items to mix with purchases
-    .map(sale => ({
+  .filter(sale => sale.sale_date && parseFloat(sale.total_sale_value) > 0)
+  .sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date))
+  .slice(0, 10)
+  .map(sale => {
+    // Updated subtitle logic
+    const subtitle = sale.item_condition && sale.item_condition.toLowerCase() !== 'unknown'
+      ? `${sale.item_condition} • Qty: ${sale.quantity_sold}`
+      : `Qty: ${sale.quantity_sold}`;
+    
+    return {
       ...sale,
       type: 'sale',
       date: new Date(sale.sale_date),
-      title: `${sale.item_name}${sale.item_skin_name ? ` | ${sale.item_skin_name}` : ''}`,
-      subtitle: `${sale.item_condition || 'Unknown'} • Qty: ${sale.quantity_sold}`,
+      title: `${sale.item_name}${sale.item_skin_name ? ` (${sale.item_skin_name})` : ''}`,
+      subtitle: subtitle,
       amount: parseFloat(sale.total_sale_value),
-      isPositive: true, // Sales are positive (money in)
+      isPositive: true,
       image_url: sale.image_url
-    }));
+    };
+  });
 
   // Combine and sort by date (most recent first)
   const combinedActivity = [...recentInvestments, ...recentSales]
@@ -905,8 +912,13 @@ const handleTimePeriodChange = (period) => {
                         </div>
                       </div>
                       <div>
-                        <h3 className="font-medium text-white">{investment.name}{investment.skin_name && ` | ${investment.skin_name}`}</h3>
-                        <p className="text-sm text-gray-400">{investment.condition} • Qty: {investment.quantity}</p>
+                        <h3 className="font-medium text-white">{investment.name}{investment.skin_name && ` (${investment.skin_name})`}</h3>
+                        <p className="text-sm text-gray-400">
+                          {investment.condition && investment.condition.toLowerCase() !== 'unknown' 
+                            ? `${investment.condition} • Qty: ${investment.quantity}`
+                            : `Qty: ${investment.quantity}`
+                          }
+                        </p>
                       </div>
                     </div>
                     
