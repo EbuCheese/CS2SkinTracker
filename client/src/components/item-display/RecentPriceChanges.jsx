@@ -53,7 +53,7 @@ const RecentPriceChanges = ({ investments = [] }) => {
   };
 
   return (
-    <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+    <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl mb-8 p-6 border border-gray-700/50">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold text-white">Biggest Price Changes</h2>
         <div className="text-sm text-gray-400">
