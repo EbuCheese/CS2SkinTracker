@@ -3,12 +3,14 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 
 const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   const [activeToggle, setActiveToggle] = useState('type'); // 'type' or 'item'
+  const [currentPage, setCurrentPage] = useState(0);
 
   // Color palette for different types
   const typeColors = {
     liquid: '#10B981',    // Green
     craft: '#F59E0B',     // Amber
     case: '#3B82F6',      // Blue
+    sticker: '#32f1ffff', // Aqua
     agent: '#8B5CF6',     // Purple
     keychain: '#EC4899',  // Pink
     graffiti: '#6B7280',  // Gray
@@ -218,6 +220,19 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
     { id: 'item', label: 'By Item', description: 'Consolidated item distribution', disabled: false }
   ];
 
+  // pagination logic
+  const ITEMS_PER_PAGE = 8;
+  const totalItems = currentData.length;
+  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+  const startIndex = currentPage * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const currentPageData = currentData.slice(startIndex, endIndex);
+
+  const handleToggleChange = (newToggle) => {
+    setActiveToggle(newToggle);
+    setCurrentPage(0);
+  };
+
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
       <div className="flex items-center justify-between mb-6">
@@ -237,7 +252,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
         {toggleOptions.map((option) => (
           <button
             key={option.id}
-            onClick={() => !option.disabled && setActiveToggle(option.id)}
+            onClick={() => !option.disabled && handleToggleChange(option.id)}
             disabled={option.disabled}
             className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
               activeToggle === option.id
@@ -312,16 +327,39 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
 
       {/* Distribution List */}
       <div>
-        <h3 className="text-sm font-medium text-white mb-3">
-          {activeToggle === 'item' ? 'Item' : 'Type'} Distribution ({currentData.length} {activeToggle === 'item' ? 'categories' : 'types'})
-        </h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium text-white">
+            {activeToggle === 'item' ? 'Item' : 'Type'} Distribution ({currentData.length} {activeToggle === 'item' ? 'categories' : 'types'})
+          </h3>
+          {activeToggle === 'item' && totalPages > 1 && (
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                disabled={currentPage === 0}
+                className="px-2 py-1 text-xs bg-gray-700/50 text-gray-300 rounded hover:bg-gray-600/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ←
+              </button>
+              <span className="text-xs text-gray-400">
+                {currentPage + 1} / {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
+                disabled={currentPage === totalPages - 1}
+                className="px-2 py-1 text-xs bg-gray-700/50 text-gray-300 rounded hover:bg-gray-600/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                →
+              </button>
+            </div>
+          )}
+        </div>
         <div className="space-y-2">
-          {currentData.map((item, index) => (
+          {currentPageData.map((item, index) => (
             <div key={item.name} className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <div 
                   className="w-3 h-3 rounded-full" 
-                  style={{ backgroundColor: getItemColor(item, index) }}
+                  style={{ backgroundColor: getItemColor(item, startIndex + index) }} // Updated index calculation
                 ></div>
                 <span className="text-sm text-gray-300">{item.name}</span>
               </div>
