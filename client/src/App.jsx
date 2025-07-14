@@ -3,13 +3,12 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import { CSDataProvider } from './contexts/CSDataContext';
 import './index.css'
-import Navbar from './components/NavBar'
 import Home from './pages/Home'
 import InvestmentsPage from './pages/Investments';
 import AccountPage from './pages/Account';
 import BetaKeyEntry from './pages/BetaKeyEntry';
 import QuickLogin from './pages/QuickLogin';
-import LoadingSpinner from './components/LoadingSpinner';
+import {LoadingSpinner, Navbar} from './components'
 
 function App() {
   const {

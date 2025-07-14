@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Plus, Search, Eye, DollarSign, Activity, Star, Loader2 } from 'lucide-react';
-import PortfolioPerformanceChart from '../components/PortfolioPerformanceChart';
-import PortfolioHealthPieChart from '../components/PortfolioHealthPieChart';
-import { supabase } from '../supabaseClient';
+import { PortfolioPerformanceChart, PortfolioHealthPieChart } from '@/components/charts';
+import { supabase } from '@/supabaseClient';
 
 const InvestmentDashboard = ({ userSession }) => {
   const [investments, setInvestments] = useState([]);

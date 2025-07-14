@@ -1,6 +1,6 @@
 // hooks/useAuth.js - Streamlined revocation logic
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase } from '@/supabaseClient';
 
 const STORAGE_KEYS = {
   USER_SESSION: 'beta_user',

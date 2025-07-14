@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TrendingUp, TrendingDown, Minus, Plus, Loader2, Edit2, Save, X } from 'lucide-react';
-import { supabase } from '../supabaseClient';
-import PopupManager from './PopupManager';
+import { supabase } from '@/supabaseClient';
+import PopupManager from '../ui/PopupManager';
 
   const CONDITION_OPTIONS = [
     { value: '', label: 'Select condition' },

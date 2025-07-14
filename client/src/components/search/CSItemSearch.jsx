@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Search } from 'lucide-react';
 import { debounce } from 'lodash';
-import { useCSData } from '../contexts/CSDataContext';
+import { useCSData } from '@/contexts/CSDataContext';
 
 const CSItemSearch = ({ 
   type = 'skins', 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
-import { supabase } from '../supabaseClient';
+import { supabase } from '@/supabaseClient';
 
 const PortfolioPerformanceChart = ({ userSession }) => {
   const [chartData, setChartData] = useState([]);

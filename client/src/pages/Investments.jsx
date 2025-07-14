@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, Plus, X, DollarSign, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
-import { supabase } from '../supabaseClient';
-import ItemCard from '../components/ItemCard';
-import AddItemForm from '../components/AddItemForm';
+import { supabase } from '@/supabaseClient';
+import { ItemCard } from '@/components/item-display';
+import { AddItemForm } from '@/components/forms'
 
 const InvestmentsPage = ({ userSession }) => {
   const [activeTab, setActiveTab] = useState('All');

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, memo } from 'react';
 import { X, Upload, Plus, Minus, Loader2, FileText } from 'lucide-react';
-import { supabase } from '../supabaseClient';
-import CSItemSearch from './CSItemSearch';
+import { supabase } from '@/supabaseClient';
+import { CSItemSearch } from '../search';
 import VariantControls from './VariantControls';
 import ConditionSelector from './ConditionSelector';
 
