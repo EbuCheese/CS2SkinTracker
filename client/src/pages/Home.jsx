@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Plus, Search, Eye, DollarSign, Activity, Star, Loader2 } from 'lucide-react';
 import { PortfolioPerformanceChart, PortfolioHealthPieChart } from '@/components/charts';
 import { RecentPriceChanges, RecentActivity } from '@/components/item-display';
+import { QuickAddItemForm } from '@/components/forms';
 import { supabase } from '@/supabaseClient';
 
 const InvestmentDashboard = ({ userSession }) => {
@@ -14,6 +15,7 @@ const InvestmentDashboard = ({ userSession }) => {
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [recentActivity, setRecentActivity] = useState([]);
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [portfolioHealth, setPortfolioHealth] = useState({
     diversityScore: 0,
     typeBreakdown: [],
@@ -792,14 +794,15 @@ const handleTimePeriodChange = (period) => {
       description: 'Add a new skin to your portfolio',
       icon: Plus,
       color: 'from-green-500 to-emerald-600',
-      hoverColor: 'hover:from-green-600 hover:to-emerald-700'
+      hoverColor: 'hover:from-green-600 hover:to-emerald-700',
+      onClick: () => setShowQuickAdd(true)
     },
     {
       title: 'Check Prices',
       description: 'Look up current market prices',
       icon: Search,
       color: 'from-blue-500 to-cyan-600',
-      hoverColor: 'hover:from-blue-600 hover:to-cyan-700'
+      hoverColor: 'hover:from-blue-600 hover:to-cyan-700',
     },
     {
       title: 'Sell Items',
@@ -875,7 +878,7 @@ const handleTimePeriodChange = (period) => {
         {/* Chart Section */}
         <PortfolioPerformanceChart userSession={userSession} />
 
-        {/* Recent Price Changes & Quick Actions */}
+        {/* Recent Price Changes */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           <div className="lg:col-span-2">
@@ -893,6 +896,7 @@ const handleTimePeriodChange = (period) => {
                   return (
                     <button
                       key={index}
+                      onClick={action.onClick}
                       className={`w-full p-4 rounded-lg bg-gradient-to-r ${action.color} ${action.hoverColor} transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl`}
                     >
                       <div className="flex items-center space-x-3">
@@ -936,6 +940,28 @@ const handleTimePeriodChange = (period) => {
           recentActivity={recentActivity} 
           formatPrice={formatPrice} 
         />
+
+        {showQuickAdd && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <div 
+                className="fixed inset-0 bg-black/60 backdrop-blur-md transition-opacity duration-200"
+                onClick={() => setShowQuickAdd(false)}
+              />
+              <div className="relative w-full max-w-lg transform overflow-hidden rounded-xl bg-gray-800/95 backdrop-blur-sm border border-gray-700/50 shadow-2xl transition-all duration-200 scale-100 opacity-100">
+                <QuickAddItemForm
+                  onClose={() => setShowQuickAdd(false)}
+                  onAdd={(newItem) => {
+                    console.log('New item added:', newItem);
+                    setShowQuickAdd(false);
+                    fetchData(); // Refresh data after adding
+                    }}
+                  userSession={userSession}
+                />
+                </div>
+            </div>
+          </div>
+        )}
 
         {/* Portfolio Health */}
         <div className="lg:col-span-1">
