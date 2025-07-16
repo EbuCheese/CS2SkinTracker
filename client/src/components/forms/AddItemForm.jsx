@@ -14,7 +14,11 @@ const INITIAL_FORM_DATA = {
   buy_price: '',
   quantity: 1,
   image_url: '',
-  notes: ''
+  notes: '',
+  isItemSelected: false,
+  isSkinSelected: false,
+  selectedItemId: null,
+  selectedSkinId: null
 };
 
 const TYPE_MAP = {
@@ -169,14 +173,26 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
   const itemType = useMemo(() => TYPE_MAP[type] || type.toLowerCase(), [type]);
   
   const isFormValid = useMemo(() => {
-    return formData.name.trim() &&
-           formData.buy_price &&
-           !isNaN(parseFloat(formData.buy_price)) &&
-           parseFloat(formData.buy_price) > 0 &&
-           formData.quantity >= 1 &&
-           (!['Liquids', 'Crafts'].includes(type) || formData.condition) &&
-           (type !== 'Crafts' || formData.skin_name?.trim());
-  }, [formData.name, formData.buy_price, formData.quantity, formData.condition, formData.skin_name, type]);
+    const baseValidation = formData.buy_price &&
+    !isNaN(parseFloat(formData.buy_price)) &&
+    parseFloat(formData.buy_price) > 0 &&
+    formData.quantity >= 1;
+
+  if (type === 'Crafts') {
+    // For crafts: need skin selected, condition, and custom name
+    return baseValidation &&
+           formData.skin_name?.trim() &&
+           formData.isSkinSelected &&
+           formData.condition &&
+           formData.name.trim(); // Custom craft name
+  } else {
+    // For other types: need item selected and condition (for Liquids)
+    return baseValidation &&
+           formData.name.trim() &&
+           formData.isItemSelected &&
+           (!['Liquids'].includes(type) || formData.condition);
+  }
+}, [formData.name, formData.buy_price, formData.quantity, formData.condition, formData.skin_name, formData.isItemSelected, formData.isSkinSelected, type]);
 
   // Memoize callbacks
   const handleDragOver = useCallback((e) => {
@@ -295,37 +311,63 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
     setFormData(prev => ({ ...prev, condition }));
   }, []);
 
-  const handleFormDataChange = useCallback((field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  }, []);
+const handleFormDataChange = useCallback((field, value) => {
+  setFormData(prev => {
+    const newData = { ...prev, [field]: value };
+    
+    // Reset selection state when user types in search fields
+    if (field === 'name' && type !== 'Crafts') {
+      // Only clear image for non-crafts when name changes (name is search field)
+      newData.isItemSelected = false;
+      newData.selectedItemId = null;
+      newData.image_url = '';
+      newData.hasStatTrak = false;
+      newData.hasSouvenir = false;
+    }
+    
+    if (field === 'skin_name') {
+      newData.isSkinSelected = false;
+      newData.selectedSkinId = null;
+      newData.image_url = '';
+      newData.hasStatTrak = false;
+      newData.hasSouvenir = false;
+    }
+    
+    return newData;
+  });
+}, [type]);
 
   const handleItemSelect = useCallback((item) => {
-    setFormData(prev => ({ 
-      ...prev, 
-      name: item.name,
-      image_url: item.image || '',
-      stattrak: false,
-      souvenir: false,
-      selectedVariant: 'normal',
-      variant: 'normal',
-      hasStatTrak: item.hasStatTrak || false,
-      hasSouvenir: item.hasSouvenir || false
-    }));
-  }, []);
+  setFormData(prev => ({ 
+    ...prev, 
+    name: item.name,
+    image_url: item.image || '',
+    stattrak: false,
+    souvenir: false,
+    selectedVariant: 'normal',
+    variant: 'normal',
+    hasStatTrak: item.hasStatTrak || false,
+    hasSouvenir: item.hasSouvenir || false,
+    isItemSelected: true, // Mark as selected
+    selectedItemId: item.id || item.name // Store item identifier
+  }));
+}, []);
 
   const handleSkinSelect = useCallback((item) => {
-    setFormData(prev => ({ 
-      ...prev, 
-      skin_name: item.name,
-      image_url: item.image || '',
-      stattrak: false,
-      souvenir: false,
-      selectedVariant: 'normal',
-      variant: 'normal',
-      hasStatTrak: item.hasStatTrak || false,
-      hasSouvenir: item.hasSouvenir || false
-    }));
-  }, []);
+  setFormData(prev => ({ 
+    ...prev, 
+    skin_name: item.name,
+    image_url: item.image || '',
+    stattrak: false,
+    souvenir: false,
+    selectedVariant: 'normal',
+    variant: 'normal',
+    hasStatTrak: item.hasStatTrak || false,
+    hasSouvenir: item.hasSouvenir || false,
+    isSkinSelected: true, // Mark as selected
+    selectedSkinId: item.id || item.name // Store skin identifier
+  }));
+}, []);
 
   const handleSubmit = useCallback(async () => {
     if (!isFormValid || !userSession?.id) {
@@ -566,26 +608,6 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
                   quantity={formData.quantity}
                   onQuantityChange={handleQuantityChange}
                 />
-              )}
-              
-              {formData.name && !formData.image_url && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    <div className="flex items-center space-x-2">
-                      <FileText className="w-4 h-4" />
-                      <span>Notes (Optional)</span>
-                    </div>
-                  </label>
-                  <textarea
-                    placeholder="Add any additional details (e.g., 95% fade, 0.16 float, special stickers, etc.)"
-                    value={formData.notes}
-                    onChange={(e) => handleFormDataChange('notes', e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors resize-none"
-                    rows={3}
-                    maxLength={300}
-                  />
-                  <p className="text-gray-400 text-xs mt-1">{formData.notes.length}/300 characters</p>
-                </div>
               )}
             </>
           )}

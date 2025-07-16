@@ -16,8 +16,12 @@ const INITIAL_FORM_DATA = {
   image_url: '',
   custom_image_url: '',
   notes: '',
-  type: '', // Auto-detected type
-  detectedCategory: ''
+  type: '',
+  detectedCategory: '',
+  isItemSelected: false,        
+  isSkinSelected: false,        
+  selectedItemId: null,         
+  selectedSkinId: null
 };
 
 const TYPE_MAP = {
@@ -212,16 +216,28 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
   const currentCategory = useMemo(() => detectItemType(selectedCategory), [selectedCategory]);
 
   const isFormValid = useMemo(() => {
-    if (!selectedCategory) return false;
-    
-    return formData.name.trim() &&
-           formData.buy_price &&
-           !isNaN(parseFloat(formData.buy_price)) &&
-           parseFloat(formData.buy_price) > 0 &&
-           formData.quantity >= 1 &&
-           (currentCategory !== 'Liquids' || formData.condition) &&
-           (currentCategory !== 'Crafts' || formData.skin_name?.trim());
-  }, [formData.name, formData.buy_price, formData.quantity, formData.condition, formData.skin_name, currentCategory, selectedCategory]);
+  if (!selectedCategory) return false;
+  
+  const baseValidation = formData.buy_price &&
+    !isNaN(parseFloat(formData.buy_price)) &&
+    parseFloat(formData.buy_price) > 0 &&
+    formData.quantity >= 1;
+
+  if (currentCategory === 'Crafts') {
+    // For crafts: need skin selected, condition, and custom name
+    return baseValidation &&
+           formData.skin_name?.trim() &&
+           formData.isSkinSelected &&
+           formData.condition &&
+           formData.name.trim(); // Custom craft name
+  } else {
+    // For other types: need item selected and condition (for Liquids)
+    return baseValidation &&
+           formData.name.trim() &&
+           formData.isItemSelected &&
+           (!['Liquids'].includes(currentCategory) || formData.condition);
+  }
+}, [formData.name, formData.buy_price, formData.quantity, formData.condition, formData.skin_name, formData.isItemSelected, formData.isSkinSelected, currentCategory, selectedCategory]);
 
   // Reset form when category changes
   useEffect(() => {
@@ -235,47 +251,59 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
     setShowForm(true);
   }, []);
 
-  const handleSearchChange = useCallback((e) => {
-    const value = e.target.value;
-    setSearchValue(value);
-    
-    // Update form data name for search component
-    setFormData(prev => ({ ...prev, name: value }));
-  }, []);
+const handleSearchChange = useCallback((e) => {
+  const value = e.target.value;
+  setSearchValue(value);
+  
+  // Update form data name for search component and reset selection state
+  setFormData(prev => ({ 
+    ...prev, 
+    name: value,
+    isItemSelected: false,     // Reset selection when typing
+    selectedItemId: null,      // Clear selected item
+    image_url: '',            // Clear image
+    hasStatTrak: false,       // Reset variant flags
+    hasSouvenir: false  
+  }));
+}, []);
 
   const handleItemSelect = useCallback((item) => {
-    const detectedCategory = detectItemType(selectedCategory);
-    
-    setFormData(prev => ({
-      ...prev,
-      name: item.name,
-      image_url: item.image || '',
-      type: CATEGORY_TO_DB_TYPE[detectedCategory],
-      detectedCategory: detectedCategory,
-      stattrak: false,
-      souvenir: false,
-      selectedVariant: 'normal',
-      variant: 'normal',
-      hasStatTrak: item.hasStatTrak || false,
-      hasSouvenir: item.hasSouvenir || false
-    }));
-    
-    setSearchValue(item.name);
-  }, [selectedCategory]);
+  const detectedCategory = detectItemType(selectedCategory);
+  
+  setFormData(prev => ({
+    ...prev,
+    name: item.name,
+    image_url: item.image || '',
+    type: CATEGORY_TO_DB_TYPE[detectedCategory],
+    detectedCategory: detectedCategory,
+    stattrak: false,
+    souvenir: false,
+    selectedVariant: 'normal',
+    variant: 'normal',
+    hasStatTrak: item.hasStatTrak || false,
+    hasSouvenir: item.hasSouvenir || false,
+    isItemSelected: true,        // Mark as selected
+    selectedItemId: item.id || item.name  // Store item identifier
+  }));
+  
+  setSearchValue(item.name);
+}, [selectedCategory]);
 
-  const handleSkinSelect = useCallback((item) => {
-    setFormData(prev => ({ 
-      ...prev, 
-      skin_name: item.name,
-      image_url: item.image || '',
-      stattrak: false,
-      souvenir: false,
-      selectedVariant: 'normal',
-      variant: 'normal',
-      hasStatTrak: item.hasStatTrak || false,
-      hasSouvenir: item.hasSouvenir || false
-    }));
-  }, []);
+const handleSkinSelect = useCallback((item) => {
+  setFormData(prev => ({ 
+    ...prev, 
+    skin_name: item.name,
+    image_url: item.image || '',
+    stattrak: false,
+    souvenir: false,
+    selectedVariant: 'normal',
+    variant: 'normal',
+    hasStatTrak: item.hasStatTrak || false,
+    hasSouvenir: item.hasSouvenir || false,
+    isSkinSelected: true,        // Mark as selected
+    selectedSkinId: item.id || item.name  // Store skin identifier
+  }));
+}, []);
 
   const handleVariantChange = useCallback((variant) => {
     setFormData(prev => ({
@@ -298,9 +326,31 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
     }));
   }, []);
 
-  const handleFormDataChange = useCallback((field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  }, []);
+const handleFormDataChange = useCallback((field, value) => {
+  setFormData(prev => {
+    const newData = { ...prev, [field]: value };
+    
+    // Reset selection state when user types in search fields
+    if (field === 'name' && currentCategory !== 'Crafts') {
+      // Only clear image for non-crafts when name changes (name is search field)
+      newData.isItemSelected = false;
+      newData.selectedItemId = null;
+      newData.image_url = '';
+      newData.hasStatTrak = false;
+      newData.hasSouvenir = false;
+    }
+    
+    if (field === 'skin_name') {
+      newData.isSkinSelected = false;
+      newData.selectedSkinId = null;
+      newData.image_url = '';
+      newData.hasStatTrak = false;
+      newData.hasSouvenir = false;
+    }
+    
+    return newData;
+  });
+}, [currentCategory]);
 
   // Image processing functions
   const handleDragOver = useCallback((e) => {
@@ -398,54 +448,57 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
     setFormData(prev => ({ ...prev, custom_image_url: '' }));
   }, []);
 
-  const handleSubmit = useCallback(async () => {
-    if (!isFormValid || !userSession?.id) {
-      alert(!userSession?.id ? 'No user session found' : 'Please fill in all required fields');
-      return;
-    }
+const handleSubmit = useCallback(async () => {
+  if (!isFormValid || !userSession?.id) {
+    alert(!userSession?.id ? 'No user session found' : 'Please fill in all required fields');
+    return;
+  }
 
-    try {
-      setSubmitting(true);
-      const buyPrice = parseFloat(formData.buy_price);
-      
-      // Generate realistic current price
-      const priceVariation = (Math.random() * 0.4 - 0.2);
-      const currentPrice = Math.max(0.01, buyPrice * (1 + priceVariation));
-      const quantity = Math.max(1, parseInt(formData.quantity));
-      
-      const newInvestment = {
-        user_id: userSession.id,
-        type: formData.type,
-        name: formData.name.trim(),
-        skin_name: formData.skin_name?.trim() || null,
-        condition: formData.condition?.trim() || null,
-        variant: formData.variant || 'normal',
-        buy_price: buyPrice,
-        current_price: currentPrice,
-        quantity: quantity,
-        image_url: formData.custom_image_url || formData.image_url || null,
-        notes: formData.notes?.trim() || null
-      };
+  try {
+    setSubmitting(true);
+    const buyPrice = parseFloat(formData.buy_price);
+    
+    // Generate realistic current price
+    const priceVariation = (Math.random() * 0.4 - 0.2);
+    const currentPrice = Math.max(0.01, buyPrice * (1 + priceVariation));
+    const quantity = Math.max(1, parseInt(formData.quantity));
+    
+    // Fix: Use the same logic as AddItemForm
+    const itemType = TYPE_MAP[currentCategory] || selectedCategory.toLowerCase();
+    
+    const newInvestment = {
+      user_id: userSession.id,
+      type: itemType, // Use itemType instead of formData.type
+      name: formData.name.trim(),
+      skin_name: formData.skin_name?.trim() || null,
+      condition: formData.condition?.trim() || null,
+      variant: formData.variant || 'normal',
+      buy_price: buyPrice,
+      current_price: currentPrice,
+      quantity: quantity,
+      image_url: formData.custom_image_url || formData.image_url || null,
+      notes: formData.notes?.trim() || null
+    };
 
-      const { data: insertData, error: insertError } = await supabase.rpc('insert_investment_with_context', {
-        investment_data: newInvestment,
-        context_user_id: userSession.id
-      });
+    const { data: insertData, error: insertError } = await supabase.rpc('insert_investment_with_context', {
+      investment_data: newInvestment,
+      context_user_id: userSession.id
+    });
 
-      if (insertError) throw insertError;
-      
-      onAdd(insertData);
-      onClose();
+    if (insertError) throw insertError;
+    
+    onAdd(insertData);
+    onClose();
 
-    } catch (err) {
-      console.error('Error adding investment:', err);
-      
-      const errorType = Object.keys(ERROR_MESSAGES).find(key => err.message.includes(key));
-      alert(errorType ? ERROR_MESSAGES[errorType] : `Failed to add investment: ${err.message}`);
-    } finally {
-      setSubmitting(false);
-    }
-  }, [isFormValid, userSession, formData, onAdd, onClose]);
+  } catch (err) {
+    console.error('Error adding investment:', err);
+    
+    const errorType = Object.keys(ERROR_MESSAGES).find(key => err.message.includes(key));
+    alert(errorType ? ERROR_MESSAGES[errorType] : `Failed to add investment: ${err.message}`);
+  } finally {
+    setSubmitting(false);
+  }
+}, [isFormValid, userSession, formData, selectedCategory, onAdd, onClose]);
 
   const handleReset = useCallback(() => {
     setSelectedCategory('');
@@ -519,7 +572,7 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
                   type="liquids"
                   placeholder="Search base skins..."
                   value={formData.skin_name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, skin_name: e.target.value }))}
+                  onChange={(e) => handleFormDataChange('skin_name', e.target.value)}
                   onSelect={handleSkinSelect}
                   className="w-full"
                   showLargeView={true}
