@@ -13,7 +13,8 @@ const CSItemSearch = ({
   maxResults = 20,
   className = '',
   disabled = false,
-  showLargeView = false
+  showLargeView = false,
+  excludeSpecialItems = false
 }) => {
   const { searchIndices, loading: globalLoading, error: globalError, getSearchIndexForType } = useCSData();
   const [results, setResults] = useState([]);
@@ -23,8 +24,40 @@ const CSItemSearch = ({
 
   // Get processed data for current type
   const typeData = useMemo(() => {
-    return getSearchIndexForType(type);
-  }, [type, searchIndices, getSearchIndexForType]);
+  const rawData = getSearchIndexForType(type);
+  
+  if (!rawData || !excludeSpecialItems) {
+    return rawData;
+  }
+
+  // Filter out knives and gloves from the items array
+  const filteredItems = rawData.items.filter(item => {
+    // Check if item exists and has required properties
+    if (!item || typeof item !== 'object') return false;
+    
+    const baseName = item.baseName || '';
+    const name = item.name || '';
+    
+    // Filter out items that start with ★ (knives and gloves)
+    return !baseName.startsWith('★') && !name.startsWith('★');
+  });
+
+  // Rebuild the search index with filtered items
+  const newSearchIndex = new Map();
+  filteredItems.forEach((item, index) => {
+    item.searchTokens.forEach(token => {
+      if (!newSearchIndex.has(token)) {
+        newSearchIndex.set(token, []);
+      }
+      newSearchIndex.get(token).push(index);
+    });
+  });
+
+  return {
+    items: filteredItems,
+    searchIndex: newSearchIndex
+  };
+}, [type, searchIndices, getSearchIndexForType, excludeSpecialItems]);
 
   // Setup intersection observer for smart image loading
   useEffect(() => {

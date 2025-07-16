@@ -577,6 +577,7 @@ const handleSubmit = useCallback(async () => {
                   className="w-full"
                   showLargeView={true}
                   maxResults={15}
+                  excludeSpecialItems={true}
                 />
               </div>
 

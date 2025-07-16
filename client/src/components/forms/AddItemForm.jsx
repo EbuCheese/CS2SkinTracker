@@ -441,6 +441,7 @@ const handleFormDataChange = useCallback((field, value) => {
       className="w-full"
       showLargeView={true}
       maxResults={15}
+      excludeSpecialItems={true}
     />
   ), [formData.skin_name, handleFormDataChange, handleSkinSelect]);
 
