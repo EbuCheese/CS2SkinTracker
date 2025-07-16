@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Plus, Search, Eye, DollarSign, Activity, Star, Loader2 } from 'lucide-react';
 import { PortfolioPerformanceChart, PortfolioHealthPieChart } from '@/components/charts';
 import { RecentPriceChanges, RecentActivity } from '@/components/item-display';
-import { QuickAddItemForm } from '@/components/forms';
+import { QuickAddItemForm, QuickSellModal } from '@/components/forms';
 import { supabase } from '@/supabaseClient';
 
 const InvestmentDashboard = ({ userSession }) => {
@@ -16,6 +16,7 @@ const InvestmentDashboard = ({ userSession }) => {
   const [chartLoading, setChartLoading] = useState(false);
   const [recentActivity, setRecentActivity] = useState([]);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [showQuickSell, setShowQuickSell] = useState(false);
   const [portfolioHealth, setPortfolioHealth] = useState({
     diversityScore: 0,
     typeBreakdown: [],
@@ -636,6 +637,19 @@ const getRecentActivity = (investments, soldItems) => {
   return combinedActivity;
 };
 
+  // handle home page sales
+  const handleSaleComplete = (investmentId, quantitySold, salePrice, remainingQuantity) => {
+    // Update the investments state to reflect the sale
+    setInvestments(prev => prev.map(inv => 
+      inv.id === investmentId 
+        ? { ...inv, quantity: remainingQuantity }
+        : inv
+    ));
+    
+    // Refresh data to get updated calculations
+    fetchData();
+  };
+
 const handleTimePeriodChange = (period) => {
   setSelectedTimePeriod(period);
   fetchChartData(period);
@@ -809,7 +823,8 @@ const handleTimePeriodChange = (period) => {
       description: 'Record a sale from your portfolio',
       icon: DollarSign,
       color: 'from-purple-500 to-violet-600',
-      hoverColor: 'hover:from-purple-600 hover:to-violet-700'
+      hoverColor: 'hover:from-purple-600 hover:to-violet-700',
+      onClick: () => setShowQuickSell(true)
     }
   ];
 
@@ -941,6 +956,7 @@ const handleTimePeriodChange = (period) => {
           formatPrice={formatPrice} 
         />
 
+        {/* QuickAddItemForm */}
         {showQuickAdd && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4">
@@ -960,6 +976,20 @@ const handleTimePeriodChange = (period) => {
                 />
                 </div>
             </div>
+          </div>
+        )}
+
+        {/* QuickSellModal */}
+        {showQuickSell && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <QuickSellModal
+              isOpen={showQuickSell}
+              onClose={() => setShowQuickSell(false)}
+              investments={investments}
+              userSession={userSession}
+              onSaleComplete={handleSaleComplete}
+              supabase={supabase} // Make sure to pass your supabase instance
+            />
           </div>
         )}
 
