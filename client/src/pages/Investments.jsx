@@ -3,6 +3,7 @@ import { Search, Plus, X, DollarSign, TrendingUp, TrendingDown, Loader2 } from '
 import { supabase } from '@/supabaseClient';
 import { ItemCard } from '@/components/item-display';
 import { AddItemForm } from '@/components/forms'
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const InvestmentsPage = ({ userSession }) => {
   const [activeTab, setActiveTab] = useState('All');
@@ -14,6 +15,9 @@ const InvestmentsPage = ({ userSession }) => {
   const [error, setError] = useState(null);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [newItemIds, setNewItemIds] = useState(new Set());
+
+  // lock scroll on delete popup
+  useScrollLock(showAddForm || !!itemToDelete);
 
   const mainTabs = ['All', 'Liquids', 'Crafts', 'Cases', 'Stickers', 'Agents', 'Keychains', 'Graffiti', 'Patches'];
   const soldTab = 'Sold';

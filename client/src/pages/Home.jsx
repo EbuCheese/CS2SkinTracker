@@ -4,6 +4,7 @@ import { PortfolioPerformanceChart, PortfolioHealthPieChart } from '@/components
 import { RecentPriceChanges, RecentActivity } from '@/components/item-display';
 import { QuickAddItemForm, QuickSellModal } from '@/components/forms';
 import { supabase } from '@/supabaseClient';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
 const InvestmentDashboard = ({ userSession }) => {
   const [investments, setInvestments] = useState([]);
@@ -25,6 +26,9 @@ const InvestmentDashboard = ({ userSession }) => {
     totalTypes: 0,
     totalWeaponTypes: 0 
   });
+
+    // Apply scroll lock when popups are open
+    useScrollLock(showQuickAdd || showQuickSell);
 
     useEffect(() => {
       if (!userSession) return;

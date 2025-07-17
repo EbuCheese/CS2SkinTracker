@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { TrendingUp, TrendingDown, Minus, Plus, Loader2, Edit2, Save, X } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 import PopupManager from '../ui/PopupManager';
+import { useScrollLock } from '@/hooks/useScrollLock';
 
   const CONDITION_OPTIONS = [
     { value: '', label: 'Select condition' },
@@ -67,6 +68,8 @@ const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, 
   operation: null,
   error: null
 });
+
+useScrollLock(popup.isOpen);
 
 const handleAsyncOperation = useCallback(async (operation, operationFn, ...args) => {
   setAsyncState({ isLoading: true, operation, error: null });
