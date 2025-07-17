@@ -239,6 +239,23 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
   }
 }, [formData.name, formData.buy_price, formData.quantity, formData.condition, formData.skin_name, formData.isItemSelected, formData.isSkinSelected, currentCategory, selectedCategory]);
 
+  // close form with esc key
+  useEffect(() => {
+  const handleEscapeKey = (event) => {
+    if (event.key === 'Escape' && onClose) {
+      onClose();
+    }
+  };
+
+  // Add event listener when component mounts
+  document.addEventListener('keydown', handleEscapeKey);
+
+  // Cleanup event listener when component unmounts
+  return () => {
+    document.removeEventListener('keydown', handleEscapeKey);
+  };
+}, [onClose]);
+
   // Reset form when category changes
   useEffect(() => {
     setFormData(INITIAL_FORM_DATA);

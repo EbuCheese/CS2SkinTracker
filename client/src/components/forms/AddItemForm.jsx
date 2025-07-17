@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, memo } from 'react';
+import React, { useState, useMemo, useCallback, memo, useEffect } from 'react';
 import { X, Upload, Plus, Minus, Loader2, FileText } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 import { CSItemSearch } from '../search';
@@ -168,6 +168,25 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
   const [submitting, setSubmitting] = useState(false);
   const [uploadingImage, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  useEffect(() => {
+  const handleEscape = (e) => {
+    if (e.key === 'Escape' && !submitting) {
+      onClose();
+    }
+  };
+  
+  document.addEventListener('keydown', handleEscape);
+  return () => document.removeEventListener('keydown', handleEscape);
+}, [onClose, submitting]);
+
+const handleBackdropClick = useCallback((e) => {
+  // Only close if clicking the backdrop itself, not the modal content
+  // prevent closing during submission
+  if (e.target === e.currentTarget && !submitting) {
+    onClose();
+  }
+}, [onClose, submitting]);
 
   // Memoize derived values
   const itemType = useMemo(() => TYPE_MAP[type] || type.toLowerCase(), [type]);
@@ -446,7 +465,10 @@ const handleFormDataChange = useCallback((field, value) => {
   ), [formData.skin_name, handleFormDataChange, handleSkinSelect]);
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div 
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        onClick={handleBackdropClick}
+      >
       <div className="bg-gradient-to-br from-gray-900 to-slate-900 p-6 rounded-xl border border-orange-500/20 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-xl font-semibold text-white">Add {type} Item</h3>

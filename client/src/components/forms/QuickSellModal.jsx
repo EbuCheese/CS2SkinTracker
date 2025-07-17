@@ -37,6 +37,23 @@ const QuickSellModal = ({
     });
   }, [availableItems, searchQuery]);
 
+    // close form with esc key
+    useEffect(() => {
+    const handleEscapeKey = (event) => {
+      if (event.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+  
+    // Add event listener when component mounts
+    document.addEventListener('keydown', handleEscapeKey);
+  
+    // Cleanup event listener when component unmounts
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [onClose]);
+
   // Reset form when modal opens/closes
   useEffect(() => {
     if (isOpen) {
