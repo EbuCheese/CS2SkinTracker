@@ -954,7 +954,7 @@ const handleTimePeriodChange = (period) => {
         </div>
 
         {/* New Widgets Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
         <RecentActivity 
           recentActivity={recentActivity} 
           formatPrice={formatPrice} 

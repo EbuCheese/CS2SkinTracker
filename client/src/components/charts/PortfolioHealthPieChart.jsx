@@ -234,7 +234,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   };
 
   return (
-    <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+    <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50" style={{ minHeight: '600px' }}>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold text-white">Portfolio Distribution</h2>
         <div className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -353,13 +353,13 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
             </div>
           )}
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2" style={{ minHeight: '255px' }}>
           {currentPageData.map((item, index) => (
             <div key={item.name} className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <div 
                   className="w-3 h-3 rounded-full" 
-                  style={{ backgroundColor: getItemColor(item, startIndex + index) }} // Updated index calculation
+                  style={{ backgroundColor: getItemColor(item, startIndex + index) }}
                 ></div>
                 <span className="text-sm text-gray-300">{item.name}</span>
               </div>
