@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
 
 const PopupManager = ({ 
@@ -12,8 +13,28 @@ const PopupManager = ({
   confirmText = 'Confirm',
   cancelText = 'Cancel',
   isLoading = false,
-  data = null // For passing additional data like salePreview
+  data = null, // For passing additional data like salePreview
+  allowEscapeClose = true // New prop to control escape key behavior
 }) => {
+  // Handle escape key
+  useEffect(() => {
+    if (!isOpen || !allowEscapeClose) return;
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        // For confirm dialogs, treat escape as cancel
+        if (type === 'confirm') {
+          handleCancel();
+        } else {
+          onClose();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, allowEscapeClose, type, onClose]);
+
   if (!isOpen) return null;
 
   const getPopupStyles = () => {
