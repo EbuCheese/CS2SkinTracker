@@ -806,31 +806,48 @@ const handleTimePeriodChange = (period) => {
     { label: 'MAX', value: 'MAX' }
   ];
 
-  const quickActions = [
-    {
-      title: 'Add New Investment',
-      description: 'Add a new skin to your portfolio',
-      icon: Plus,
-      color: 'from-green-500 to-emerald-600',
-      hoverColor: 'hover:from-green-600 hover:to-emerald-700',
-      onClick: () => setShowQuickAdd(true)
-    },
-    {
-      title: 'Check Prices',
-      description: 'Look up current market prices',
-      icon: Search,
-      color: 'from-blue-500 to-cyan-600',
-      hoverColor: 'hover:from-blue-600 hover:to-cyan-700',
-    },
-    {
-      title: 'Sell Items',
-      description: 'Record a sale from your portfolio',
-      icon: DollarSign,
-      color: 'from-purple-500 to-violet-600',
-      hoverColor: 'hover:from-purple-600 hover:to-violet-700',
-      onClick: () => setShowQuickSell(true)
-    }
-  ];
+const quickActions = [
+  {
+    title: 'Check Prices',
+    description: 'Look up current market prices',
+    icon: Search,
+    color: 'from-blue-500 to-cyan-600',
+    hoverColor: 'hover:from-blue-600 hover:to-cyan-700',
+    // onClick: () => navigate to price checker or open price modal
+  },
+  {
+    title: 'Add New Investment',
+    description: 'Add a new skin to your portfolio',
+    icon: Plus,
+    color: 'from-green-500 to-emerald-600',
+    hoverColor: 'hover:from-green-600 hover:to-emerald-700',
+    onClick: () => setShowQuickAdd(true)
+  },
+  {
+    title: 'Sell Items',
+    description: 'Record a sale from your portfolio',
+    icon: DollarSign,
+    color: 'from-purple-500 to-violet-600',
+    hoverColor: 'hover:from-purple-600 hover:to-violet-700',
+    onClick: () => setShowQuickSell(true)
+  },
+  {
+    title: 'View Watchlist',
+    description: 'Monitor items you\'re tracking',
+    icon: Eye,
+    color: 'from-orange-500 to-red-600',
+    hoverColor: 'hover:from-orange-600 hover:to-red-700',
+    // onClick: () => setShowWatchlist(true) or navigate to watchlist
+  },
+  {
+    title: 'Market Trends',
+    description: 'View trending skins & market insights',
+    icon: TrendingUp,
+    color: 'from-rose-500 to-pink-600',
+hoverColor: 'hover:from-rose-600 hover:to-pink-700',
+    // onClick: () => navigate to market trends
+  },
+];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900">
@@ -906,7 +923,7 @@ const handleTimePeriodChange = (period) => {
 
           {/* Quick Actions */}
           <div className="lg:col-span-1">
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 mb-8 border border-gray-700/50">
               <h2 className="text-xl font-semibold text-white mb-6">Quick Actions</h2>
               
               <div className="space-y-4">
@@ -931,19 +948,19 @@ const handleTimePeriodChange = (period) => {
               </div>
 
               {/* Portfolio Summary */}
-              <div className="mt-6 space-y-3">
+              <div className="mt-8 mb-2 space-y-3" style={{marginBottom: '10px'}}>
                 <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-400">Realized P&L</span>
-                    <span className={`text-sm font-medium ${portfolioMetrics.totalRealizedPL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    <span className="text-md text-gray-400">Realized P&L</span>
+                    <span className={`text-md font-medium ${portfolioMetrics.totalRealizedPL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {portfolioMetrics.totalRealizedPL >= 0 ? '+' : ''}{formatPrice(portfolioMetrics.totalRealizedPL)}
                     </span>
                   </div>
                 </div>
                 <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-400">Unrealized P&L</span>
-                    <span className={`text-sm font-medium ${portfolioMetrics.totalUnrealizedPL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    <span className="text-md text-gray-400">Unrealized P&L</span>
+                    <span className={`text-md font-medium ${portfolioMetrics.totalUnrealizedPL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {portfolioMetrics.totalUnrealizedPL >= 0 ? '+' : ''}{formatPrice(portfolioMetrics.totalUnrealizedPL)}
                     </span>
                   </div>
