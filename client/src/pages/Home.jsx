@@ -948,7 +948,7 @@ hoverColor: 'hover:from-rose-600 hover:to-pink-700',
               </div>
 
               {/* Portfolio Summary */}
-              <div className="mt-8 mb-2 space-y-3" style={{marginBottom: '10px'}}>
+              <div className="mt-6 mb-1 space-y-3">
                 <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
                   <div className="flex justify-between items-center">
                     <span className="text-md text-gray-400">Realized P&L</span>
