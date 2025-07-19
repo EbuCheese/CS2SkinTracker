@@ -36,6 +36,21 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
     '#0EA5E9', '#65A30D', '#EA580C', '#9333EA', '#E11D48', '#475569', '#B91C1C'
   ];
 
+  // Helper function to format percentage with appropriate precision
+  const formatPercentage = (percentage) => {
+    if (percentage >= 1) {
+      return percentage.toFixed(1) + '%';
+    } else if (percentage >= 0.1) {
+      return percentage.toFixed(2) + '%';
+    } else if (percentage >= 0.01) {
+      return percentage.toFixed(3) + '%';
+    } else if (percentage > 0) {
+      return '<0.001%';
+    } else {
+      return '0%';
+    }
+  };
+
   // Smart consolidation logic for items
   const consolidateItems = (itemName) => {
     const lowerName = itemName.toLowerCase();
@@ -181,7 +196,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
             Value: ${data.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </p>
           <p className="text-gray-300 text-sm">
-            Percentage: {data.percentage.toFixed(1)}%
+            Percentage: {formatPercentage(data.percentage)}
           </p>
           <p className="text-gray-300 text-sm">
             Items: {data.count}
@@ -210,7 +225,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
         dominantBaseline="central"
         className="text-sm font-medium"
       >
-        {`${percentage.toFixed(1)}%`}
+        {formatPercentage(percentage)}
       </text>
     );
   };
@@ -364,7 +379,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
                 <span className="text-sm text-gray-300">{item.name}</span>
               </div>
               <div className="text-right">
-                <span className="text-sm font-medium text-white">{item.percentage.toFixed(1)}%</span>
+                <span className="text-sm font-medium text-white">{formatPercentage(item.percentage)}</span>
                 <p className="text-xs text-gray-400">{item.count} items</p>
               </div>
             </div>
