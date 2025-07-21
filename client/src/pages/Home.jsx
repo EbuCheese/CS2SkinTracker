@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { TrendingUp, TrendingDown, Plus, Search, Eye, DollarSign, Activity, Star, Loader2 } from 'lucide-react';
 import { PortfolioPerformanceChart, PortfolioHealthPieChart } from '@/components/charts';
 import { RecentPriceChanges, RecentActivity } from '@/components/item-display';
@@ -6,6 +6,7 @@ import { QuickAddItemForm, QuickSellModal } from '@/components/forms';
 import { supabase } from '@/supabaseClient';
 import { useScrollLock } from '@/hooks/useScrollLock';
 import { useCalculatePortfolioHealth } from '@/hooks/useCalculatePortfolioHealth';
+import { useAdvancedDebounce } from '@/hooks/useAdvancedDebounce';
 
 const createQuickActions = (setShowQuickAdd, setShowQuickSell) => [
   {
@@ -50,7 +51,7 @@ const createQuickActions = (setShowQuickAdd, setShowQuickSell) => [
   },
 ];
 
-// Calculate portfolio metrics
+// Calculate portfolio metrics (memoized for performance)
 const calculatePortfolioMetrics = (investments) => {
     const totalBuyValue = investments.reduce((sum, inv) => 
       sum + (parseFloat(inv.buy_price) * parseFloat(inv.original_quantity)), 0);
@@ -161,17 +162,22 @@ const InvestmentDashboard = ({ userSession }) => {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showQuickSell, setShowQuickSell] = useState(false);
   
-    // Apply scroll lock when popups are open
-    useScrollLock(showQuickAdd || showQuickSell);
+  // Ref to track if initial load is complete
+  const initialLoadComplete = useRef(false);
+  const lastDataFetchRef = useRef(0);
+  
+  // Apply scroll lock when popups are open
+  useScrollLock(showQuickAdd || showQuickSell);
 
-    const quickActions = useMemo(() => 
-      createQuickActions(setShowQuickAdd, setShowQuickSell), 
-      []
-    );
+  const quickActions = useMemo(() => 
+    createQuickActions(setShowQuickAdd, setShowQuickSell), 
+    []
+  );
 
-    const portfolioHealth = useCalculatePortfolioHealth(investments);
+  const portfolioHealth = useCalculatePortfolioHealth(investments);
 
-    const portfolioMetrics = useMemo(() => {
+  // Memoize portfolio metrics calculation with deep comparison
+  const portfolioMetrics = useMemo(() => {
     if (investments.length === 0) {
       return {
         totalBuyValue: 0,
@@ -185,19 +191,105 @@ const InvestmentDashboard = ({ userSession }) => {
     return calculatePortfolioMetrics(investments);
   }, [investments]);
 
-    const recentActivityMemo = useMemo(() => {
+  // Memoize recent activity with both dependencies
+  const recentActivityMemo = useMemo(() => {
     if (investments.length === 0 && soldItems.length === 0) return [];
     return getRecentActivity(investments, soldItems);
   }, [investments, soldItems]);
 
+  // Non-debounced fetch data for initial load and critical updates
+  const fetchCriticalData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (!validateUserSession(userSession)) {
+        setError('Invalid user session. Please re-validate your beta key.');
+        return;
+      }
+
+      console.log('Fetching data for user:', userSession.id);
+
+      const [investmentsResult, soldItemsResult] = await Promise.allSettled([
+        supabase.rpc('fetch_user_investment_summary', {
+          context_user_id: userSession.id
+        }),
+        supabase.rpc('fetch_user_investment_sales', {
+          context_user_id: userSession.id
+        })
+      ]);
+
+      // Declare investmentsArray outside the if block
+      let investmentsArray = [];
+
+      // Handle investments result
+      if (investmentsResult.status === 'fulfilled' && !investmentsResult.value.error) {
+        investmentsArray = Array.isArray(investmentsResult.value.data) 
+          ? investmentsResult.value.data 
+          : (investmentsResult.value.data || []);
+        setInvestments(investmentsArray);
+      } else {
+        console.error('Investments query failed:', investmentsResult.reason || investmentsResult.value?.error);
+        setError('Access denied. Please verify your beta key is valid and active.');
+        return;
+      }
+
+      // Handle sold items result (non-critical)
+      if (soldItemsResult.status === 'fulfilled' && !soldItemsResult.value.error) {
+        const soldItemsArray = Array.isArray(soldItemsResult.value.data)
+          ? soldItemsResult.value.data
+          : (soldItemsResult.value.data || []);
+        setSoldItems(soldItemsArray);
+      } else {
+        console.warn('Could not fetch sold items, continuing with investments only');
+        setSoldItems([]);
+      }
+
+      // Only fetch chart data if we have investments and it's the initial load
+      if (investmentsArray.length > 0 && !initialLoadComplete.current) {
+        await debouncedFetchChartData(selectedTimePeriod);
+      }
+
+      lastDataFetchRef.current = Date.now();
+      initialLoadComplete.current = true;
+
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [userSession?.id]);
+
+  // DEBOUNCED REFRESH for user-initiated actions
+  const { debouncedFunction: debouncedRefresh } = useAdvancedDebounce(
+    useCallback(async () => {
+      // Only refresh if enough time has passed since last fetch
+      const timeSinceLastFetch = Date.now() - lastDataFetchRef.current;
+      if (timeSinceLastFetch < 1000) return; // Minimum 1 second between refreshes
+      
+      await fetchCriticalData();
+    }, [fetchCriticalData]),
+    800, // Slightly longer delay for user actions
+    { 
+      leading: false, 
+      trailing: true, 
+      maxWait: 2000 // Ensure execution within 2 seconds max
+    }
+  );
+
+  // Handle sale completion with debounced data refresh
   const handleSaleComplete = useCallback((investmentId, quantitySold, salePrice, remainingQuantity) => {
+    // Immediately update local state for responsive UI
     setInvestments(prev => prev.map(inv => 
       inv.id === investmentId 
         ? { ...inv, quantity: remainingQuantity }
         : inv
     ));
-    fetchData();
-  }, []);
+    
+    // Debounce the full data refresh
+    debouncedRefresh();
+  }, [debouncedRefresh]);
 
   const validateUserSession = (session) => {
     if (!session) return false;
@@ -210,163 +302,109 @@ const InvestmentDashboard = ({ userSession }) => {
     return true;
   };
 
-// get the chart data from func
-const fetchChartData = useCallback(async (timePeriod) => {
-  try {
-    setChartLoading(true);
-    
-    const { data, error } = await supabase.rpc('get_chart_data', {
-      context_user_id: userSession.id,
-      time_period: timePeriod
-    });
+  // Debounced chart data fetching for time period changes
+  const { debouncedFunction: debouncedFetchChartData } = useAdvancedDebounce(
+    useCallback(async (timePeriod) => {
+      try {
+        setChartLoading(true);
+        
+        const { data, error } = await supabase.rpc('get_chart_data', {
+          context_user_id: userSession.id,
+          time_period: timePeriod
+        });
 
-    if (error) {
-      console.error('Chart data fetch failed:', error);
-      return;
-    }
-
-    const chartResult = typeof data === 'string' ? JSON.parse(data) : data;
-    
-    // Pre-calculate current date once
-    const currentDate = new Date();
-    const currentDateString = currentDate.toDateString();
-    const currentMonth = currentDate.getMonth();
-    
-    // Transform the data for the chart with optimized date handling
-    const transformedData = chartResult.data.map(point => {
-      const date = new Date(point.date);
-      const isToday = date.toDateString() === currentDateString;
-      
-      let formattedDate;
-      if (chartResult.granularity === 'hourly') {
-        if (isToday) {
-          formattedDate = date.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-          });
-        } else {
-          formattedDate = date.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            hour12: true
-          });
+        if (error) {
+          console.error('Chart data fetch failed:', error);
+          return;
         }
-      } else if (chartResult.granularity === 'daily') {
-        formattedDate = date.toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric'
+
+        const chartResult = typeof data === 'string' ? JSON.parse(data) : data;
+        
+        // Pre-calculate current date once
+        const currentDate = new Date();
+        const currentDateString = currentDate.toDateString();
+        const currentMonth = currentDate.getMonth();
+        
+        // Transform the data for the chart with optimized date handling
+        const transformedData = chartResult.data.map(point => {
+          const date = new Date(point.date);
+          const isToday = date.toDateString() === currentDateString;
+          
+          let formattedDate;
+          if (chartResult.granularity === 'hourly') {
+            if (isToday) {
+              formattedDate = date.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              });
+            } else {
+              formattedDate = date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                hour12: true
+              });
+            }
+          } else if (chartResult.granularity === 'daily') {
+            formattedDate = date.toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric'
+            });
+          } else {
+            formattedDate = date.toLocaleDateString('en-US', {
+              month: 'short',
+              year: 'numeric'
+            });
+          }
+          
+          return {
+            date: formattedDate,
+            rawDate: date,
+            totalValue: parseFloat(point.value),
+            invested: parseFloat(point.invested),
+            profitLoss: parseFloat(point.profit_loss),
+            returnPercentage: parseFloat(point.return_percentage),
+            isCurrentValue: isToday && chartResult.granularity === 'hourly' || 
+                           (chartResult.granularity === 'daily' && isToday) ||
+                           (chartResult.granularity === 'monthly' && date.getMonth() === currentMonth)
+          };
         });
-      } else {
-        formattedDate = date.toLocaleDateString('en-US', {
-          month: 'short',
-          year: 'numeric'
-        });
+
+        transformedData.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
+        setChartData(transformedData);
+        
+      } catch (err) {
+        console.error('Error fetching chart data:', err);
+      } finally {
+        setChartLoading(false);
       }
-      
-      return {
-        date: formattedDate,
-        rawDate: date,
-        totalValue: parseFloat(point.value),
-        invested: parseFloat(point.invested),
-        profitLoss: parseFloat(point.profit_loss),
-        returnPercentage: parseFloat(point.return_percentage),
-        isCurrentValue: isToday && chartResult.granularity === 'hourly' || 
-                       (chartResult.granularity === 'daily' && isToday) ||
-                       (chartResult.granularity === 'monthly' && date.getMonth() === currentMonth)
-      };
-    });
-
-    transformedData.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
-    setChartData(transformedData);
-    
-  } catch (err) {
-    console.error('Error fetching chart data:', err);
-  } finally {
-    setChartLoading(false);
-  }
-}, [userSession?.id]);
-
-const fetchData = useCallback(async () => {
-  try {
-    setLoading(true);
-    setError(null);
-
-    if (!userSession?.id || typeof userSession.id !== 'string') {
-      setError('Invalid user session. Please re-validate your beta key.');
-      return;
+    }, [userSession?.id]),
+    500, // delay for chart data updates
+    { leading: false,
+      trailing: true,
+      maxWait: 1500 
     }
+  );
 
-    console.log('Fetching data for user:', userSession.id);
+  // Initial data fetch - no debouncing for first load
+  useEffect(() => {
+    if (!userSession) return;
 
-    // Create abort controller for request cancellation
-    const abortController = new AbortController();
-
-    const [investmentsResult, soldItemsResult] = await Promise.allSettled([
-      supabase.rpc('fetch_user_investment_summary', {
-        context_user_id: userSession.id
-      }),
-      supabase.rpc('fetch_user_investment_sales', {
-        context_user_id: userSession.id
-      })
-    ]);
-
-    // Declare investmentsArray outside the if block
-    let investmentsArray = [];
-
-    // Handle investments result
-    if (investmentsResult.status === 'fulfilled' && !investmentsResult.value.error) {
-      investmentsArray = Array.isArray(investmentsResult.value.data) 
-        ? investmentsResult.value.data 
-        : (investmentsResult.value.data || []);
-      setInvestments(investmentsArray);
+    if (validateUserSession(userSession)) {
+      fetchCriticalData();
     } else {
-      console.error('Investments query failed:', investmentsResult.reason || investmentsResult.value?.error);
-      setError('Access denied. Please verify your beta key is valid and active.');
-      return;
+      setLoading(false);
+      setError('Invalid user session. Please validate your beta key.');
     }
+  }, [userSession, fetchCriticalData]);
 
-    // Handle sold items result (non-critical)
-    if (soldItemsResult.status === 'fulfilled' && !soldItemsResult.value.error) {
-      const soldItemsArray = Array.isArray(soldItemsResult.value.data)
-        ? soldItemsResult.value.data
-        : (soldItemsResult.value.data || []);
-      setSoldItems(soldItemsArray);
-    } else {
-      console.warn('Could not fetch sold items, continuing with investments only');
-      setSoldItems([]);
+  // Chart data fetch for time period changes - debounced
+  useEffect(() => {
+    if (investments.length > 0 && initialLoadComplete.current) {
+      debouncedFetchChartData(selectedTimePeriod);
     }
-
-    // Only fetch chart data if we have investments
-    if (investmentsArray.length > 0) {
-      await fetchChartData(selectedTimePeriod);
-    }
-
-  } catch (err) {
-    console.error('Unexpected error:', err);
-    setError('An unexpected error occurred. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-}, [userSession?.id, selectedTimePeriod, fetchChartData]);
-
-useEffect(() => {
-      if (!userSession) return;
-  
-      if (validateUserSession(userSession)) {
-        fetchData();
-      } else {
-        setLoading(false);
-        setError('Invalid user session. Please validate your beta key.');
-      }
-    }, [userSession, fetchData]);
-
-    useEffect(() => {
-  if (investments.length > 0) {
-    fetchChartData(selectedTimePeriod);
-  }
-}, [selectedTimePeriod, fetchChartData]);
+  }, [selectedTimePeriod, debouncedFetchChartData, investments.length]);
 
   if (loading) {
     return (
@@ -534,7 +572,7 @@ useEffect(() => {
                   onAdd={(newItem) => {
                     console.log('New item added:', newItem);
                     setShowQuickAdd(false);
-                    fetchData(); // Refresh data after adding
+                    debouncedRefresh(true); // Use debounced refresh for user actions
                     }}
                   userSession={userSession}
                 />
