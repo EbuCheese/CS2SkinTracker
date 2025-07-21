@@ -3,7 +3,7 @@ import { Search, X, TrendingUp, TrendingDown, Loader2, Save, DollarSign } from '
 
 const QuickSellModal = ({ 
   isOpen, 
-  onClose, 
+  onClose,
   investments, 
   userSession, 
   onSaleComplete,
@@ -16,43 +16,52 @@ const QuickSellModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Filter available items (quantity > 0)
-  const availableItems = useMemo(() => {
-    return investments.filter(item => item.quantity > 0);
+  // Memoize available items with profit calculations
+  const availableItemsWithProfits = useMemo(() => {
+    return investments
+      .filter(item => item.quantity > 0)
+      .map(item => {
+        const profitLoss = (item.current_price - item.buy_price) * item.quantity;
+        const profitPercentage = item.buy_price > 0 ? 
+          ((profitLoss / (item.buy_price * item.quantity)) * 100) : 0;
+        
+        return {
+          ...item,
+          profitLoss,
+          profitPercentage: Number(profitPercentage.toFixed(1))
+        };
+      });
   }, [investments]);
 
-  // Filter items based on search query
+  // Optimize search with debouncing concept built into useMemo
   const filteredItems = useMemo(() => {
-    if (!searchQuery) return availableItems;
+    if (!searchQuery) return availableItemsWithProfits;
     
     const query = searchQuery.toLowerCase();
-    return availableItems.filter(item => {
-      const itemName = item.name || '';
-      const skinName = item.skin_name || '';
-      const condition = item.condition || '';
+    return availableItemsWithProfits.filter(item => {
+      // Pre-lowercase and cache these values would be ideal, but this is still better
+      const searchableText = [
+        item.name || '',
+        item.skin_name || '',
+        item.condition || ''
+      ].join(' ').toLowerCase();
       
-      return itemName.toLowerCase().includes(query) ||
-             skinName.toLowerCase().includes(query) ||
-             condition.toLowerCase().includes(query);
+      return searchableText.includes(query);
     });
-  }, [availableItems, searchQuery]);
+  }, [availableItemsWithProfits, searchQuery]);
 
-    // close form with esc key
-    useEffect(() => {
-    const handleEscapeKey = (event) => {
-      if (event.key === 'Escape' && onClose) {
-        onClose();
-      }
-    };
-  
-    // Add event listener when component mounts
-    document.addEventListener('keydown', handleEscapeKey);
-  
-    // Cleanup event listener when component unmounts
-    return () => {
-      document.removeEventListener('keydown', handleEscapeKey);
-    };
+  // Memoize escape key handler
+  const handleEscapeKey = useCallback((event) => {
+    if (event.key === 'Escape' && onClose) {
+      onClose();
+    }
   }, [onClose]);
+
+  // Escape key handler
+  useEffect(() => {
+    document.addEventListener('keydown', handleEscapeKey);
+    return () => document.removeEventListener('keydown', handleEscapeKey);
+  }, [handleEscapeKey]);
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -72,11 +81,28 @@ const QuickSellModal = ({
     }
   }, [selectedItem]);
 
+  // Memoize item selection handler
   const handleItemSelect = useCallback((item) => {
     setSelectedItem(item);
     setSoldQuantity(Math.min(1, item.quantity));
     setSoldPrice('');
     setError('');
+  }, []);
+
+  // Memoize search change handler
+  const handleSearchChange = useCallback((e) => {
+    setSearchQuery(e.target.value);
+  }, []);
+
+  // Memoize quantity change handler
+  const handleQuantityChange = useCallback((e) => {
+    const value = Math.min(parseInt(e.target.value) || 1, selectedItem?.quantity || 1);
+    setSoldQuantity(value);
+  }, [selectedItem?.quantity]);
+
+  // Memoize price change handler
+  const handlePriceChange = useCallback((e) => {
+    setSoldPrice(e.target.value);
   }, []);
 
   const handleSellConfirm = async () => {
@@ -112,7 +138,6 @@ const QuickSellModal = ({
       
       if (saleError) throw new Error(`Sale failed: ${saleError.message}`);
       
-      // Call parent callback to update the investments list
       onSaleComplete(selectedItem.id, quantity, pricePerUnit, saleResult.remaining_quantity);
       
       // Reset and close
@@ -129,12 +154,34 @@ const QuickSellModal = ({
     }
   };
 
-  const handleBackToSearch = () => {
+  const handleBackToSearch = useCallback(() => {
     setSelectedItem(null);
     setSoldPrice('');
     setSoldQuantity(1);
     setError('');
-  };
+  }, []);
+
+  // Memoize backdrop click handler
+  const handleBackdropClick = useCallback((e) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  }, [onClose]);
+
+  // Calculate sale preview values
+  const salePreview = useMemo(() => {
+    if (!selectedItem || !soldPrice || !soldQuantity) return null;
+    
+    const pricePerUnit = parseFloat(soldPrice);
+    const quantity = parseInt(soldQuantity);
+    
+    if (isNaN(pricePerUnit) || isNaN(quantity)) return null;
+    
+    const totalSaleValue = pricePerUnit * quantity;
+    const profitLoss = (pricePerUnit - selectedItem.buy_price) * quantity;
+    
+    return { totalSaleValue, profitLoss };
+  }, [selectedItem, soldPrice, soldQuantity]);
 
   if (!isOpen) return null;
 
@@ -142,15 +189,15 @@ const QuickSellModal = ({
     <div className="flex min-h-full items-center justify-center p-4">
       <div
         className="fixed inset-0 bg-black/60 backdrop-blur-md transition-opacity duration-200"
-        onClick={onClose}
+        onClick={handleBackdropClick}
       />
       <div className="relative w-full max-w-2xl transform overflow-hidden rounded-xl bg-gradient-to-br from-gray-900 to-slate-900 border border-orange-500/20 shadow-2xl transition-all duration-200 scale-100 opacity-100 max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <h3 className="text-xl font-semibold text-white flex items-center">
-          <DollarSign className="w-5 h-5 mr-2 mt-1" />
-          Quick Sell Item
-        </h3>
+            <DollarSign className="w-5 h-5 mr-2 mt-1" />
+            Quick Sell Item
+          </h3>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white transition-colors duration-200"
@@ -171,7 +218,7 @@ const QuickSellModal = ({
                   type="text"
                   placeholder="Search items to sell..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={handleSearchChange}
                   className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors duration-200"
                 />
               </div>
@@ -185,62 +232,56 @@ const QuickSellModal = ({
                     </div>
                   </div>
                 ) : (
-                  filteredItems.map((item) => {
-                    const profitLoss = (item.current_price - item.buy_price) * item.quantity;
-                    const profitPercentage = item.buy_price > 0 ? 
-                      ((profitLoss / (item.buy_price * item.quantity)) * 100).toFixed(1) : '0.0';
-                    
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => handleItemSelect(item)}
-                        className="flex items-center space-x-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-orange-500/50 hover:bg-gray-800 cursor-pointer transition-all duration-200"
-                      >
-                        {/* Image */}
-                        <div className="w-14 h-14 bg-gray-700 rounded-lg flex-shrink-0 overflow-hidden">
-                          {item.image_url ? (
-                            <img 
-                              src={item.image_url} 
-                              alt={item.name}
-                              className="w-full h-full object-contain"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-white text-xs font-medium">
-                              {item.name.substring(0, 2).toUpperCase()}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Item info */}
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-white truncate">{item.name}</h3>
-                          {item.skin_name && (
-                            <p className="text-sm text-gray-400 truncate">{item.skin_name}</p>
-                          )}
-                          <div className="flex items-center space-x-2 mt-1">
-                            {item.condition && item.condition.toLowerCase() !== 'unknown' && (
-                              <span className="text-xs text-gray-400">{item.condition}</span>
-                            )}
-                            <span className="text-xs text-gray-400">Qty: {item.quantity}</span>
+                  filteredItems.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => handleItemSelect(item)}
+                      className="flex items-center space-x-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-orange-500/50 hover:bg-gray-800 cursor-pointer transition-all duration-200"
+                    >
+                      {/* Image */}
+                      <div className="w-14 h-14 bg-gray-700 rounded-lg flex-shrink-0 overflow-hidden">
+                        {item.image_url ? (
+                          <img 
+                            src={item.image_url} 
+                            alt={item.name}
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-white text-xs font-medium">
+                            {item.name.substring(0, 2).toUpperCase()}
                           </div>
-                        </div>
+                        )}
+                      </div>
 
-                        {/* Price and profit */}
-                        <div className="text-right flex-shrink-0">
-                          <div className="text-white font-medium">${item.current_price.toFixed(2)}</div>
-                          <div className={`text-xs flex items-center space-x-1 px-2 py-1 rounded-full font-medium ${
-                            profitLoss >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-                          }`}>
-                            {profitLoss >= 0 ? 
-                              <TrendingUp className="w-3 h-3" /> : 
-                              <TrendingDown className="w-3 h-3" />
-                            }
-                            <span>{profitPercentage}%</span>
-                          </div>
+                      {/* Item info */}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-white truncate">{item.name}</h3>
+                        {item.skin_name && (
+                          <p className="text-sm text-gray-400 truncate">{item.skin_name}</p>
+                        )}
+                        <div className="flex items-center space-x-2 mt-1">
+                          {item.condition && item.condition.toLowerCase() !== 'unknown' && (
+                            <span className="text-xs text-gray-400">{item.condition}</span>
+                          )}
+                          <span className="text-xs text-gray-400">Qty: {item.quantity}</span>
                         </div>
                       </div>
-                    );
-                  })
+
+                      {/* Price and profit */}
+                      <div className="text-right flex-shrink-0">
+                        <div className="text-white font-medium">${item.current_price.toFixed(2)}</div>
+                        <div className={`text-xs flex items-center space-x-1 px-2 py-1 rounded-full font-medium ${
+                          item.profitLoss >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                        }`}>
+                          {item.profitLoss >= 0 ? 
+                            <TrendingUp className="w-3 h-3" /> : 
+                            <TrendingDown className="w-3 h-3" />
+                          }
+                          <span>{item.profitPercentage}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
             </>
@@ -284,8 +325,13 @@ const QuickSellModal = ({
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm text-gray-400">Current Price</div>
-                    <div className="text-white font-medium">${selectedItem.current_price.toFixed(2)}</div>
+                    <div className="space-y-1">
+                      
+                      <div>
+                        <div className="text-xs text-gray-500">Current Price</div>
+                        <div className="text-white font-medium">${selectedItem.current_price.toFixed(2)}</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -301,7 +347,7 @@ const QuickSellModal = ({
                     min="1"
                     max={selectedItem.quantity}
                     value={soldQuantity}
-                    onChange={(e) => setSoldQuantity(Math.min(parseInt(e.target.value) || 1, selectedItem.quantity))}
+                    onChange={handleQuantityChange}
                     className="w-full px-3 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-orange-500 focus:outline-none transition-colors duration-200"
                   />
                 </div>
@@ -315,29 +361,48 @@ const QuickSellModal = ({
                     min="0.01"
                     placeholder="0.00"
                     value={soldPrice}
-                    onChange={(e) => setSoldPrice(e.target.value)}
+                    onChange={handlePriceChange}
                     className="w-full px-3 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-orange-500 focus:outline-none transition-colors duration-200"
                   />
                 </div>
               </div>
 
               {/* Sale preview */}
-              {soldPrice && soldQuantity && (
+              {salePreview && (
                 <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-400">Total sale value:</span>
-                    <span className="text-white font-medium">
-                      ${(parseFloat(soldPrice) * soldQuantity).toFixed(2)}
-                    </span>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-400 block">Buy Price (each)</span>
+                      <span className="text-white font-medium">${selectedItem.buy_price.toFixed(2)}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 block">Sale Price (each)</span>
+                      <span className="text-white font-medium">${parseFloat(soldPrice).toFixed(2)}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-400 block">Profit per Item</span>
+                      <span className={`font-medium ${
+                        (parseFloat(soldPrice) - selectedItem.buy_price) >= 0 ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        ${(parseFloat(soldPrice) - selectedItem.buy_price).toFixed(2)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-400">Profit/Loss:</span>
-                    <span className={`font-medium ${
-                      ((parseFloat(soldPrice) - selectedItem.buy_price) * soldQuantity) >= 0 ? 
-                      'text-green-400' : 'text-red-400'
-                    }`}>
-                      ${((parseFloat(soldPrice) - selectedItem.buy_price) * soldQuantity).toFixed(2)}
-                    </span>
+                  <div className="border-t border-gray-600 mt-3 pt-3">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-gray-400">Total sale value:</span>
+                      <span className="text-white font-medium">
+                        ${salePreview.totalSaleValue.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Total Profit/Loss:</span>
+                      <span className={`font-medium ${
+                        salePreview.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        ${salePreview.profitLoss.toFixed(2)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
