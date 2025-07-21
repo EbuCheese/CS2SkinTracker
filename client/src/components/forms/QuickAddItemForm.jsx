@@ -533,7 +533,7 @@ const handleSubmit = useCallback(async () => {
     <div className={`bg-gradient-to-br from-gray-900 to-slate-900 p-6 rounded-xl border border-orange-500/20 ${className}`}>
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-xl font-semibold text-white flex items-center">
-          <Plus className="w-5 h-5 mr-2" />
+          <Plus className="w-5 h-5 mr-2 mt-1" />
           Quick Add Item
         </h3>
         {onClose && (
