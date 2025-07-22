@@ -213,18 +213,20 @@ const handlePartialSale = useCallback(async () => {
     return;
   }
  
-  const totalSaleValue = pricePerUnit * quantity;
-  const profitLoss = (pricePerUnit - item.buy_price) * quantity;
-  
+  const totalSaleValue = parseFloat(soldPrice) * soldQuantity;
+  const profitLoss = (parseFloat(soldPrice) - item.buy_price) * soldQuantity;
+  const investment = item.buy_price * soldQuantity;
+  const percentage = investment > 0 ? ((profitLoss / investment) * 100).toFixed(2) : '0.00';
+
   showPopup({
     type: 'confirm',
     title: 'Confirm Sale',
     message: `Sell ${quantity} units at $${pricePerUnit.toFixed(2)} each?`,
-    data: { quantity, pricePerUnit, totalSaleValue, profitLoss },
+    data: { quantity, pricePerUnit, totalSaleValue, profitLoss, percentage },
     onConfirm: () => handleAsyncOperation(
       'PARTIAL_SALE',
       handleConfirmedSale,
-      quantity, pricePerUnit, totalSaleValue, profitLoss
+      quantity, pricePerUnit, totalSaleValue, profitLoss, percentage
     ),
     confirmText: 'Confirm Sale',
     cancelText: 'Cancel'
@@ -809,7 +811,12 @@ const handleEditFormChange = useCallback((field, value) => {
               <div className="text-xs text-gray-400 bg-gray-700/50 p-2 rounded">
                 <div>Total sale value: ${(parseFloat(soldPrice) * soldQuantity).toFixed(2)}</div>
                 <div className={((parseFloat(soldPrice) - item.buy_price) * soldQuantity) >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  Profit/Loss: ${((parseFloat(soldPrice) - item.buy_price) * soldQuantity).toFixed(2)}
+                  {(() => {
+                    const profitLoss = (parseFloat(soldPrice) - item.buy_price) * soldQuantity;
+                    const investment = item.buy_price * soldQuantity;
+                    const percentage = investment > 0 ? ((profitLoss / investment) * 100).toFixed(2) : '0.00';
+                    return `Profit/Loss: ${profitLoss >= 0 ? '+' : '-'}$${Math.abs(profitLoss).toFixed(2)} (${percentage}%)`;
+                  })()}
                 </div>
               </div>
             )}

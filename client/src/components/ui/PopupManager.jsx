@@ -128,7 +128,7 @@ const PopupManager = ({
               <div className="bg-gray-700/50 p-3 rounded">
                 <div>Total sale value: ${data.totalSaleValue?.toFixed(2)}</div>
                 <div className={data.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  Profit/Loss: {data.profitLoss >= 0 ? '+' : ''}${data.profitLoss?.toFixed(2)}
+                  Profit/Loss: {data.profitLoss >= 0 ? '+' : '-'}${Math.abs(data.profitLoss)?.toFixed(2)} ({data.percentage}%)
                 </div>
               </div>
             </div>
