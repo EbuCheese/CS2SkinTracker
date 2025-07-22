@@ -181,9 +181,12 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
                       const qtyPart = parts.find(part => part.startsWith('Qty:')) || `Qty: ${activity.quantity || 1}`;
                       
                       // Build the formatted string: condition (variant) • quantity
-                      const variant = activity.variant && activity.variant.toLowerCase() !== 'normal' 
-                        ? ` (${activity.variant.toLowerCase() === 'stattrak' ? 'ST' : activity.variant.toLowerCase() === 'souvenir' ? 'SV' : activity.variant})`
-                        : '';
+                      const variant = (activity.variant || activity.item_variant) && 
+                                  (activity.variant || activity.item_variant).toLowerCase() !== 'normal' 
+                      ? ` (${(activity.variant || activity.item_variant).toLowerCase() === 'stattrak' ? 'ST' : 
+                            (activity.variant || activity.item_variant).toLowerCase() === 'souvenir' ? 'SV' : 
+                            (activity.variant || activity.item_variant)})`
+                      : '';
                         
                       return `${condition}${variant} • ${qtyPart}`;
                     })()

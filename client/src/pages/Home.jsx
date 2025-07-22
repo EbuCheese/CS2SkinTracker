@@ -130,7 +130,9 @@ const getRecentActivity = (investments, soldItems) => {
       subtitle: subtitle,
       amount: parseFloat(sale.total_sale_value),
       isPositive: true,
-      image_url: sale.image_url
+      image_url: sale.image_url,
+      variant: sale.item_variant, // Add this line to map the variant correctly
+      quantity: sale.quantity_sold // Also add quantity for consistency
     };
   });
 
