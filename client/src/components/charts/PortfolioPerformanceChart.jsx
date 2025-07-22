@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
@@ -8,7 +8,7 @@ const PortfolioPerformanceChart = ({ userSession }) => {
   const [chartLoading, setChartLoading] = useState(false);
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('MAX');
 
-  const timePeriods = [
+  const timePeriods = useMemo(() => [
     { label: '1D', value: '1D' },
     { label: '5D', value: '5D' },
     { label: '1M', value: '1M' },
@@ -17,10 +17,23 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     { label: '1Y', value: '1Y' },
     { label: '5Y', value: '5Y' },
     { label: 'MAX', value: 'MAX' }
-  ];
+  ], []);
 
-  // Fetch chart data from Supabase
-  const fetchChartData = async (timePeriod) => {
+  // Memoized formatters to prevent recreation on every render
+  const formatPrice = useCallback((price) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2
+    }).format(price);
+  }, []);
+
+  const formatTickPrice = useCallback((value) => `$${value.toFixed(2)}`, []);
+
+  // Fetch chart data from Supabase with error boundary
+  const fetchChartData = useCallback(async (timePeriod) => {
+    if (!userSession?.id) return;
+    
     try {
       setChartLoading(true);
       
@@ -93,16 +106,16 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     } finally {
       setChartLoading(false);
     }
-  };
+  }, [userSession?.id]);
 
   // Handle time period change
-  const handleTimePeriodChange = (period) => {
+  const handleTimePeriodChange = useCallback((period) => {
     setSelectedTimePeriod(period);
     fetchChartData(period);
-  };
+  }, [fetchChartData]);
 
-  // Calculate time frame change
-  const calculateTimeFrameChange = (chartData) => {
+  // Calculate time frame change - memoized
+  const timeFrameChange = useMemo(() => {
     if (!chartData || chartData.length < 2) return { change: 0, percentage: 0 };
     
     const startValue = chartData[0].totalValue;
@@ -111,13 +124,13 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     const percentage = startValue > 0 ? (change / startValue) * 100 : 0;
     
     return { change, percentage };
-  };
+  }, [chartData]);
 
-  // Calculate Y-axis domain for better chart scaling
-  const calculateYAxisDomain = (data, timePeriod) => {
-    if (!data || data.length === 0) return ['auto', 'auto'];
+  // Calculate Y-axis domain for better chart scaling - memoized
+  const yAxisDomain = useMemo(() => {
+    if (!chartData || chartData.length === 0) return ['auto', 'auto'];
     
-    const values = data.map(d => d.totalValue);
+    const values = chartData.map(d => d.totalValue);
     const minValue = Math.min(...values);
     const maxValue = Math.max(...values);
     
@@ -131,7 +144,7 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     }
     
     let paddingPercent;
-    switch (timePeriod) {
+    switch (selectedTimePeriod) {
       case '1D':
       case '5D':
         paddingPercent = 0.05; // 5% padding for short periods
@@ -154,23 +167,73 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     
     const padding = range * paddingPercent;
     return [Math.max(0, minValue - padding), maxValue + padding];
-  };
+  }, [chartData, selectedTimePeriod]);
 
-  // Format price utility
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2
-    }).format(price);
-  };
+  // Memoized tooltip formatter
+  const tooltipFormatter = useCallback((value, name) => {
+    if (name === 'totalValue') return [formatPrice(value), 'Portfolio Value'];
+    if (name === 'invested') return [formatPrice(value), 'Total Invested'];
+    if (name === 'profitLoss') return [formatPrice(value), 'Profit/Loss'];
+    return [value, name];
+  }, [formatPrice]);
+
+  // Memoized tooltip label formatter
+  const tooltipLabelFormatter = useCallback((label, payload) => {
+    if (payload && payload.length > 0 && payload[0].payload.rawDate) {
+      const rawDate = payload[0].payload.rawDate;
+      // For hourly data, show full date and time
+      if (['1D', '5D'].includes(selectedTimePeriod)) {
+        return rawDate.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+      } else {
+        // For other periods, show just the date
+        return rawDate.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+      }
+    }
+    return label;
+  }, [selectedTimePeriod]);
+
+  // Memoized tooltip content style
+  const tooltipContentStyle = useMemo(() => ({
+    backgroundColor: '#1F2937',
+    border: '1px solid #374151',
+    borderRadius: '8px',
+    color: '#F9FAFB'
+  }), []);
+
+  // Memoized line props
+  const lineProps = useMemo(() => ({
+    type: "monotone",
+    dataKey: "totalValue",
+    stroke: "url(#gradient)",
+    strokeWidth: ['1D', '5D'].includes(selectedTimePeriod) ? 2 : 3,
+    dot: ['1D', '5D'].includes(selectedTimePeriod) ? 
+      { fill: '#F97316', strokeWidth: 2, r: 3 } : 
+      { fill: '#F97316', strokeWidth: 2, r: 4 },
+    activeDot: { r: 6, fill: '#EA580C' }
+  }), [selectedTimePeriod]);
+
+  // Memoized tick count
+  const tickCount = useMemo(() => 
+    ['1D', '5D'].includes(selectedTimePeriod) ? 8 : 6, 
+    [selectedTimePeriod]
+  );
 
   // Load initial data
   useEffect(() => {
-    if (userSession?.id) {
-      fetchChartData(selectedTimePeriod);
-    }
-  }, [userSession]);
+    fetchChartData(selectedTimePeriod);
+  }, [fetchChartData, selectedTimePeriod]);
 
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 mb-8 border border-gray-700/50">
@@ -187,29 +250,22 @@ const PortfolioPerformanceChart = ({ userSession }) => {
           {/* Time Frame Change Display - Under Title */}
           {chartData.length > 1 && !chartLoading && (
             <div className="flex items-center space-x-2">
-              {(() => {
-                const { change, percentage } = calculateTimeFrameChange(chartData);
-                return (
-                  <>
-                    <span className={`text-xl font-bold ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {change >= 0 ? '+' : ''}{formatPrice(change)}
-                    </span>
-                    <span className={`text-sm font-medium px-2 py-1 rounded ${
-                      change >= 0 
-                        ? 'bg-green-500/20 text-green-400' 
-                        : 'bg-red-500/20 text-red-400'
-                    }`}>
-                      {change >= 0 ? '+' : ''}{percentage.toFixed(2)}%
-                    </span>
-                    <span className="text-sm text-gray-400">({selectedTimePeriod})</span>
-                    {change >= 0 ? (
-                      <TrendingUp className="w-4 h-4 text-green-400" />
-                    ) : (
-                      <TrendingDown className="w-4 h-4 text-red-400" />
-                    )}
-                  </>
-                );
-              })()}
+              <span className={`text-xl font-bold ${timeFrameChange.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {timeFrameChange.change >= 0 ? '+' : ''}{formatPrice(timeFrameChange.change)}
+              </span>
+              <span className={`text-sm font-medium px-2 py-1 rounded ${
+                timeFrameChange.change >= 0 
+                  ? 'bg-green-500/20 text-green-400' 
+                  : 'bg-red-500/20 text-red-400'
+              }`}>
+                {timeFrameChange.change >= 0 ? '+' : ''}{timeFrameChange.percentage.toFixed(2)}%
+              </span>
+              <span className="text-sm text-gray-400">({selectedTimePeriod})</span>
+              {timeFrameChange.change >= 0 ? (
+                <TrendingUp className="w-4 h-4 text-green-400" />
+              ) : (
+                <TrendingDown className="w-4 h-4 text-red-400" />
+              )}
             </div>
           )}
         </div>
@@ -249,61 +305,16 @@ const PortfolioPerformanceChart = ({ userSession }) => {
               <YAxis 
                 stroke="#9CA3AF"
                 fontSize={12}
-                tickFormatter={(value) => `$${value.toFixed(2)}`}
-                domain={calculateYAxisDomain(chartData, selectedTimePeriod)}
-                // Add more tick marks for short periods
-                tickCount={['1D', '5D'].includes(selectedTimePeriod) ? 8 : 6}
+                tickFormatter={formatTickPrice}
+                domain={yAxisDomain}
+                tickCount={tickCount}
               />
               <Tooltip 
-                formatter={(value, name) => {
-                  if (name === 'totalValue') return [formatPrice(value), 'Portfolio Value'];
-                  if (name === 'invested') return [formatPrice(value), 'Total Invested'];
-                  if (name === 'profitLoss') return [formatPrice(value), 'Profit/Loss'];
-                  return [value, name];
-                }}
-                labelFormatter={(label, payload) => {
-                  if (payload && payload.length > 0 && payload[0].payload.rawDate) {
-                    const rawDate = payload[0].payload.rawDate;
-                    // For hourly data, show full date and time
-                    if (['1D', '5D'].includes(selectedTimePeriod)) {
-                      return rawDate.toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true
-                      });
-                    } else {
-                      // For other periods, show just the date
-                      return rawDate.toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      });
-                    }
-                  }
-                  return label;
-                }}
-                contentStyle={{
-                  backgroundColor: '#1F2937',
-                  border: '1px solid #374151',
-                  borderRadius: '8px',
-                  color: '#F9FAFB'
-                }}
+                formatter={tooltipFormatter}
+                labelFormatter={tooltipLabelFormatter}
+                contentStyle={tooltipContentStyle}
               />
-              <Line 
-                type="monotone" 
-                dataKey="totalValue" 
-                stroke="url(#gradient)" 
-                strokeWidth={['1D', '5D'].includes(selectedTimePeriod) ? 2 : 3}
-                dot={['1D', '5D'].includes(selectedTimePeriod) ? 
-                  { fill: '#F97316', strokeWidth: 2, r: 3 } : 
-                  { fill: '#F97316', strokeWidth: 2, r: 4 }
-                }
-                activeDot={{ r: 6, fill: '#EA580C' }}
-              />
+              <Line {...lineProps} />
               <defs>
                 <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor="#F97316" />
