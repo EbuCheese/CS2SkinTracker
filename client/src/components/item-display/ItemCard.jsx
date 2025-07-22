@@ -239,10 +239,11 @@ const handlePartialSale = useCallback(async () => {
       
       const { data: saleResult, error: saleError } = await supabase.rpc('process_investment_sale', {
         p_investment_id: item.id,
-        p_user_id: userSession.id,
-        p_quantity_to_sell: quantity,
         p_price_per_unit: pricePerUnit,
-        p_sale_notes: null
+        p_quantity_to_sell: quantity,
+        p_sale_notes: null,
+        p_user_id: userSession.id,
+        p_item_variant: item.variant || 'normal'
       });
       
       if (saleError) throw new Error(`Sale failed: ${saleError.message}`);
@@ -407,14 +408,14 @@ const handleEditFormChange = useCallback((field, value) => {
           )}
           
           {/* Variant badges */}
-          {item.variant && item.variant !== 'normal' && (
+          {((isSoldItem ? item.item_variant : item.variant) && (isSoldItem ? item.item_variant : item.variant) !== 'normal') && (
             <div className="absolute top-0 right-0 flex flex-col gap-0.5">
-              {item.variant === 'stattrak' && (
+              {(isSoldItem ? item.item_variant : item.variant) === 'stattrak' && (
                 <span className="text-[10px] px-1 py-0.5 rounded-sm bg-orange-500 text-white font-medium shadow-sm">
                   ST
                 </span>
               )}
-              {item.variant === 'souvenir' && (
+              {(isSoldItem ? item.item_variant : item.variant) === 'souvenir' && (
                 <span className="text-[10px] px-1 py-0.5 rounded-sm bg-yellow-500 text-white font-medium shadow-sm">
                   SV
                 </span>
@@ -444,64 +445,88 @@ const handleEditFormChange = useCallback((field, value) => {
           {/* Show different info for sold items vs active investments */}
           {isSoldItem ? (
             // Sold item display
-            <div className="mt-2 text-sm">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-gray-400 mb-0.5">Sold:</div>
-                  <div className="text-green-400">${item.price_per_unit?.toFixed(2)}</div>
-                </div>
-                <div>
-                  <div className="text-gray-400 mb-0.5">Bought:</div>
-                  <div className="text-white">${item.buy_price_per_unit?.toFixed(2)}</div>
-                </div>
-              </div>
-
-              {item.notes && (
-                <div className="mt-1">
-                  <button
-                    onClick={() => showPopup({
-                      type: 'note',
-                      title: 'Item Note',
-                      message: item.notes,
-                      confirmText: 'Close'
-                    })}
-                    className="text-xs text-gray-400 italic truncate hover:text-orange-400 transition-colors text-left w-full"
-                    title="Click to view full note"
-                  >
-                    note: {item.notes}
-                  </button>
-                </div>
-              )}
-
-              <div className="mt-1">
-                <span className="text-gray-400">Quantity: </span>
-                <span className="text-white">{item.quantity_sold}</span>
-              </div>
-              <div className="mt-1">
-                <span className="text-gray-400">Sale Date: </span>
-                <span className="text-white">{new Date(item.sale_date).toLocaleDateString()}</span>
-              </div>
-              <div className="mt-1">
-                <span className="text-gray-400">Total Sale: </span>
-                <span className="text-white">${item.total_sale_value?.toFixed(2)}</span>
-              </div>
-            </div>
-          ) : (
             <>
-              {/* Condition Display */}
+              {/* Condition and Variant Display for Sold Items */}
               <div className="flex items-center space-x-2 mt-1">
-                {item.condition && (
-                  <p className="text-xs text-gray-500 truncate">{item.condition}</p>
+                {(isSoldItem ? item.item_condition : item.condition) && (
+                  <p className="text-xs text-gray-500 truncate">{isSoldItem ? item.item_condition : item.condition}</p>
                 )}
                 
-                {item.variant && item.variant !== 'normal' && (
+                {((isSoldItem ? item.item_variant : item.variant) && (isSoldItem ? item.item_variant : item.variant) !== 'normal') && (
                   <div className="flex items-center space-x-1">
-                    {item.variant === 'stattrak' && (
+                    {(isSoldItem ? item.item_variant : item.variant) === 'stattrak' && (
                       <span className="text-xs px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">
                         StatTrak™
                       </span>
                     )}
-                    {item.variant === 'souvenir' && (
+                    {(isSoldItem ? item.item_variant : item.variant) === 'souvenir' && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                        Souvenir
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-2 text-sm">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-gray-400 mb-0.5">Sold:</div>
+                    <div className="text-green-400">${item.price_per_unit?.toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 mb-0.5">Bought:</div>
+                    <div className="text-white">${item.buy_price_per_unit?.toFixed(2)}</div>
+                  </div>
+                </div>
+
+                {item.notes && (
+                  <div className="mt-1">
+                    <button
+                      onClick={() => showPopup({
+                        type: 'note',
+                        title: 'Item Note',
+                        message: item.notes,
+                        confirmText: 'Close'
+                      })}
+                      className="text-xs text-gray-400 italic truncate hover:text-orange-400 transition-colors text-left w-full"
+                      title="Click to view full note"
+                    >
+                      note: {item.notes}
+                    </button>
+                  </div>
+                )}
+
+                <div className="mt-1">
+                  <span className="text-gray-400">Quantity: </span>
+                  <span className="text-white">{item.quantity_sold}</span>
+                </div>
+                <div className="mt-1">
+                  <span className="text-gray-400">Sale Date: </span>
+                  <span className="text-white">{new Date(item.sale_date).toLocaleDateString()}</span>
+                </div>
+                <div className="mt-1">
+                  <span className="text-gray-400">Total Sale: </span>
+                  <span className="text-white">${item.total_sale_value?.toFixed(2)}</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Condition Display */}
+              <div className="flex items-center space-x-2 mt-1">
+                {(isSoldItem ? item.item_condition : item.condition) && (
+                  <p className="text-xs text-gray-500 truncate">{isSoldItem ? item.item_condition : item.condition}</p>
+                )}
+                
+                {((isSoldItem ? item.item_variant : item.variant) && (isSoldItem ? item.item_variant : item.variant) !== 'normal') && (
+                  <div className="flex items-center space-x-1">
+                    {(isSoldItem ? item.item_variant : item.variant) === 'stattrak' && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                        StatTrak™
+                      </span>
+                    )}
+                    {(isSoldItem ? item.item_variant : item.variant) === 'souvenir' && (
                       <span className="text-xs px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
                         Souvenir
                       </span>

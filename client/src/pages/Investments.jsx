@@ -92,18 +92,22 @@ const InvestmentsPage = ({ userSession }) => {
           const itemName = item.item_name || '';
           const skinName = item.item_skin_name || '';
           const condition = item.item_condition || '';
+          const variant = item.item_variant || '';
           
           return itemName.toLowerCase().includes(query) ||
                 skinName.toLowerCase().includes(query) ||
-                condition.toLowerCase().includes(query);
+                condition.toLowerCase().includes(query) ||
+                variant.toLowerCase().includes(query);
         } else {
           const itemName = item.item_name || item.name || '';
           const skinName = item.skin_name || '';
           const condition = item.condition || '';
+          const variant = item.variant || '';
           
           return itemName.toLowerCase().includes(query) ||
                 skinName.toLowerCase().includes(query) ||
-                condition.toLowerCase().includes(query);
+                condition.toLowerCase().includes(query) ||
+                variant.toLowerCase().includes(query);
         }
       });
     }
