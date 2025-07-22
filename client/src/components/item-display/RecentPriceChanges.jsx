@@ -51,7 +51,7 @@ const InvestmentItem = React.memo(({
           </h3>
           <p className="text-sm text-gray-400">
             {investment.condition && investment.condition.toLowerCase() !== 'unknown' 
-              ? `${investment.condition} • Qty: ${investment.quantity}`
+              ? `${investment.condition}${investment.variant && investment.variant.toLowerCase() !== 'normal' ? ` (${investment.variant === 'stattrak' ? 'ST' : investment.variant === 'souvenir' ? 'SV' : investment.variant})` : ''} • Qty: ${investment.quantity}`
               : `Qty: ${investment.quantity}`
             }
           </p>

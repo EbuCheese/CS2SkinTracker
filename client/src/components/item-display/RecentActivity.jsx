@@ -173,7 +173,22 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
             </h3>
             {!isVeryCompact && (
               <p className={`text-gray-400 truncate ${isCompact ? 'text-xs' : 'text-sm'}`}>
-                {activity.subtitle}
+                {activity.subtitle && activity.subtitle.toLowerCase() !== 'unknown' 
+                  ? (() => {
+                      // Parse the subtitle to extract condition and quantity
+                      const parts = activity.subtitle.split(' • ');
+                      const condition = parts[0]; // e.g., "Factory New"
+                      const qtyPart = parts.find(part => part.startsWith('Qty:')) || `Qty: ${activity.quantity || 1}`;
+                      
+                      // Build the formatted string: condition (variant) • quantity
+                      const variant = activity.variant && activity.variant.toLowerCase() !== 'normal' 
+                        ? ` (${activity.variant.toLowerCase() === 'stattrak' ? 'ST' : activity.variant.toLowerCase() === 'souvenir' ? 'SV' : activity.variant})`
+                        : '';
+                        
+                      return `${condition}${variant} • ${qtyPart}`;
+                    })()
+                  : `Qty: ${activity.quantity || 1}`
+                }
               </p>
             )}
             <p className={`text-gray-500 ${isCompact ? 'text-xs' : 'text-sm'}`}>
