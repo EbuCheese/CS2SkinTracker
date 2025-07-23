@@ -8,11 +8,13 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   const [viewMode, setViewMode] = useState('chart'); // 'chart' or 'table'
   const [selectedSlice, setSelectedSlice] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [stickyTooltip, setStickyTooltip] = useState(null);
 
   // Reset selected slice when switching tabs or view modes
   useEffect(() => {
-    setSelectedSlice(null);
-  }, [activeToggle, viewMode]);
+  setSelectedSlice(null);
+  setStickyTooltip(null);
+}, [activeToggle, viewMode, showSmallSlices]);
 
   // Memoized color palettes
   const colors = useMemo(() => ({
@@ -236,41 +238,100 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   // Check if there are small slices in item view
   const hasSmallSlices = activeToggle === 'item' && consolidatedBreakdown.some(item => item.percentage < 2);
 
-  // Enhanced tooltip
-  const CustomTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs">
-          <p className="text-white font-medium text-base mb-2">{data.name}</p>
-          <div className="space-y-1">
-            <p className="text-gray-300 text-sm">
-              <span className="text-green-400">Value:</span> {formatCurrency(data.value)}
+// Enhanced tooltip that shows for ALL slices
+const CustomTooltip = ({ active, payload, coordinate }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    
+    // Don't close sticky tooltip on hover - let it stay until user clicks
+    // Only prevent showing hover tooltip if sticky is open for the same slice
+    if (data.isGrouped && stickyTooltip && stickyTooltip.name === data.name) {
+      return null; // Don't show hover tooltip when sticky is open for same slice
+    }
+    
+    // Position non-Others tooltips more on the left side to avoid overlap with sticky tooltip
+    const tooltipStyle = data.isGrouped ? {} : {
+      transform: 'translateX(-65%)',
+      marginLeft: '-15px'
+    };
+    
+    return (
+      <div 
+        className="bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs"
+        style={tooltipStyle}
+      >
+        <p className="text-white font-medium text-base mb-2">{data.name}</p>
+        <div className="space-y-1">
+          <p className="text-gray-300 text-sm">
+            <span className="text-green-400">Value:</span> {formatCurrency(data.value)}
+          </p>
+          <p className="text-gray-300 text-sm">
+            <span className="text-blue-400">Share:</span> {formatPercentage(data.percentage)}
+          </p>
+          <p className="text-gray-300 text-sm">
+            <span className="text-purple-400">Items:</span> {data.count}
+          </p>
+          {/* Show grouped items hint in hover tooltip */}
+          {data.isGrouped && (
+            <p className="text-yellow-400 text-xs mt-1">
+              {selectedSlice === data.name 
+                ? `Click to deselect • Contains ${data.items.length} items`
+                : `Click to see ${data.items.length} grouped items`
+              }
             </p>
-            <p className="text-gray-300 text-sm">
-              <span className="text-blue-400">Share:</span> {formatPercentage(data.percentage)}
-            </p>
-            <p className="text-gray-300 text-sm">
-              <span className="text-purple-400">Items:</span> {data.count}
-            </p>
-            {data.isGrouped && (
-              <div className="mt-2 pt-2 border-t border-gray-600">
-                <p className="text-yellow-400 text-xs mb-1">
-                  Contains {data.items.length} items:
-                </p>
-                <div className="text-xs text-gray-300 max-h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-                  {data.items.map((item, i) => (
-                    <div key={i} className="py-0.5">• {item.name} ({formatPercentage(item.percentage)})</div>
-                  ))}
-                </div>
-              </div>
-            )}
+          )}
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+const StickyTooltip = () => {
+  if (!stickyTooltip) return null;
+  
+  const data = stickyTooltip;
+  return (
+    <div 
+      className="absolute bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs z-50 pointer-events-auto"
+      style={{
+        right: '13px',
+        top: '250px'
+      }}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-white font-medium text-base">{data.name}</p>
+        <button
+          onClick={() => setStickyTooltip(null)}
+          className="text-gray-400 hover:text-white ml-2 text-sm"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="space-y-1">
+        <p className="text-gray-300 text-sm">
+          <span className="text-green-400">Value:</span> {formatCurrency(data.value)}
+        </p>
+        <p className="text-gray-300 text-sm">
+          <span className="text-blue-400">Share:</span> {formatPercentage(data.percentage)}
+        </p>
+        <p className="text-gray-300 text-sm">
+          <span className="text-purple-400">Items:</span> {data.count}
+        </p>
+        <div className="mt-2 pt-2 border-t border-gray-600">
+          <p className="text-yellow-400 text-xs mb-1">
+            Contains {data.items.length} items:
+          </p>
+          <div className="text-xs text-gray-300 max-h-20 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+            {data.items.map((item, i) => (
+              <div key={i} className="py-0.5">• {item.name} ({formatPercentage(item.percentage)})</div>
+            ))}
           </div>
         </div>
-      );
-    }
-    return null;
-  };
+      </div>
+    </div>
+  );
+};
 
   // Enhanced label rendering with minimum size
   const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percentage, name, startAngle, endAngle }) => {
@@ -317,21 +378,35 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
     setSelectedSlice(null);
   };
 
-  const handleSliceClick = (data, index) => {
-    // if (data.isGrouped) {
-    //   // Expand grouped slice
-    //   setShowSmallSlices(true);
-    // }
+const handleSliceClick = (data, index) => {
+  if (data.isGrouped) {
+    // For Others slice, check if it's currently selected
+    const isCurrentlySelected = selectedSlice === data.name;
+    
+    if (isCurrentlySelected) {
+      // If already selected, just deselect and close tooltip
+      setStickyTooltip(null);
+      setSelectedSlice(null);
+    } else {
+      // If not selected, select it and open sticky tooltip
+      setStickyTooltip(data);
+      setSelectedSlice(data.name);
+    }
+  } else {
+    // For regular slices, close sticky tooltip (intentional action) and toggle selection
+    setStickyTooltip(null);
     setSelectedSlice(selectedSlice === data.name ? null : data.name);
-  };
+  }
+};
 
   // Handle clicking outside the chart to deselect
   const handleChartContainerClick = (e) => {
-    // Only reset if clicking on the container itself, not on chart elements
-    if (e.target === e.currentTarget) {
-      setSelectedSlice(null);
-    }
-  };
+  // Only reset if clicking on the container itself, not on chart elements
+  if (e.target === e.currentTarget) {
+    setSelectedSlice(null);
+    setStickyTooltip(null); // Close sticky tooltip when clicking outside
+  }
+};
 
   const toggleOptions = [
     { id: 'type', label: 'By Type', description: 'Investment type distribution' },
@@ -342,7 +417,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   const TableView = () => (
     <div className="h-full overflow-auto">
     <table className="w-full text-sm">
-      <thead className="sticky top-0 bg-gray-800/90 backdrop-blur-sm"> {/* Made header sticky */}
+      <thead className="sticky top-0 bg-gray-800/90 backdrop-blur-sm">
         <tr className="border-b border-gray-600">
           <th className="text-left py-3 px-1 text-gray-300">Item</th>
           <th className="text-right py-3 text-gray-300">Value</th>
@@ -384,7 +459,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   );
 
   return (
-    <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 h-full flex flex-col" style={{ minHeight: '600px' }}>
+    <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 h-full flex flex-col relative" style={{ minHeight: '600px' }}>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-semibold text-white">Portfolio Distribution</h2>
@@ -497,7 +572,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
                 animationDuration={800}
                 onClick={handleSliceClick}
                 className="cursor-pointer"
-                minAngle={2} // Ensure minimum slice visibility
+                minAngle={2}
               >
                 {processedData.map((entry, index) => (
                   <Cell 
@@ -512,6 +587,8 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
               <Tooltip content={<CustomTooltip />} />
             </PieChart>
           </ResponsiveContainer>
+          {/* Add the sticky tooltip here, inside the chart container */}
+          <StickyTooltip />
         </div>
       ) : (
         <div className="flex-1 mb-6">
@@ -581,7 +658,23 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
                 className={`flex items-center justify-between py-2 px-3 rounded transition-colors cursor-pointer ${
                   selectedSlice === item.name ? 'bg-gray-700/50' : 'hover:bg-gray-700/20'
                 }`}
-                onClick={() => setSelectedSlice(selectedSlice === item.name ? null : item.name)}
+                onClick={() => {
+                  if (item.isGrouped) {
+                    // Handle Others slice like the chart click
+                    const isCurrentlySelected = selectedSlice === item.name;
+                    if (isCurrentlySelected) {
+                      setStickyTooltip(null);
+                      setSelectedSlice(null);
+                    } else {
+                      setStickyTooltip(item);
+                      setSelectedSlice(item.name);
+                    }
+                  } else {
+                    // Handle regular slices
+                    setStickyTooltip(null);
+                    setSelectedSlice(selectedSlice === item.name ? null : item.name);
+                  }
+                }}
               >
                 <div className="flex items-center space-x-3">
                   <div 
