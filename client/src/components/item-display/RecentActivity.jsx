@@ -231,28 +231,50 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
         </div>
       </div>
      
-      <div className="flex-1 flex flex-col justify-between">
-        {recentActivity.length > 0 ? (
-          <div className="space-y-3 flex-1">
+      <div className="flex-1 flex flex-col h-full">
+      {recentActivity.length > 0 ? (
+        <>
+          <div className="flex-1 flex flex-col" style={{ gap: '12px' }}>
             {visibleActivities.map((activity, index) => (
-              <ActivityItem
+              <div 
                 key={`${activity.type}-${activity.id || index}`}
-                activity={activity}
-                index={index}
-                cardHeight={cardHeight}
-                isCompact={isCompact}
-                isVeryCompact={isVeryCompact}
-                formatPrice={formatPrice}
-                dateOptions={dateOptions}
-              />
+                className="flex-1"
+                style={{ minHeight: `${Math.floor(cardHeight)}px` }}
+              >
+                <ActivityItem
+                  activity={activity}
+                  index={index}
+                  cardHeight={cardHeight}
+                  isCompact={isCompact}
+                  isVeryCompact={isVeryCompact}
+                  formatPrice={formatPrice}
+                  dateOptions={dateOptions}
+                />
+              </div>
             ))}
           </div>
-        ) : (
-          <div className="text-center py-8 text-gray-400 flex-1 flex flex-col justify-center">
-            <Activity className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p>No recent activity</p>
-          </div>
-        )}
+          
+          {/* Footer with additional info */}
+          {recentActivity.length > visibleItems && (
+            <div className="mt-4 pt-4 border-t border-gray-600/30 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <button className="text-sm text-orange-400 hover:text-orange-300 font-medium transition-colors">
+                  View all activity →
+                </button>
+                <span className="text-xs text-gray-500">
+                  +{recentActivity.length - visibleItems} more
+                </span>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="text-center py-8 text-gray-400 flex-1 flex flex-col justify-center">
+          <Activity className="w-12 h-12 mx-auto mb-2 opacity-50" />
+          <p>No recent activity</p>
+        </div>
+      )}
+
         
         {/* Footer with additional info */}
         {recentActivity.length > visibleItems && (

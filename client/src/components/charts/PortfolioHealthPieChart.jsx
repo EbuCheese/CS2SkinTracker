@@ -478,7 +478,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
       {/* Chart or Table View */}
       <div className="mb-6"></div>
       {viewMode === 'chart' ? (
-        <div className="flex-1 mb-6" style={{ minHeight: '260px' }} onClick={handleChartContainerClick}>
+        <div className="flex-1 mb-6" style={{ minHeight: '260px', maxHeight: '260px' }} onClick={handleChartContainerClick}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
