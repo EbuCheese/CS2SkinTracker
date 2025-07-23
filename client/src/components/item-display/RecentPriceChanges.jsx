@@ -317,7 +317,7 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
       
       {/* Content area that grows to fill space */}
       <div className="flex-grow flex flex-col overflow-hidden">
-        <div className="space-y-3 flex-grow">
+        <div className="space-y-4 flex-grow">
           {currentPageItems.map((investment) => (
             <InvestmentItem 
               key={investment.id}
