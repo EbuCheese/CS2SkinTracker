@@ -1,5 +1,40 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+
+const DistributionItem = React.memo(({ 
+  item, 
+  index, 
+  startIndex, 
+  isSelected, 
+  onClick,
+  getItemColor,
+  formatCurrency,
+  formatPercentage 
+}) => (
+  <div 
+    className={`flex items-center justify-between py-2 px-3 rounded transition-colors cursor-pointer ${
+      isSelected ? 'bg-gray-700/50' : 'hover:bg-gray-700/20'
+    }`}
+    onClick={onClick}
+  >
+    <div className="flex items-center space-x-3">
+      <div 
+        className={`w-3 h-3 rounded-full ${item.isGrouped ? 'ring-1 ring-gray-500' : ''}`}
+        style={{ backgroundColor: getItemColor(item, startIndex + index) }}
+      />
+      <span className={`text-sm ${item.isGrouped ? 'text-gray-400' : 'text-gray-300'}`}>
+        {item.name} {item.isGrouped && `(${item.items.length} items)`}
+      </span>
+    </div>
+    <div className="text-right">
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium text-green-400">{formatCurrency(item.value)}</span>
+        <span className="text-sm font-medium text-white">{formatPercentage(item.percentage)}</span>
+      </div>
+      <p className="text-xs text-gray-400">{item.count} items</p>
+    </div>
+  </div>
+));
 
 const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   const [activeToggle, setActiveToggle] = useState('type');
@@ -9,12 +44,22 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   const [selectedSlice, setSelectedSlice] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [stickyTooltip, setStickyTooltip] = useState(null);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
 
   // Reset selected slice when switching tabs or view modes
   useEffect(() => {
   setSelectedSlice(null);
   setStickyTooltip(null);
 }, [activeToggle, viewMode, showSmallSlices]);
+
+// simple debounce effect for search
+useEffect(() => {
+  const timer = setTimeout(() => {
+    setDebouncedSearchTerm(searchTerm);
+  }, 300);
+  
+  return () => clearTimeout(timer);
+}, [searchTerm]);
 
   // Memoized color palettes
   const colors = useMemo(() => ({
@@ -163,7 +208,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
     
     // Filter by search term
     const filteredData = rawData.filter(item =>
-      item.name.toLowerCase().includes(searchTerm.toLowerCase())
+      item.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
     );
     
     // Only apply small slice grouping logic for item view and chart mode
@@ -204,17 +249,17 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
     
     // For type view or table view, return filtered data as-is (no grouping)
     return filteredData.sort((a, b) => b.percentage - a.percentage);
-  }, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, showSmallSlices, searchTerm, viewMode]);
+  }, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, showSmallSlices, debouncedSearchTerm, viewMode]);
 
   // Table data - always shows all items without grouping
   const tableData = useMemo(() => {
-    const rawData = activeToggle === 'item' ? consolidatedBreakdown : (actualPortfolio.typeBreakdown || []);
-    
-    // Filter by search term
-    return rawData.filter(item =>
-      item.name.toLowerCase().includes(searchTerm.toLowerCase())
-    ).sort((a, b) => b.percentage - a.percentage);
-  }, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, searchTerm]);
+  const rawData = activeToggle === 'item' ? consolidatedBreakdown : (actualPortfolio.typeBreakdown || []);
+  
+  // Use debouncedSearchTerm instead of searchTerm
+  return rawData.filter(item =>
+    item.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+  ).sort((a, b) => b.percentage - a.percentage);
+}, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, debouncedSearchTerm]);
 
   // Memoized color getter
   const getItemColor = useMemo(() => (item, index) => {
@@ -239,28 +284,75 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   const hasSmallSlices = activeToggle === 'item' && consolidatedBreakdown.some(item => item.percentage < 2);
 
 // Enhanced tooltip that shows for ALL slices
-const CustomTooltip = ({ active, payload, coordinate }) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    
-    // Don't close sticky tooltip on hover - let it stay until user clicks
-    // Only prevent showing hover tooltip if sticky is open for the same slice
-    if (data.isGrouped && stickyTooltip && stickyTooltip.name === data.name) {
-      return null; // Don't show hover tooltip when sticky is open for same slice
+  const CustomTooltip = React.memo(({ active, payload, coordinate }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      
+      // Don't close sticky tooltip on hover - let it stay until user clicks
+      // Only prevent showing hover tooltip if sticky is open for the same slice
+      if (data.isGrouped && stickyTooltip && stickyTooltip.name === data.name) {
+        return null; // Don't show hover tooltip when sticky is open for same slice
+      }
+      
+      // Position non-Others tooltips more on the left side to avoid overlap with sticky tooltip
+      const tooltipStyle = data.isGrouped ? {} : {
+        transform: 'translateX(-65%)',
+        marginLeft: '-15px'
+      };
+      
+      return (
+        <div 
+          className="bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs"
+          style={tooltipStyle}
+        >
+          <p className="text-white font-medium text-base mb-2">{data.name}</p>
+          <div className="space-y-1">
+            <p className="text-gray-300 text-sm">
+              <span className="text-green-400">Value:</span> {formatCurrency(data.value)}
+            </p>
+            <p className="text-gray-300 text-sm">
+              <span className="text-blue-400">Share:</span> {formatPercentage(data.percentage)}
+            </p>
+            <p className="text-gray-300 text-sm">
+              <span className="text-purple-400">Items:</span> {data.count}
+            </p>
+            {/* Show grouped items hint in hover tooltip */}
+            {data.isGrouped && (
+              <p className="text-yellow-400 text-xs mt-1">
+                {selectedSlice === data.name 
+                  ? `Click to deselect • ${data.items.length} items`
+                  : `Click to see ${data.items.length} grouped items`
+                }
+              </p>
+            )}
+          </div>
+        </div>
+      );
     }
+    return null;
+  });
+
+  const StickyTooltip = React.memo(() => {
+    if (!stickyTooltip) return null;
     
-    // Position non-Others tooltips more on the left side to avoid overlap with sticky tooltip
-    const tooltipStyle = data.isGrouped ? {} : {
-      transform: 'translateX(-65%)',
-      marginLeft: '-15px'
-    };
-    
+    const data = stickyTooltip;
     return (
       <div 
-        className="bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs"
-        style={tooltipStyle}
+        className="absolute bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs z-50 pointer-events-auto"
+        style={{
+          right: '13px',
+          top: '250px'
+        }}
       >
-        <p className="text-white font-medium text-base mb-2">{data.name}</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-white font-medium text-base">{data.name}</p>
+          <button
+            onClick={() => setStickyTooltip(null)}
+            className="text-gray-400 hover:text-white ml-2 text-sm"
+          >
+            ✕
+          </button>
+        </div>
         <div className="space-y-1">
           <p className="text-gray-300 text-sm">
             <span className="text-green-400">Value:</span> {formatCurrency(data.value)}
@@ -271,67 +363,20 @@ const CustomTooltip = ({ active, payload, coordinate }) => {
           <p className="text-gray-300 text-sm">
             <span className="text-purple-400">Items:</span> {data.count}
           </p>
-          {/* Show grouped items hint in hover tooltip */}
-          {data.isGrouped && (
-            <p className="text-yellow-400 text-xs mt-1">
-              {selectedSlice === data.name 
-                ? `Click to deselect • Contains ${data.items.length} items`
-                : `Click to see ${data.items.length} grouped items`
-              }
+          <div className="mt-2 pt-2 border-t border-gray-600">
+            <p className="text-yellow-400 text-xs mb-1">
+              Contains {data.items.length} items:
             </p>
-          )}
-        </div>
-      </div>
-    );
-  }
-  return null;
-};
-
-const StickyTooltip = () => {
-  if (!stickyTooltip) return null;
-  
-  const data = stickyTooltip;
-  return (
-    <div 
-      className="absolute bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs z-50 pointer-events-auto"
-      style={{
-        right: '13px',
-        top: '250px'
-      }}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-white font-medium text-base">{data.name}</p>
-        <button
-          onClick={() => setStickyTooltip(null)}
-          className="text-gray-400 hover:text-white ml-2 text-sm"
-        >
-          ✕
-        </button>
-      </div>
-      <div className="space-y-1">
-        <p className="text-gray-300 text-sm">
-          <span className="text-green-400">Value:</span> {formatCurrency(data.value)}
-        </p>
-        <p className="text-gray-300 text-sm">
-          <span className="text-blue-400">Share:</span> {formatPercentage(data.percentage)}
-        </p>
-        <p className="text-gray-300 text-sm">
-          <span className="text-purple-400">Items:</span> {data.count}
-        </p>
-        <div className="mt-2 pt-2 border-t border-gray-600">
-          <p className="text-yellow-400 text-xs mb-1">
-            Contains {data.items.length} items:
-          </p>
-          <div className="text-xs text-gray-300 max-h-20 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-            {data.items.map((item, i) => (
-              <div key={i} className="py-0.5">• {item.name} ({formatPercentage(item.percentage)})</div>
-            ))}
+            <div className="text-xs text-gray-300 max-h-20 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+              {data.items.map((item, i) => (
+                <div key={i} className="py-0.5">• {item.name} ({formatPercentage(item.percentage)})</div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  });
 
   // Enhanced label rendering with minimum size
   const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percentage, name, startAngle, endAngle }) => {
@@ -371,42 +416,52 @@ const StickyTooltip = () => {
   const startIndex = currentPage * ITEMS_PER_PAGE;
   const currentPageData = currentData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-  const handleToggleChange = (newToggle) => {
-    setActiveToggle(newToggle);
-    setCurrentPage(0);
-    setSearchTerm('');
-    setSelectedSlice(null);
-  };
-
-const handleSliceClick = (data, index) => {
-  if (data.isGrouped) {
-    // For Others slice, check if it's currently selected
-    const isCurrentlySelected = selectedSlice === data.name;
-    
+  const handleDistributionItemClick = useCallback((item) => {
+  if (item.isGrouped) {
+    const isCurrentlySelected = selectedSlice === item.name;
     if (isCurrentlySelected) {
-      // If already selected, just deselect and close tooltip
       setStickyTooltip(null);
       setSelectedSlice(null);
     } else {
-      // If not selected, select it and open sticky tooltip
+      setStickyTooltip(item);
+      setSelectedSlice(item.name);
+    }
+  } else {
+    setStickyTooltip(null);
+    setSelectedSlice(selectedSlice === item.name ? null : item.name);
+  }
+}, [selectedSlice]);
+
+  const handleToggleChange = useCallback((newToggle) => {
+  setActiveToggle(newToggle);
+  setCurrentPage(0);
+  setSearchTerm('');
+  setSelectedSlice(null);
+}, []);
+
+const handleSliceClick = useCallback((data, index) => {
+  if (data.isGrouped) {
+    const isCurrentlySelected = selectedSlice === data.name;
+    if (isCurrentlySelected) {
+      setStickyTooltip(null);
+      setSelectedSlice(null);
+    } else {
       setStickyTooltip(data);
       setSelectedSlice(data.name);
     }
   } else {
-    // For regular slices, close sticky tooltip (intentional action) and toggle selection
     setStickyTooltip(null);
     setSelectedSlice(selectedSlice === data.name ? null : data.name);
   }
-};
+}, [selectedSlice]);
 
   // Handle clicking outside the chart to deselect
-  const handleChartContainerClick = (e) => {
-  // Only reset if clicking on the container itself, not on chart elements
+  const handleChartContainerClick = useCallback((e) => {
   if (e.target === e.currentTarget) {
     setSelectedSlice(null);
-    setStickyTooltip(null); // Close sticky tooltip when clicking outside
+    setStickyTooltip(null);
   }
-};
+}, []);
 
   const toggleOptions = [
     { id: 'type', label: 'By Type', description: 'Investment type distribution' },
@@ -653,46 +708,17 @@ const handleSliceClick = (data, index) => {
           </div>
           <div className="space-y-1" style={{ minHeight: '255px' }}>
             {currentPageData.map((item, index) => (
-              <div 
-                key={`${item.name}-${index}`} 
-                className={`flex items-center justify-between py-2 px-3 rounded transition-colors cursor-pointer ${
-                  selectedSlice === item.name ? 'bg-gray-700/50' : 'hover:bg-gray-700/20'
-                }`}
-                onClick={() => {
-                  if (item.isGrouped) {
-                    // Handle Others slice like the chart click
-                    const isCurrentlySelected = selectedSlice === item.name;
-                    if (isCurrentlySelected) {
-                      setStickyTooltip(null);
-                      setSelectedSlice(null);
-                    } else {
-                      setStickyTooltip(item);
-                      setSelectedSlice(item.name);
-                    }
-                  } else {
-                    // Handle regular slices
-                    setStickyTooltip(null);
-                    setSelectedSlice(selectedSlice === item.name ? null : item.name);
-                  }
-                }}
-              >
-                <div className="flex items-center space-x-3">
-                  <div 
-                    className={`w-3 h-3 rounded-full ${item.isGrouped ? 'ring-1 ring-gray-500' : ''}`}
-                    style={{ backgroundColor: getItemColor(item, startIndex + index) }}
-                  />
-                  <span className={`text-sm ${item.isGrouped ? 'text-gray-400' : 'text-gray-300'}`}>
-                    {item.name} {item.isGrouped && `(${item.items.length} items)`}
-                  </span>
-                </div>
-                <div className="text-right">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-green-400">{formatCurrency(item.value)}</span>
-                    <span className="text-sm font-medium text-white">{formatPercentage(item.percentage)}</span>
-                  </div>
-                  <p className="text-xs text-gray-400">{item.count} items</p>
-                </div>
-              </div>
+              <DistributionItem
+                key={`${item.name}-${index}`}
+                item={item}
+                index={index}
+                startIndex={startIndex}
+                isSelected={selectedSlice === item.name}
+                onClick={() => handleDistributionItemClick(item)}
+                getItemColor={getItemColor}
+                formatCurrency={formatCurrency}
+                formatPercentage={formatPercentage}
+              />
             ))}
           </div>
         </div>
