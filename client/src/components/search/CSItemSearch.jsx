@@ -1,8 +1,8 @@
-// CSItemSearch.jsx - Updated to work with preprocessed CSDataContext
+// CSItemSearch.jsx - Updated to use custom useAdvancedDebounce hook
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Search } from 'lucide-react';
-import { debounce } from 'lodash';
 import { useCSData } from '@/contexts/CSDataContext';
+import { useAdvancedDebounce } from '@/hooks/util';
 
 const CSItemSearch = ({ 
   type = 'skins', 
@@ -24,40 +24,40 @@ const CSItemSearch = ({
 
   // Get processed data for current type
   const typeData = useMemo(() => {
-  const rawData = getSearchIndexForType(type);
-  
-  if (!rawData || !excludeSpecialItems) {
-    return rawData;
-  }
-
-  // Filter out knives and gloves from the items array
-  const filteredItems = rawData.items.filter(item => {
-    // Check if item exists and has required properties
-    if (!item || typeof item !== 'object') return false;
+    const rawData = getSearchIndexForType(type);
     
-    const baseName = item.baseName || '';
-    const name = item.name || '';
-    
-    // Filter out items that start with ★ (knives and gloves)
-    return !baseName.startsWith('★') && !name.startsWith('★');
-  });
+    if (!rawData || !excludeSpecialItems) {
+      return rawData;
+    }
 
-  // Rebuild the search index with filtered items
-  const newSearchIndex = new Map();
-  filteredItems.forEach((item, index) => {
-    item.searchTokens.forEach(token => {
-      if (!newSearchIndex.has(token)) {
-        newSearchIndex.set(token, []);
-      }
-      newSearchIndex.get(token).push(index);
+    // Filter out knives and gloves from the items array
+    const filteredItems = rawData.items.filter(item => {
+      // Check if item exists and has required properties
+      if (!item || typeof item !== 'object') return false;
+      
+      const baseName = item.baseName || '';
+      const name = item.name || '';
+      
+      // Filter out items that start with ★ (knives and gloves)
+      return !baseName.startsWith('★') && !name.startsWith('★');
     });
-  });
 
-  return {
-    items: filteredItems,
-    searchIndex: newSearchIndex
-  };
-}, [type, searchIndices, getSearchIndexForType, excludeSpecialItems]);
+    // Rebuild the search index with filtered items
+    const newSearchIndex = new Map();
+    filteredItems.forEach((item, index) => {
+      item.searchTokens.forEach(token => {
+        if (!newSearchIndex.has(token)) {
+          newSearchIndex.set(token, []);
+        }
+        newSearchIndex.get(token).push(index);
+      });
+    });
+
+    return {
+      items: filteredItems,
+      searchIndex: newSearchIndex
+    };
+  }, [type, searchIndices, getSearchIndexForType, excludeSpecialItems]);
 
   // Setup intersection observer for smart image loading
   useEffect(() => {
@@ -146,9 +146,12 @@ const CSItemSearch = ({
     setIsOpen(searchResults.length > 0);
   }, [typeData, maxResults]);
 
-  const debouncedSearch = useMemo(
-    () => debounce(performSearch, 200),
-    [performSearch]
+  // Use custom debounce hook instead of lodash
+  const { debouncedFunction: debouncedSearch } = useAdvancedDebounce(
+    performSearch, 
+    200, 
+    { trailing: true }, // Only execute on trailing edge
+    [performSearch] // Dependencies
   );
 
   const handleInputChange = useCallback((e) => {
