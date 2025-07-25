@@ -4,9 +4,8 @@ import { PortfolioPerformanceChart, PortfolioHealthPieChart } from '@/components
 import { RecentPriceChanges, RecentActivity } from '@/components/item-display';
 import { QuickAddItemForm, QuickSellModal } from '@/components/forms';
 import { supabase } from '@/supabaseClient';
-import { useScrollLock } from '@/hooks/useScrollLock';
-import { useCalculatePortfolioHealth } from '@/hooks/useCalculatePortfolioHealth';
-import { useAdvancedDebounce } from '@/hooks/useAdvancedDebounce';
+import { useScrollLock, useAdvancedDebounce } from '@/hooks/util';
+import { useCalculatePortfolioHealth } from '@/hooks/portfolio';
 
 const createQuickActions = (setShowQuickAdd, setShowQuickSell) => [
   {

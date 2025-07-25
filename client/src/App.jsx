@@ -1,6 +1,6 @@
 // App.js - Updated with CS Data Provider
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { useAuth } from './hooks/useAuth';
+import { useAuth } from '@/hooks/auth';
 import { CSDataProvider } from './contexts/CSDataContext';
 import './index.css'
 import Home from './pages/Home'

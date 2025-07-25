@@ -1,9 +1,8 @@
 import React, { useState, useMemo, useCallback, memo, useEffect, useReducer } from 'react';
 import { X, Plus, Loader2, Search, FileText, Upload, Minus } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
-import { CSItemSearch } from '../search';
-import VariantControls from './VariantControls';
-import ConditionSelector from './ConditionSelector';
+import { CSItemSearch } from '@/components/search';
+import { VariantControls, ConditionSelector } from '@/components/forms';
 
 // Shared constants
 const INITIAL_FORM_DATA = {

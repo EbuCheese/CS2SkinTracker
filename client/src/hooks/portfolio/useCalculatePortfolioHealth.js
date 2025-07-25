@@ -1,6 +1,5 @@
 import { useMemo, useCallback } from 'react';
 
-// Move consolidateItems function to the hook file
 const consolidateItems = (() => {
   const cache = new Map();
   return (itemName) => {

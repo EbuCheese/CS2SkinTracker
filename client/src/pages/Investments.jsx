@@ -3,7 +3,7 @@ import { Search, Plus, X, DollarSign, TrendingUp, TrendingDown, Loader2 } from '
 import { supabase } from '@/supabaseClient';
 import { ItemCard } from '@/components/item-display';
 import { AddItemForm } from '@/components/forms'
-import { useScrollLock } from '@/hooks/useScrollLock';
+import { useScrollLock } from '@/hooks/util';
 
 const InvestmentsPage = ({ userSession }) => {
   const [activeTab, setActiveTab] = useState('All');
