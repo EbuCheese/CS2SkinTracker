@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, memo, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, memo, useEffect, useReducer } from 'react';
 import { X, Plus, Loader2, Search, FileText, Upload, Minus } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 import { CSItemSearch } from '../search';
@@ -14,6 +14,7 @@ const INITIAL_FORM_DATA = {
   buy_price: '',
   quantity: 1,
   image_url: '',
+  base_image_url: '',
   custom_image_url: '',
   notes: '',
   type: '',
@@ -23,6 +24,17 @@ const INITIAL_FORM_DATA = {
   selectedItemId: null,         
   selectedSkinId: null
 };
+
+const CATEGORIES = [
+  { value: 'liquids', label: 'Liquids', description: 'Weapon skins, knives, gloves' },
+  { value: 'cases', label: 'Cases', description: 'Weapon cases and capsules' },
+  { value: 'crafts', label: 'Crafts', description: 'Custom weapon crafts' },
+  { value: 'agents', label: 'Agents', description: 'Player character agents' },
+  { value: 'stickers', label: 'Stickers', description: 'Weapon stickers' },
+  { value: 'keychains', label: 'Keychains', description: 'Weapon keychains (charms)' },
+  { value: 'graffiti', label: 'Graffiti', description: 'Graffiti sprays' },
+  { value: 'patches', label: 'Patches', description: 'Agent patches' }
+];
 
 const TYPE_MAP = {
   'Liquids': 'liquid',
@@ -66,6 +78,67 @@ const detectItemType = (searchType) => {
   };
   
   return typeMapping[searchType] || 'Liquids';
+};
+
+const validateForm = (formData, currentCategory, selectedCategory) => {
+  if (!selectedCategory) return false;
+  
+  const baseValidation = formData.buy_price &&
+    !isNaN(parseFloat(formData.buy_price)) &&
+    parseFloat(formData.buy_price) > 0 &&
+    formData.quantity >= 1;
+
+  if (currentCategory === 'Crafts') {
+    return baseValidation &&
+           formData.skin_name?.trim() &&
+           formData.isSkinSelected &&
+           formData.condition &&
+           formData.name.trim();
+  } else {
+    return baseValidation &&
+           formData.name.trim() &&
+           formData.isItemSelected &&
+           (!['Liquids'].includes(currentCategory) || formData.condition);
+  }
+};
+
+const formDataReducer = (state, action) => {
+  switch (action.type) {
+    case 'UPDATE_FIELD':
+      const newState = { ...state, [action.field]: action.value };
+      
+      // Reset selection state when user types in search fields
+      if (action.field === 'name' && action.currentCategory !== 'Crafts') {
+        return {
+          ...newState,
+          isItemSelected: false,
+          selectedItemId: null,
+          image_url: '',
+          hasStatTrak: false,
+          hasSouvenir: false
+        };
+      }
+      
+      if (action.field === 'skin_name') {
+        return {
+          ...newState,
+          isSkinSelected: false,
+          selectedSkinId: null,
+          image_url: '',
+          hasStatTrak: false,
+          hasSouvenir: false
+        };
+      }
+      
+      return newState;
+    case 'RESET':
+      return INITIAL_FORM_DATA;
+    case 'SET_ITEM_SELECTED':
+      // Handle item selection logic - merge payload with current state
+      return { ...state, ...action.payload };
+    default:
+      return state;
+  }
 };
 
 // Memoized sub-components
@@ -193,7 +266,7 @@ const QuantitySelector = memo(({ quantity, onQuantityChange }) => (
 ));
 
 const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) => {
-  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
+  const [formData, dispatch] = useReducer(formDataReducer, INITIAL_FORM_DATA);
   const [submitting, setSubmitting] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(''); // Category selection state
   const [searchValue, setSearchValue] = useState('');
@@ -201,43 +274,12 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
   const [uploadingImage, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
-  // Available categories for selection
-  const categories = [
-    { value: 'liquids', label: 'Liquids', description: 'Weapon skins and knives' },
-    { value: 'cases', label: 'Cases', description: 'Weapon cases and capsules' },
-    { value: 'crafts', label: 'Crafts', description: 'Custom crafted items' },
-    { value: 'agents', label: 'Agents', description: 'Player character agents' },
-    { value: 'stickers', label: 'Stickers', description: 'Weapon stickers' },
-    { value: 'keychains', label: 'Keychains', description: 'Weapon keychains' },
-    { value: 'graffiti', label: 'Graffiti', description: 'Graffiti sprays' },
-    { value: 'patches', label: 'Patches', description: 'Agent patches' }
-  ];
-
   const currentCategory = useMemo(() => detectItemType(selectedCategory), [selectedCategory]);
 
-  const isFormValid = useMemo(() => {
-  if (!selectedCategory) return false;
-  
-  const baseValidation = formData.buy_price &&
-    !isNaN(parseFloat(formData.buy_price)) &&
-    parseFloat(formData.buy_price) > 0 &&
-    formData.quantity >= 1;
-
-  if (currentCategory === 'Crafts') {
-    // For crafts: need skin selected, condition, and custom name
-    return baseValidation &&
-           formData.skin_name?.trim() &&
-           formData.isSkinSelected &&
-           formData.condition &&
-           formData.name.trim(); // Custom craft name
-  } else {
-    // For other types: need item selected and condition (for Liquids)
-    return baseValidation &&
-           formData.name.trim() &&
-           formData.isItemSelected &&
-           (!['Liquids'].includes(currentCategory) || formData.condition);
-  }
-}, [formData.name, formData.buy_price, formData.quantity, formData.condition, formData.skin_name, formData.isItemSelected, formData.isSkinSelected, currentCategory, selectedCategory]);
+  const isFormValid = useMemo(() => 
+  validateForm(formData, currentCategory, selectedCategory), 
+  [formData, currentCategory, selectedCategory]
+);
 
   // close form with esc key
   useEffect(() => {
@@ -258,7 +300,7 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
 
   // Reset form when category changes
   useEffect(() => {
-    setFormData(INITIAL_FORM_DATA);
+    dispatch({ type: 'RESET' });
     setSearchValue('');
     setShowForm(false);
   }, [selectedCategory]);
@@ -273,100 +315,83 @@ const handleSearchChange = useCallback((e) => {
   setSearchValue(value);
   
   // Update form data name for search component and reset selection state
-  setFormData(prev => ({ 
-    ...prev, 
-    name: value,
-    isItemSelected: false,     // Reset selection when typing
-    selectedItemId: null,      // Clear selected item
-    image_url: '',            // Clear image
-    hasStatTrak: false,       // Reset variant flags
-    hasSouvenir: false  
-  }));
-}, []);
+  dispatch({ 
+    type: 'UPDATE_FIELD', 
+    field: 'name', 
+    value: value,
+    currentCategory 
+  });
+}, [currentCategory]);
 
   const handleItemSelect = useCallback((item) => {
   const detectedCategory = detectItemType(selectedCategory);
   
-  setFormData(prev => ({
-    ...prev,
-    name: item.name,
-    image_url: item.image || '',
-    type: CATEGORY_TO_DB_TYPE[detectedCategory],
-    detectedCategory: detectedCategory,
-    stattrak: false,
-    souvenir: false,
-    selectedVariant: 'normal',
-    variant: 'normal',
-    hasStatTrak: item.hasStatTrak || false,
-    hasSouvenir: item.hasSouvenir || false,
-    isItemSelected: true,        // Mark as selected
-    selectedItemId: item.id || item.name  // Store item identifier
-  }));
+  dispatch({
+    type: 'SET_ITEM_SELECTED',
+    payload: {
+      name: item.name,
+      image_url: item.image || '',
+      type: CATEGORY_TO_DB_TYPE[detectedCategory],
+      detectedCategory: detectedCategory,
+      stattrak: false,
+      souvenir: false,
+      selectedVariant: 'normal',
+      variant: 'normal',
+      hasStatTrak: item.hasStatTrak || false,
+      hasSouvenir: item.hasSouvenir || false,
+      isItemSelected: true,
+      selectedItemId: item.id || item.name
+    }
+  });
   
   setSearchValue(item.name);
 }, [selectedCategory]);
 
 const handleSkinSelect = useCallback((item) => {
-  setFormData(prev => ({ 
-    ...prev, 
-    skin_name: item.name,
-    image_url: item.image || '',
-    stattrak: false,
-    souvenir: false,
-    selectedVariant: 'normal',
-    variant: 'normal',
-    hasStatTrak: item.hasStatTrak || false,
-    hasSouvenir: item.hasSouvenir || false,
-    isSkinSelected: true,        // Mark as selected
-    selectedSkinId: item.id || item.name  // Store skin identifier
-  }));
-}, []);
+  dispatch({
+    type: 'SET_ITEM_SELECTED',
+    payload: {
+      skin_name: item.name,
+      image_url: formData.custom_image_url || item.image || '',
+      stattrak: false,
+      souvenir: false,
+      selectedVariant: 'normal',
+      variant: 'normal',
+      hasStatTrak: item.hasStatTrak || false,
+      hasSouvenir: item.hasSouvenir || false,
+      isSkinSelected: true,
+      selectedSkinId: item.id || item.name,
+      base_image_url: item.image || ''
+    }
+  });
+}, [formData.custom_image_url]);
 
   const handleVariantChange = useCallback((variant) => {
-    setFormData(prev => ({
-      ...prev,
+  dispatch({
+    type: 'SET_ITEM_SELECTED',
+    payload: {
       stattrak: variant === 'stattrak',
       souvenir: variant === 'souvenir',
       selectedVariant: variant,
       variant: variant
-    }));
-  }, []);
+    }
+  });
+}, []);
 
   const handleConditionChange = useCallback((condition) => {
-    setFormData(prev => ({ ...prev, condition }));
-  }, []);
+  dispatch({ type: 'UPDATE_FIELD', field: 'condition', value: condition });
+}, []);
 
   const handleQuantityChange = useCallback((delta) => {
-    setFormData(prev => ({
-      ...prev,
-      quantity: Math.max(1, Math.min(9999, prev.quantity + delta))
-    }));
-  }, []);
+  dispatch({
+    type: 'UPDATE_FIELD',
+    field: 'quantity',
+    value: Math.max(1, Math.min(9999, formData.quantity + delta))
+  });
+}, [formData.quantity]);
 
 const handleFormDataChange = useCallback((field, value) => {
-  setFormData(prev => {
-    const newData = { ...prev, [field]: value };
-    
-    // Reset selection state when user types in search fields
-    if (field === 'name' && currentCategory !== 'Crafts') {
-      // Only clear image for non-crafts when name changes (name is search field)
-      newData.isItemSelected = false;
-      newData.selectedItemId = null;
-      newData.image_url = '';
-      newData.hasStatTrak = false;
-      newData.hasSouvenir = false;
-    }
-    
-    if (field === 'skin_name') {
-      newData.isSkinSelected = false;
-      newData.selectedSkinId = null;
-      newData.image_url = '';
-      newData.hasStatTrak = false;
-      newData.hasSouvenir = false;
-    }
-    
-    return newData;
-  });
+  dispatch({ type: 'UPDATE_FIELD', field, value, currentCategory });
 }, [currentCategory]);
 
   // Image processing functions
@@ -414,36 +439,40 @@ const handleFormDataChange = useCallback((field, value) => {
   }, []);
 
   const processImageFile = useCallback(async (file) => {
-    if (!file?.type.startsWith('image/') || file.size > 10 * 1024 * 1024) {
-      alert(!file?.type.startsWith('image/') ? 'Please select a valid image file' : 'Image must be less than 10MB');
-      return;
+  if (!file?.type.startsWith('image/') || file.size > 10 * 1024 * 1024) {
+    alert(!file?.type.startsWith('image/') ? 'Please select a valid image file' : 'Image must be less than 10MB');
+    return;
+  }
+  
+  try {
+    setIsUploading(true);
+    
+    let quality = 0.8;
+    let compressedBlob = await compressImage(file, 800, 600, quality);
+    
+    if (compressedBlob.size > 200 * 1024) {
+      quality = 0.6;
+      compressedBlob = await compressImage(file, 600, 450, quality);
     }
     
-    try {
-      setIsUploading(true);
-      
-      let quality = 0.8;
-      let compressedBlob = await compressImage(file, 800, 600, quality);
-      
-      if (compressedBlob.size > 200 * 1024) {
-        quality = 0.6;
-        compressedBlob = await compressImage(file, 600, 450, quality);
-      }
-      
-      const base64 = await blobToBase64(compressedBlob);
-      setFormData(prev => ({ 
-        ...prev, 
+    const base64 = await blobToBase64(compressedBlob);
+    dispatch({
+      type: 'SET_ITEM_SELECTED',
+      payload: {
         custom_image_url: base64,
-        image_url: base64
-      }));
-      
-    } catch (error) {
-      console.error('Error processing image:', error);
-      alert('Error processing image. Please try again.');
-    } finally {
-      setIsUploading(false);
-    }
-  }, [compressImage, blobToBase64]);
+        image_url: base64,
+        // Preserve base_image_url if it exists
+        ...(formData.base_image_url && { base_image_url: formData.base_image_url })
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error processing image:', error);
+    alert('Error processing image. Please try again.');
+  } finally {
+    setIsUploading(false);
+  }
+}, [compressImage, blobToBase64, formData.base_image_url]);
 
   const handleDrop = useCallback(async (e) => {
     e.preventDefault();
@@ -462,8 +491,14 @@ const handleFormDataChange = useCallback((field, value) => {
   }, [processImageFile]);
 
   const handleRemoveImage = useCallback(() => {
-    setFormData(prev => ({ ...prev, custom_image_url: '' }));
-  }, []);
+  dispatch({ 
+    type: 'SET_ITEM_SELECTED',
+    payload: {
+      custom_image_url: '',
+      image_url: formData.base_image_url || ''
+    }
+  });
+}, [formData.base_image_url]);
 
 const handleSubmit = useCallback(async () => {
   if (!isFormValid || !userSession?.id) {
@@ -518,11 +553,11 @@ const handleSubmit = useCallback(async () => {
 }, [isFormValid, userSession, formData, selectedCategory, onAdd, onClose]);
 
   const handleReset = useCallback(() => {
-    setSelectedCategory('');
-    setFormData(INITIAL_FORM_DATA);
-    setSearchValue('');
-    setShowForm(false);
-  }, []);
+  setSelectedCategory('');
+  dispatch({ type: 'RESET' });
+  setSearchValue('');
+  setShowForm(false);
+}, []);
 
   const handleBack = useCallback(() => {
     setSelectedCategory('');
@@ -548,7 +583,7 @@ const handleSubmit = useCallback(async () => {
         <div className="space-y-6">
           <p className="text-gray-300 text-sm mb-4">Select a category to get started:</p>
           <div className="grid grid-cols-2 gap-3">
-            {categories.map(category => (
+            {CATEGORIES.map(category => (
               <button
                 key={category.value}
                 onClick={() => handleCategorySelect(category.value)}
@@ -574,7 +609,7 @@ const handleSubmit = useCallback(async () => {
               ← Back to categories
             </button>
             <span className="text-gray-400 text-sm">
-              Adding: {categories.find(c => c.value === selectedCategory)?.label}
+              Adding: {CATEGORIES.find(c => c.value === selectedCategory)?.label}
             </span>
           </div>
 
@@ -775,7 +810,7 @@ const handleSubmit = useCallback(async () => {
                 max="999999"
                 placeholder="0.00"
                 value={formData.buy_price}
-                onChange={(e) => setFormData(prev => ({ ...prev, buy_price: e.target.value }))}
+                onChange={(e) => dispatch({ type: 'UPDATE_FIELD', field: 'buy_price', value: e.target.value })}
                 className="w-full pl-7 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors text-sm"
                 required
               />

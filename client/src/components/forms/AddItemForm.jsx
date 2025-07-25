@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, memo, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, memo, useEffect, useReducer } from 'react';
 import { X, Upload, Plus, Minus, Loader2, FileText } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 import { CSItemSearch } from '../search';
@@ -14,6 +14,7 @@ const INITIAL_FORM_DATA = {
   buy_price: '',
   quantity: 1,
   image_url: '',
+  base_image_url: '',
   notes: '',
   isItemSelected: false,
   isSkinSelected: false,
@@ -163,8 +164,46 @@ const QuantitySelector = memo(({ quantity, onQuantityChange }) => (
   </div>
 ));
 
+const formDataReducer = (state, action) => {
+  switch (action.type) {
+    case 'UPDATE_FIELD':
+      const newState = { ...state, [action.field]: action.value };
+      
+      // Reset selection state when user types in search fields
+      if (action.field === 'name' && action.currentType !== 'Crafts') {
+        return {
+          ...newState,
+          isItemSelected: false,
+          selectedItemId: null,
+          image_url: '',
+          hasStatTrak: false,
+          hasSouvenir: false
+        };
+      }
+      
+      if (action.field === 'skin_name') {
+        return {
+          ...newState,
+          isSkinSelected: false,
+          selectedSkinId: null,
+          image_url: '',
+          hasStatTrak: false,
+          hasSouvenir: false
+        };
+      }
+      
+      return newState;
+    case 'RESET':
+      return INITIAL_FORM_DATA;
+    case 'SET_ITEM_SELECTED':
+      return { ...state, ...action.payload };
+    default:
+      return state;
+  }
+};
+
 const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
-  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
+  const [formData, dispatch] = useReducer(formDataReducer, INITIAL_FORM_DATA);
   const [submitting, setSubmitting] = useState(false);
   const [uploadingImage, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -258,36 +297,40 @@ const handleBackdropClick = useCallback((e) => {
   }, []);
 
   const processImageFile = useCallback(async (file) => {
-    if (!file?.type.startsWith('image/') || file.size > 10 * 1024 * 1024) {
-      alert(!file?.type.startsWith('image/') ? 'Please select a valid image file' : 'Image must be less than 10MB');
-      return;
+  if (!file?.type.startsWith('image/') || file.size > 10 * 1024 * 1024) {
+    alert(!file?.type.startsWith('image/') ? 'Please select a valid image file' : 'Image must be less than 10MB');
+    return;
+  }
+  
+  try {
+    setIsUploading(true);
+    
+    let quality = 0.8;
+    let compressedBlob = await compressImage(file, 800, 600, quality);
+    
+    if (compressedBlob.size > 200 * 1024) {
+      quality = 0.6;
+      compressedBlob = await compressImage(file, 600, 450, quality);
     }
     
-    try {
-      setIsUploading(true);
-      
-      let quality = 0.8;
-      let compressedBlob = await compressImage(file, 800, 600, quality);
-      
-      if (compressedBlob.size > 200 * 1024) {
-        quality = 0.6;
-        compressedBlob = await compressImage(file, 600, 450, quality);
-      }
-      
-      const base64 = await blobToBase64(compressedBlob);
-      setFormData(prev => ({ 
-        ...prev, 
+    const base64 = await blobToBase64(compressedBlob);
+    dispatch({
+      type: 'SET_ITEM_SELECTED',
+      payload: {
         custom_image_url: base64,
-        image_url: base64
-      }));
-      
-    } catch (error) {
-      console.error('Error processing image:', error);
-      alert('Error processing image. Please try again.');
-    } finally {
-      setIsUploading(false);
-    }
-  }, [compressImage, blobToBase64]);
+        image_url: base64,
+        // Preserve base_image_url if it exists
+        ...(formData.base_image_url && { base_image_url: formData.base_image_url })
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error processing image:', error);
+    alert('Error processing image. Please try again.');
+  } finally {
+    setIsUploading(false);
+  }
+}, [compressImage, blobToBase64, formData.base_image_url]);
 
   const handleDrop = useCallback(async (e) => {
     e.preventDefault();
@@ -305,88 +348,80 @@ const handleBackdropClick = useCallback((e) => {
     await processImageFile(file);
   }, [processImageFile]);
 
-  const handleRemoveImage = useCallback(() => {
-    setFormData(prev => ({ ...prev, custom_image_url: '' }));
-  }, []);
+const handleRemoveImage = useCallback(() => {
+  dispatch({ 
+    type: 'SET_ITEM_SELECTED',
+    payload: {
+      custom_image_url: '',
+      image_url: formData.base_image_url || ''
+    }
+  });
+}, [formData.base_image_url]);
 
-  const handleVariantChange = useCallback((variant) => {
-    setFormData(prev => ({ 
-      ...prev, 
+const handleVariantChange = useCallback((variant) => {
+  dispatch({
+    type: 'SET_ITEM_SELECTED',
+    payload: {
       stattrak: variant === 'stattrak',
       souvenir: variant === 'souvenir',
       selectedVariant: variant,
       variant: variant
-    }));
-  }, []);
+    }
+  });
+}, []);
 
-  const handleQuantityChange = useCallback((delta) => {
-    setFormData(prev => ({ 
-      ...prev, 
-      quantity: Math.max(1, Math.min(9999, prev.quantity + delta))
-    }));
-  }, []);
+const handleQuantityChange = useCallback((delta) => {
+  dispatch({
+    type: 'UPDATE_FIELD',
+    field: 'quantity',
+    value: Math.max(1, Math.min(9999, formData.quantity + delta))
+  });
+}, [formData.quantity]);
 
-  const handleConditionChange = useCallback((condition) => {
-    setFormData(prev => ({ ...prev, condition }));
-  }, []);
+const handleConditionChange = useCallback((condition) => {
+  dispatch({ type: 'UPDATE_FIELD', field: 'condition', value: condition });
+}, []);
 
 const handleFormDataChange = useCallback((field, value) => {
-  setFormData(prev => {
-    const newData = { ...prev, [field]: value };
-    
-    // Reset selection state when user types in search fields
-    if (field === 'name' && type !== 'Crafts') {
-      // Only clear image for non-crafts when name changes (name is search field)
-      newData.isItemSelected = false;
-      newData.selectedItemId = null;
-      newData.image_url = '';
-      newData.hasStatTrak = false;
-      newData.hasSouvenir = false;
-    }
-    
-    if (field === 'skin_name') {
-      newData.isSkinSelected = false;
-      newData.selectedSkinId = null;
-      newData.image_url = '';
-      newData.hasStatTrak = false;
-      newData.hasSouvenir = false;
-    }
-    
-    return newData;
-  });
+  dispatch({ type: 'UPDATE_FIELD', field, value, currentType: type });
 }, [type]);
 
-  const handleItemSelect = useCallback((item) => {
-  setFormData(prev => ({ 
-    ...prev, 
-    name: item.name,
-    image_url: item.image || '',
-    stattrak: false,
-    souvenir: false,
-    selectedVariant: 'normal',
-    variant: 'normal',
-    hasStatTrak: item.hasStatTrak || false,
-    hasSouvenir: item.hasSouvenir || false,
-    isItemSelected: true, // Mark as selected
-    selectedItemId: item.id || item.name // Store item identifier
-  }));
+const handleItemSelect = useCallback((item) => {
+  dispatch({
+    type: 'SET_ITEM_SELECTED',
+    payload: {
+      name: item.name,
+      image_url: item.image || '',
+      stattrak: false,
+      souvenir: false,
+      selectedVariant: 'normal',
+      variant: 'normal',
+      hasStatTrak: item.hasStatTrak || false,
+      hasSouvenir: item.hasSouvenir || false,
+      isItemSelected: true,
+      selectedItemId: item.id || item.name
+    }
+  });
 }, []);
 
-  const handleSkinSelect = useCallback((item) => {
-  setFormData(prev => ({ 
-    ...prev, 
-    skin_name: item.name,
-    image_url: item.image || '',
-    stattrak: false,
-    souvenir: false,
-    selectedVariant: 'normal',
-    variant: 'normal',
-    hasStatTrak: item.hasStatTrak || false,
-    hasSouvenir: item.hasSouvenir || false,
-    isSkinSelected: true, // Mark as selected
-    selectedSkinId: item.id || item.name // Store skin identifier
-  }));
-}, []);
+const handleSkinSelect = useCallback((item) => {
+  dispatch({
+    type: 'SET_ITEM_SELECTED',
+    payload: {
+      skin_name: item.name,
+      image_url: formData.custom_image_url || item.image || '',
+      stattrak: false,
+      souvenir: false,
+      selectedVariant: 'normal',
+      variant: 'normal',
+      hasStatTrak: item.hasStatTrak || false,
+      hasSouvenir: item.hasSouvenir || false,
+      isSkinSelected: true,
+      selectedSkinId: item.id || item.name,
+      base_image_url: item.image || ''
+    }
+  });
+}, [formData.custom_image_url]);
 
   const handleSubmit = useCallback(async () => {
     if (!isFormValid || !userSession?.id) {
