@@ -457,7 +457,8 @@ const handleSliceClick = useCallback((data, index) => {
 
   // Handle clicking outside the chart to deselect
   const handleChartContainerClick = useCallback((e) => {
-  if (e.target === e.currentTarget) {
+  // Check if the click target is the ResponsiveContainer div or PieChart svg
+  if (e.target.tagName === 'DIV' || e.target.tagName === 'svg') {
     setSelectedSlice(null);
     setStickyTooltip(null);
   }
@@ -553,7 +554,7 @@ const handleSliceClick = useCallback((data, index) => {
       </div>
 
       {/* Controls Row */}
-      <div className="flex items-center justify-between mb-4 gap-4">
+      <div className={`flex items-center justify-between gap-4 ${viewMode === 'table' ? 'mb-4' : ''}`}>
         {/* Search */}
         <div className="flex-1 max-w-xs">
           <input
@@ -606,9 +607,9 @@ const handleSliceClick = useCallback((data, index) => {
       </div>
 
       {/* Chart or Table View */}
-      <div className="mb-6"></div>
+      <div className={viewMode === 'table' ? 'mb-6' : ''}></div>
       {viewMode === 'chart' ? (
-        <div className="flex-1 mb-6" style={{ minHeight: '260px', maxHeight: '260px' }} onClick={handleChartContainerClick}>
+        <div className="flex-1" style={{ minHeight: '320px', maxHeight: '320px' }} onClick={handleChartContainerClick}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -617,8 +618,8 @@ const handleSliceClick = useCallback((data, index) => {
                 cy="50%"
                 labelLine={false}
                 label={renderCustomLabel}
-                outerRadius={120}
-                innerRadius={45}
+                outerRadius={130}
+                innerRadius={55}
                 fill="#8884d8"
                 dataKey="value"
                 stroke="#1f2937"
@@ -642,7 +643,6 @@ const handleSliceClick = useCallback((data, index) => {
               <Tooltip content={<CustomTooltip />} />
             </PieChart>
           </ResponsiveContainer>
-          {/* Add the sticky tooltip here, inside the chart container */}
           <StickyTooltip />
         </div>
       ) : (
