@@ -3,7 +3,7 @@ import { X, Plus, Loader2, Search, FileText, Upload, Minus } from 'lucide-react'
 import { supabase } from '@/supabaseClient';
 import { CSItemSearch } from '@/components/search';
 import { VariantControls, ConditionSelector } from '@/components/forms';
-import { useItemForm, useImageUpload } from '@/hooks/item-forms';
+import { useItemForm, useImageUpload, useFormSubmission } from '@/hooks/item-forms';
 
 const CATEGORIES = [
   { value: 'liquids', label: 'Liquids', description: 'Weapon skins, knives, gloves' },
@@ -15,34 +15,6 @@ const CATEGORIES = [
   { value: 'graffiti', label: 'Graffiti', description: 'Graffiti sprays' },
   { value: 'patches', label: 'Patches', description: 'Agent patches' }
 ];
-
-const TYPE_MAP = {
-  'Liquids': 'liquid',
-  'Cases': 'case',
-  'Crafts': 'craft', 
-  'Agents': 'agent',
-  'Stickers': 'sticker',
-  'Keychains': 'keychain',
-  'Graffiti': 'graffiti',
-  'Patches': 'patch'
-};
-
-const CATEGORY_TO_DB_TYPE = {
-  'Liquids': 'liquid',
-  'Cases': 'case',
-  'Crafts': 'craft',
-  'Agents': 'agent',
-  'Stickers': 'sticker',
-  'Keychains': 'keychain',
-  'Graffiti': 'graffiti',
-  'Patches': 'patch'
-};
-
-const ERROR_MESSAGES = {
-  'row-level security policy': 'Authentication error: Please refresh and re-enter your beta key.',
-  'foreign key': 'User session error: Please refresh and re-enter your beta key.',
-  'context': 'Authentication context error: Please try again or refresh the page.'
-};
 
 // Auto-detect item type based on search results
 const detectItemType = (searchType) => {
@@ -185,10 +157,10 @@ const QuantitySelector = memo(({ quantity, onQuantityChange }) => (
 ));
 
 const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) => {
-  const [submitting, setSubmitting] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(''); // Category selection state
   const [searchValue, setSearchValue] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const { submitting, handleSubmit: submitForm } = useFormSubmission(supabase);
 
   const currentCategory = useMemo(() => detectItemType(selectedCategory), [selectedCategory]);
 
@@ -260,56 +232,12 @@ const handleSearchChange = useCallback((e) => {
 }, [currentCategory]);
 
 const handleSubmit = useCallback(async () => {
-  if (!isFormValid || !userSession?.id) {
-    alert(!userSession?.id ? 'No user session found' : 'Please fill in all required fields');
-    return;
-  }
-
-  try {
-    setSubmitting(true);
-    const buyPrice = parseFloat(formData.buy_price);
-    
-    // Generate realistic current price
-    const priceVariation = (Math.random() * 0.4 - 0.2);
-    const currentPrice = Math.max(0.01, buyPrice * (1 + priceVariation));
-    const quantity = Math.max(1, parseInt(formData.quantity));
-    
-    // Fix: Use the same logic as AddItemForm
-    const itemType = TYPE_MAP[currentCategory] || selectedCategory.toLowerCase();
-    
-    const newInvestment = {
-      user_id: userSession.id,
-      type: itemType, // Use itemType instead of formData.type
-      name: formData.name.trim(),
-      skin_name: formData.skin_name?.trim() || null,
-      condition: formData.condition?.trim() || null,
-      variant: formData.variant || 'normal',
-      buy_price: buyPrice,
-      current_price: currentPrice,
-      quantity: quantity,
-      image_url: formData.custom_image_url || formData.image_url || null,
-      notes: formData.notes?.trim() || null
-    };
-
-    const { data: insertData, error: insertError } = await supabase.rpc('insert_investment_with_context', {
-      investment_data: newInvestment,
-      context_user_id: userSession.id
-    });
-
-    if (insertError) throw insertError;
-    
-    onAdd(insertData);
-    onClose();
-
-  } catch (err) {
-    console.error('Error adding investment:', err);
-    
-    const errorType = Object.keys(ERROR_MESSAGES).find(key => err.message.includes(key));
-    alert(errorType ? ERROR_MESSAGES[errorType] : `Failed to add investment: ${err.message}`);
-  } finally {
-    setSubmitting(false);
-  }
-}, [isFormValid, userSession, formData, selectedCategory, onAdd, onClose]);
+    if (!isFormValid) {
+      alert('Please fill in all required fields');
+      return;
+    }
+    await submitForm(formData, userSession, currentCategory, onAdd, onClose);
+  }, [isFormValid, formData, userSession, currentCategory, onAdd, onClose, submitForm]);
 
   const handleReset = useCallback(() => {
   setSelectedCategory('');
