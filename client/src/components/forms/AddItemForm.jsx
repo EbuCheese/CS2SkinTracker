@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useCallback, memo, useEffect, useReducer } from 'react';
+import React, { useState, useMemo, useCallback, memo, useEffect } from 'react';
 import { X, Upload, Plus, Minus, Loader2, FileText } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 import { CSItemSearch } from '@/components/search';
 import { VariantControls, ConditionSelector } from '@/components/forms';
-import { useItemForm } from '@/hooks/item-forms';
+import { useItemForm, useImageUpload } from '@/hooks/item-forms';
 
 const TYPE_MAP = {
   'Liquids': 'liquid',
@@ -149,8 +149,6 @@ const QuantitySelector = memo(({ quantity, onQuantityChange }) => (
 
 const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
   const [submitting, setSubmitting] = useState(false);
-  const [uploadingImage, setIsUploading] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
 
   // from useItemForm hook
   const {
@@ -165,6 +163,17 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
     handleQuantityChange,
     resetForm
   } = useItemForm(type, type);
+
+  // from useImageUpload
+  const {
+    uploadingImage,
+    isDragOver,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handleImageUpload,
+    handleRemoveImage
+  } = useImageUpload(dispatch, formData);
 
   useEffect(() => {
   const handleEscape = (e) => {
@@ -188,112 +197,6 @@ const handleBackdropClick = useCallback((e) => {
   // Memoize derived values
   const itemType = useMemo(() => TYPE_MAP[type] || type.toLowerCase(), [type]);
   
-  // Memoize callbacks
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  }, []);
-
-  const compressImage = useCallback((file, maxWidth = 800, maxHeight = 600, quality = 0.8) => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
-      
-      img.onload = () => {
-        const ratio = Math.min(maxWidth / img.width, maxHeight / img.height);
-        const width = Math.floor(img.width * ratio);
-        const height = Math.floor(img.height * ratio);
-        
-        canvas.width = width;
-        canvas.height = height;
-        
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        canvas.toBlob(resolve, 'image/jpeg', quality);
-      };
-      
-      img.src = URL.createObjectURL(file);
-    });
-  }, []);
-
-  const blobToBase64 = useCallback((blob) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.readAsDataURL(blob);
-    });
-  }, []);
-
-  const processImageFile = useCallback(async (file) => {
-  if (!file?.type.startsWith('image/') || file.size > 10 * 1024 * 1024) {
-    alert(!file?.type.startsWith('image/') ? 'Please select a valid image file' : 'Image must be less than 10MB');
-    return;
-  }
-  
-  try {
-    setIsUploading(true);
-    
-    let quality = 0.8;
-    let compressedBlob = await compressImage(file, 800, 600, quality);
-    
-    if (compressedBlob.size > 200 * 1024) {
-      quality = 0.6;
-      compressedBlob = await compressImage(file, 600, 450, quality);
-    }
-    
-    const base64 = await blobToBase64(compressedBlob);
-    dispatch({
-      type: 'SET_ITEM_SELECTED',
-      payload: {
-        custom_image_url: base64,
-        image_url: base64,
-        // Preserve base_image_url if it exists
-        ...(formData.base_image_url && { base_image_url: formData.base_image_url })
-      }
-    });
-    
-  } catch (error) {
-    console.error('Error processing image:', error);
-    alert('Error processing image. Please try again.');
-  } finally {
-    setIsUploading(false);
-  }
-}, [compressImage, blobToBase64, formData.base_image_url]);
-
-  const handleDrop = useCallback(async (e) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      const file = files[0];
-      await processImageFile(file);
-    }
-  }, [processImageFile]);
-
-  const handleImageUpload = useCallback(async (e) => {
-    const file = e.target.files[0];
-    await processImageFile(file);
-  }, [processImageFile]);
-
-const handleRemoveImage = useCallback(() => {
-  dispatch({ 
-    type: 'SET_ITEM_SELECTED',
-    payload: {
-      custom_image_url: '',
-      image_url: formData.base_image_url || ''
-    }
-  });
-}, [formData.base_image_url]);
-
   const handleSubmit = useCallback(async () => {
     if (!isFormValid || !userSession?.id) {
       alert(!userSession?.id ? 'No user session found' : 'Please fill in all required fields');
