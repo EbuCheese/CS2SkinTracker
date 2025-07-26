@@ -3,26 +3,7 @@ import { X, Plus, Loader2, Search, FileText, Upload, Minus } from 'lucide-react'
 import { supabase } from '@/supabaseClient';
 import { CSItemSearch } from '@/components/search';
 import { VariantControls, ConditionSelector } from '@/components/forms';
-
-// Shared constants
-const INITIAL_FORM_DATA = {
-  name: '',
-  skin_name: '',
-  condition: '',
-  variant: 'normal',
-  buy_price: '',
-  quantity: 1,
-  image_url: '',
-  base_image_url: '',
-  custom_image_url: '',
-  notes: '',
-  type: '',
-  detectedCategory: '',
-  isItemSelected: false,        
-  isSkinSelected: false,        
-  selectedItemId: null,         
-  selectedSkinId: null
-};
+import { useItemForm } from '@/hooks/item-forms';
 
 const CATEGORIES = [
   { value: 'liquids', label: 'Liquids', description: 'Weapon skins, knives, gloves' },
@@ -98,45 +79,6 @@ const validateForm = (formData, currentCategory, selectedCategory) => {
            formData.name.trim() &&
            formData.isItemSelected &&
            (!['Liquids'].includes(currentCategory) || formData.condition);
-  }
-};
-
-const formDataReducer = (state, action) => {
-  switch (action.type) {
-    case 'UPDATE_FIELD':
-      const newState = { ...state, [action.field]: action.value };
-      
-      // Reset selection state when user types in search fields
-      if (action.field === 'name' && action.currentCategory !== 'Crafts') {
-        return {
-          ...newState,
-          isItemSelected: false,
-          selectedItemId: null,
-          image_url: '',
-          hasStatTrak: false,
-          hasSouvenir: false
-        };
-      }
-      
-      if (action.field === 'skin_name') {
-        return {
-          ...newState,
-          isSkinSelected: false,
-          selectedSkinId: null,
-          image_url: '',
-          hasStatTrak: false,
-          hasSouvenir: false
-        };
-      }
-      
-      return newState;
-    case 'RESET':
-      return INITIAL_FORM_DATA;
-    case 'SET_ITEM_SELECTED':
-      // Handle item selection logic - merge payload with current state
-      return { ...state, ...action.payload };
-    default:
-      return state;
   }
 };
 
@@ -265,7 +207,6 @@ const QuantitySelector = memo(({ quantity, onQuantityChange }) => (
 ));
 
 const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) => {
-  const [formData, dispatch] = useReducer(formDataReducer, INITIAL_FORM_DATA);
   const [submitting, setSubmitting] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(''); // Category selection state
   const [searchValue, setSearchValue] = useState('');
@@ -275,10 +216,19 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
 
   const currentCategory = useMemo(() => detectItemType(selectedCategory), [selectedCategory]);
 
-  const isFormValid = useMemo(() => 
-  validateForm(formData, currentCategory, selectedCategory), 
-  [formData, currentCategory, selectedCategory]
-);
+  // from useItemForm hook
+  const {
+      formData,
+      dispatch,
+      isFormValid,
+      handleFormDataChange,
+      handleItemSelect,
+      handleSkinSelect,
+      handleVariantChange,
+      handleConditionChange,
+      handleQuantityChange,
+      resetForm
+    } = useItemForm(currentCategory, selectedCategory);
 
   // close form with esc key
   useEffect(() => {
@@ -320,77 +270,6 @@ const handleSearchChange = useCallback((e) => {
     value: value,
     currentCategory 
   });
-}, [currentCategory]);
-
-  const handleItemSelect = useCallback((item) => {
-  const detectedCategory = detectItemType(selectedCategory);
-  
-  dispatch({
-    type: 'SET_ITEM_SELECTED',
-    payload: {
-      name: item.name,
-      image_url: item.image || '',
-      type: CATEGORY_TO_DB_TYPE[detectedCategory],
-      detectedCategory: detectedCategory,
-      stattrak: false,
-      souvenir: false,
-      selectedVariant: 'normal',
-      variant: 'normal',
-      hasStatTrak: item.hasStatTrak || false,
-      hasSouvenir: item.hasSouvenir || false,
-      isItemSelected: true,
-      selectedItemId: item.id || item.name
-    }
-  });
-  
-  setSearchValue(item.name);
-}, [selectedCategory]);
-
-const handleSkinSelect = useCallback((item) => {
-  dispatch({
-    type: 'SET_ITEM_SELECTED',
-    payload: {
-      skin_name: item.name,
-      image_url: formData.custom_image_url || item.image || '',
-      stattrak: false,
-      souvenir: false,
-      selectedVariant: 'normal',
-      variant: 'normal',
-      hasStatTrak: item.hasStatTrak || false,
-      hasSouvenir: item.hasSouvenir || false,
-      isSkinSelected: true,
-      selectedSkinId: item.id || item.name,
-      base_image_url: item.image || ''
-    }
-  });
-}, [formData.custom_image_url]);
-
-  const handleVariantChange = useCallback((variant) => {
-  dispatch({
-    type: 'SET_ITEM_SELECTED',
-    payload: {
-      stattrak: variant === 'stattrak',
-      souvenir: variant === 'souvenir',
-      selectedVariant: variant,
-      variant: variant
-    }
-  });
-}, []);
-
-  const handleConditionChange = useCallback((condition) => {
-  dispatch({ type: 'UPDATE_FIELD', field: 'condition', value: condition });
-}, []);
-
-  const handleQuantityChange = useCallback((delta) => {
-  dispatch({
-    type: 'UPDATE_FIELD',
-    field: 'quantity',
-    value: Math.max(1, Math.min(9999, formData.quantity + delta))
-  });
-}, [formData.quantity]);
-
-const handleFormDataChange = useCallback((field, value) => {
-  dispatch({ type: 'UPDATE_FIELD', field, value, currentCategory });
 }, [currentCategory]);
 
   // Image processing functions
