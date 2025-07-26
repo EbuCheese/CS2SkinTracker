@@ -561,25 +561,15 @@ const InvestmentDashboard = ({ userSession }) => {
 
         {/* QuickAddItemForm */}
         {showQuickAdd && (
-          <div className="fixed inset-0 z-50 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <div 
-                className="fixed inset-0 bg-black/60 backdrop-blur-md transition-opacity duration-200"
-                onClick={() => setShowQuickAdd(false)}
-              />
-              <div className="relative w-full max-w-lg transform overflow-hidden rounded-xl bg-gray-800/95 backdrop-blur-sm border border-gray-700/50 shadow-2xl transition-all duration-200 scale-100 opacity-100 border-orange-500/20">
-                <QuickAddItemForm
-                  onClose={() => setShowQuickAdd(false)}
-                  onAdd={(newItem) => {
-                    console.log('New item added:', newItem);
-                    setShowQuickAdd(false);
-                    debouncedRefresh(true); // Use debounced refresh for user actions
-                    }}
-                  userSession={userSession}
-                />
-                </div>
-            </div>
-          </div>
+          <QuickAddItemForm
+            onClose={() => setShowQuickAdd(false)}
+            onAdd={(newItem) => {
+              console.log('New item added:', newItem);
+              setShowQuickAdd(false);
+              debouncedRefresh(true);
+            }}
+            userSession={userSession}
+          />
         )}
 
         {/* QuickSellModal */}

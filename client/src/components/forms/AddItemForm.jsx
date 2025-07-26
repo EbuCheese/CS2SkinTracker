@@ -1,134 +1,24 @@
-import React, { useState, useMemo, useCallback, memo, useEffect } from 'react';
-import { X, Upload, Plus, Minus, Loader2, FileText } from 'lucide-react';
+import React, { memo } from 'react';
+import { X, Loader2 } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
-import { CSItemSearch } from '@/components/search';
-import { VariantControls, ConditionSelector } from '@/components/forms';
-import { useItemForm, useImageUpload, useFormSubmission } from '@/hooks/item-forms';
-
-// Memoized sub-components
-const VariantBadge = memo(({ stattrak, souvenir }) => {
-  if (stattrak) {
-    return (
-      <span className="inline-block px-2 py-0.5 bg-orange-600 text-white rounded text-xs mt-1 mr-1">
-        StatTrak™
-      </span>
-    );
-  }
-  
-  if (souvenir) {
-    return (
-      <span className="inline-block px-2 py-0.5 bg-yellow-600 text-white rounded text-xs mt-1">
-        Souvenir
-      </span>
-    );
-  }
-  
-  return (
-    <span className="inline-block px-2 py-0.5 bg-blue-600 text-white rounded text-xs mt-1">
-      Normal
-    </span>
-  );
-});
-
-const ImageUploadSection = memo(({ 
-  isDragOver, 
-  uploadingImage, 
-  customImageUrl, 
-  imageUrl,
-  onDragOver, 
-  onDragLeave, 
-  onDrop, 
-  onImageUpload, 
-  onRemoveImage 
-}) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-300 mb-3">Upload Custom Image (Optional)</label>
-    <div 
-      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-        isDragOver 
-          ? 'border-orange-500 bg-orange-500/10' 
-          : 'border-orange-500/30 hover:border-orange-500/50'
-      }`}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
-      <input
-        type="file"
-        accept="image/*"
-        onChange={onImageUpload}
-        className="hidden"
-        id="image-upload"
-        disabled={uploadingImage}
-      />
-      
-      {uploadingImage ? (
-        <div className="flex flex-col items-center">
-          <Loader2 className="w-10 h-10 text-orange-500 mb-3 animate-spin" />
-          <span className="text-sm text-gray-400">Processing image...</span>
-        </div>
-      ) : customImageUrl ? (
-        <div className="flex flex-col items-center">
-          <img 
-            src={customImageUrl} 
-            alt="Custom preview" 
-            className="w-96 h-40 object-contain rounded mb-2" 
-          />
-          <span className="text-sm text-green-400 mb-2">Custom image uploaded</span>
-          <label htmlFor="image-upload" className="text-sm text-orange-400 hover:text-orange-300 cursor-pointer">
-            Click to change image
-          </label>
-          <button
-            type="button"
-            onClick={onRemoveImage}
-            className="text-xs text-gray-500 hover:text-gray-400 mt-1"
-          >
-            Remove custom image
-          </button>
-        </div>
-      ) : (
-        <label htmlFor="image-upload" className="cursor-pointer flex flex-col items-center">
-          <Upload className="w-10 h-10 text-orange-500 mb-3" />
-          <span className="text-sm text-gray-400">Click to upload or drag & drop</span>
-          <span className="text-xs text-gray-500 mt-1">
-            {imageUrl ? 'Overrides base skin image' : 'No base image selected'}
-          </span>
-        </label>
-      )}
-    </div>
-  </div>
-));
-
-const QuantitySelector = memo(({ quantity, onQuantityChange }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-300 mb-3">Quantity</label>
-    <div className="flex items-center justify-center space-x-4">
-      <button
-        type="button"
-        onClick={() => onQuantityChange(-1)}
-        className="w-10 h-10 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors"
-      >
-        <Minus className="w-5 h-5" />
-      </button>
-      <input
-        type="number"
-        min="1"
-        max="9999"
-        value={quantity}
-        onChange={(e) => onQuantityChange(Math.max(1, parseInt(e.target.value) || 1) - quantity)}
-        className="w-20 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-center focus:border-orange-500 focus:outline-none transition-colors"
-      />
-      <button
-        type="button"
-        onClick={() => onQuantityChange(1)}
-        className="w-10 h-10 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center text-white transition-colors"
-      >
-        <Plus className="w-5 h-5" />
-      </button>
-    </div>
-    <p className="text-gray-400 text-xs text-center mt-2">Current quantity: {quantity}</p>
-  </div>
-));
+import { 
+  VariantBadge, 
+  ImageUploadSection, 
+  QuantitySelector, 
+  ConditionSelector 
+} from '@/components/forms/SharedFormComponents';
+import { 
+  ItemSelectionSection, 
+  SelectedItemDisplay, 
+  CraftNameInput, 
+  BuyPriceInput 
+} from '@/components/forms/FormSections';
+import { 
+  useItemForm, 
+  useImageUpload, 
+  useFormSubmission, 
+  useFormLogic 
+} from '@/hooks/item-forms';
 
 const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
   const { submitting, handleSubmit: submitForm } = useFormSubmission(supabase);
@@ -147,7 +37,7 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
     resetForm
   } = useItemForm(type, type);
 
-  // from useImageUpload
+  // from useImageUpload hook
   const {
     uploadingImage,
     isDragOver,
@@ -158,251 +48,121 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
     handleRemoveImage
   } = useImageUpload(dispatch, formData);
 
-  useEffect(() => {
-  const handleEscape = (e) => {
-    if (e.key === 'Escape' && !submitting) {
-      onClose();
-    }
-  };
-  
-  document.addEventListener('keydown', handleEscape);
-  return () => document.removeEventListener('keydown', handleEscape);
-}, [onClose, submitting]);
+  // from useFormLogic hook
+  const { handleBackdropClick, handleSubmit } = useFormLogic({
+    onClose,
+    submitting,
+    isFormValid,
+    formData,
+    userSession,
+    type,
+    onAdd,
+    submitForm
+  });
 
-const handleBackdropClick = useCallback((e) => {
-  // Only close if clicking the backdrop itself, not the modal content
-  // prevent closing during submission
-  if (e.target === e.currentTarget && !submitting) {
-    onClose();
-  }
-}, [onClose, submitting]);
-  
-  const handleSubmit = useCallback(async () => {
-    if (!isFormValid) {
-      alert('Please fill in all required fields');
-      return;
-    }
-    await submitForm(formData, userSession, type, onAdd, onClose);
-  }, [isFormValid, formData, userSession, type, onAdd, onClose, submitForm]);
+  // Render craft-specific form sections
+  const renderCraftSections = () => (
+    <>
+      <ItemSelectionSection
+        type={type}
+        searchType="liquids"
+        formData={formData}
+        handleFormDataChange={handleFormDataChange}
+        handleItemSelect={handleItemSelect}
+        handleSkinSelect={handleSkinSelect}
+      />
 
-  // Memoize search components
-  const itemSearch = useMemo(() => (
-    <CSItemSearch
-      type={type.toLowerCase()}
-      placeholder={`Search ${type.toLowerCase()}...`}
-      value={formData.name}
-      onChange={(e) => handleFormDataChange('name', e.target.value)}
-      onSelect={handleItemSelect}
-      className="w-full"
-      showLargeView={true}
-      maxResults={15}
-    />
-  ), [type, formData.name, handleFormDataChange, handleItemSelect]);
+      <SelectedItemDisplay
+        formData={formData}
+        type={type}
+        handleVariantChange={handleVariantChange}
+        handleFormDataChange={handleFormDataChange}
+      />
 
-  const skinSearch = useMemo(() => (
-    <CSItemSearch
-      type="liquids"
-      placeholder="Search base skins..."
-      value={formData.skin_name}
-      onChange={(e) => handleFormDataChange('skin_name', e.target.value)}
-      onSelect={handleSkinSelect}
-      className="w-full"
-      showLargeView={true}
-      maxResults={15}
-      excludeSpecialItems={true}
-    />
-  ), [formData.skin_name, handleFormDataChange, handleSkinSelect]);
+      <ConditionSelector
+        selectedCondition={formData.condition}
+        onConditionChange={handleConditionChange}
+        required={true}
+      />
+
+      <CraftNameInput
+        formData={formData}
+        handleFormDataChange={handleFormDataChange}
+      />
+
+      <ImageUploadSection
+        isDragOver={isDragOver}
+        uploadingImage={uploadingImage}
+        customImageUrl={formData.custom_image_url}
+        imageUrl={formData.image_url}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onImageUpload={handleImageUpload}
+        onRemoveImage={handleRemoveImage}
+      />
+    </>
+  );
+
+  // Render standard item form sections
+  const renderStandardSections = () => (
+    <>
+      <ItemSelectionSection
+        type={type}
+        searchType={type.toLowerCase()}
+        formData={formData}
+        handleFormDataChange={handleFormDataChange}
+        handleItemSelect={handleItemSelect}
+        handleSkinSelect={handleSkinSelect}
+      />
+
+      <SelectedItemDisplay
+        formData={formData}
+        type={type}
+        handleVariantChange={handleVariantChange}
+        handleFormDataChange={handleFormDataChange}
+      />
+
+      {type === 'Liquids' && (
+        <ConditionSelector
+          selectedCondition={formData.condition}
+          onConditionChange={handleConditionChange}
+          required={true}
+        />
+      )}
+
+      {(type === 'Liquids' || type === 'Cases') && (
+        <QuantitySelector
+          quantity={formData.quantity}
+          onQuantityChange={handleQuantityChange}
+        />
+      )}
+    </>
+  );
 
   return (
-      <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-        onClick={handleBackdropClick}
-      >
+    <div 
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={handleBackdropClick}
+    >
       <div className="bg-gradient-to-br from-gray-900 to-slate-900 p-6 rounded-xl border border-orange-500/20 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-xl font-semibold text-white">Add {type} Item</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+          <button 
+            onClick={onClose} 
+            className="text-gray-400 hover:text-white transition-colors"
+          >
             <X className="w-6 h-6" />
           </button>
         </div>
         
         <div className="space-y-6">
-          {type === 'Crafts' ? (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-3">
-                  Search Base Skin <span className="text-red-400">*</span>
-                </label>
-                {skinSearch}
-              </div>
-
-              {formData.image_url && (
-                <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Selected Base Skin</label>
-                  <div className="flex items-center space-x-3 mb-3">
-                    <img 
-                      src={formData.image_url} 
-                      alt={formData.skin_name}
-                      className="w-16 h-16 object-contain bg-gray-700 rounded"
-                    />
-                    <div className="flex-1">
-                      <p className="text-white font-medium">{formData.skin_name}</p>
-                      <p className="text-gray-400 text-sm">Base skin selected</p>
-                      <VariantBadge stattrak={formData.stattrak} souvenir={formData.souvenir} />
-                    </div>
-                  </div>
-                  
-                  <VariantControls
-                    hasStatTrak={formData.hasStatTrak}
-                    hasSouvenir={formData.hasSouvenir}
-                    selectedVariant={formData.selectedVariant || formData.variant}
-                    onVariantChange={handleVariantChange}
-                    type="Skin"
-                  />
-                </div>
-              )}
-
-              <ConditionSelector
-                selectedCondition={formData.condition}
-                onConditionChange={handleConditionChange}
-                required={true}
-              />
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Custom Craft Name <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter your custom craft name"
-                  value={formData.name}
-                  onChange={(e) => handleFormDataChange('name', e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors"
-                  required
-                  maxLength={100}
-                />
-                <p className="text-gray-400 text-xs mt-1">Give your craft a unique name</p>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  <div className="flex items-center space-x-2">
-                    <FileText className="w-4 h-4" />
-                    <span>Craft Details (Optional)</span>
-                  </div>
-                </label>
-                <textarea
-                  placeholder="Add craft details (e.g., 4x Katowice 2014, specific sticker placements, float value, etc.)"
-                  value={formData.notes}
-                  onChange={(e) => handleFormDataChange('notes', e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors resize-none"
-                  rows={3}
-                  maxLength={300}
-                />
-                <p className="text-gray-400 text-xs mt-1">{formData.notes.length}/300 characters</p>
-              </div>
-
-              <ImageUploadSection
-                isDragOver={isDragOver}
-                uploadingImage={uploadingImage}
-                customImageUrl={formData.custom_image_url}
-                imageUrl={formData.image_url}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onImageUpload={handleImageUpload}
-                onRemoveImage={handleRemoveImage}
-              />
-            </>
-          ) : (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-3">
-                  Search {type} <span className="text-red-400">*</span>
-                </label>
-                {itemSearch}
-              </div>
-
-              {formData.image_url && (
-                <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Selected Item</label>
-                  <div className="flex items-center space-x-3 mb-3">
-                    <img 
-                      src={formData.image_url} 
-                      alt={formData.name}
-                      className="w-16 h-16 object-contain bg-gray-700 rounded"
-                    />
-                    <div className="flex-1">
-                      <p className="text-white font-medium">{formData.name}</p>
-                      <p className="text-gray-400 text-sm">Ready to add</p>
-                      <VariantBadge stattrak={formData.stattrak} souvenir={formData.souvenir} />
-                    </div>
-                  </div>
-                  
-                  <VariantControls
-                    hasStatTrak={formData.hasStatTrak}
-                    hasSouvenir={formData.hasSouvenir}
-                    selectedVariant={formData.selectedVariant || formData.variant}
-                    onVariantChange={handleVariantChange}
-                    type="Item"
-                  />
-                  
-                  <div className="border-t border-gray-600 pt-3 mt-3">
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      <div className="flex items-center space-x-2">
-                        <FileText className="w-4 h-4" />
-                        <span>Notes (Optional)</span>
-                      </div>
-                    </label>
-                    <textarea
-                      placeholder="Add any additional details (e.g., 95% fade, 0.16 float, special stickers, etc.)"
-                      value={formData.notes}
-                      onChange={(e) => handleFormDataChange('notes', e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors resize-none text-sm"
-                      rows={2}
-                      maxLength={300}
-                    />
-                    <p className="text-gray-400 text-xs mt-1">{formData.notes.length}/300 characters</p>
-                  </div>
-                </div>
-              )}
-                          
-              {type === 'Liquids' && (
-                <ConditionSelector
-                  selectedCondition={formData.condition}
-                  onConditionChange={handleConditionChange}
-                  required={true}
-                />
-              )}
-
-              {(type === 'Liquids' || type === 'Cases') && (
-                <QuantitySelector
-                  quantity={formData.quantity}
-                  onQuantityChange={handleQuantityChange}
-                />
-              )}
-            </>
-          )}
+          {type === 'Crafts' ? renderCraftSections() : renderStandardSections()}
           
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Buy Price <span className="text-red-400">*</span>
-            </label>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">$</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                max="999999"
-                placeholder="0.00"
-                value={formData.buy_price}
-                onChange={(e) => handleFormDataChange('buy_price', e.target.value)}
-                className="w-full pl-8 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors"
-                required
-              />
-            </div>
-          </div>
+          <BuyPriceInput
+            formData={formData}
+            handleFormDataChange={handleFormDataChange}
+          />
           
           <button
             type="button"
@@ -418,7 +178,9 @@ const handleBackdropClick = useCallback((e) => {
             ) : (
               <>
                 <span>Add {type} Item</span>
-                {formData.quantity > 1 && <span className="text-orange-200">({formData.quantity}x)</span>}
+                {formData.quantity > 1 && (
+                  <span className="text-orange-200">({formData.quantity}x)</span>
+                )}
               </>
             )}
           </button>
