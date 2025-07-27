@@ -1,4 +1,3 @@
-// pages/QuickLogin.js - Updated with improved revocation logic
 import React, { useState } from 'react';
 import { TrendingUp, LogIn, Key, RefreshCw, AlertTriangle, X } from 'lucide-react';
 

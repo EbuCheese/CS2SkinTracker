@@ -6,19 +6,25 @@ import { AddItemForm } from '@/components/forms'
 import { useScrollLock } from '@/hooks/util';
 
 const InvestmentsPage = ({ userSession }) => {
+  // UI States
   const [activeTab, setActiveTab] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // Data States
   const [investments, setInvestments] = useState([]);
   const [soldItems, setSoldItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Item Management States
   const [itemToDelete, setItemToDelete] = useState(null);
   const [newItemIds, setNewItemIds] = useState(new Set());
 
-  // lock scroll on delete popup
+  // lock scroll on add form or delete message  
   useScrollLock(showAddForm || !!itemToDelete);
 
+  // Tab config array
   const mainTabs = ['All', 'Liquids', 'Crafts', 'Cases', 'Stickers', 'Agents', 'Keychains', 'Graffiti', 'Patches'];
   const soldTab = 'Sold';
 
@@ -27,38 +33,46 @@ const InvestmentsPage = ({ userSession }) => {
     const groups = {};
    
     soldItems.forEach(item => {
+      // Extract date without the time to group items sold on same day
       const dateOnly = item.sale_date.split('T')[0];
       const itemSkinName = item.item_skin_name || '';
       const itemCondition = item.item_condition || '';
+      
+      // unique key combining all item characteristics and sale date to ensure only identical items are grouped on same day
       const groupKey = `${item.item_name}-${itemSkinName}-${itemCondition}-${item.buy_price_per_unit}-${item.price_per_unit}-${dateOnly}`;
       
       if (groups[groupKey]) {
+        // Accumulate quantities and values for existing group
         groups[groupKey].quantity_sold += item.quantity_sold;
         groups[groupKey].total_sale_value += item.total_sale_value;
         groups[groupKey].sale_ids.push(item.id);
         
+        // Keep the earliest sale time as the representative time for the group
         const existingDate = new Date(groups[groupKey].sale_date);
         const currentDate = new Date(item.sale_date);
         if (currentDate < existingDate) {
           groups[groupKey].sale_date = item.sale_date;
         }
       } else {
+        // Create new group with first occurrence of this item combination
         groups[groupKey] = {
           ...item,
           sale_ids: [item.id],
         };
       }
     });
-   
+
+    // Convert groups object back to array for rendering
     return Object.values(groups);
   }, []);
 
+  
   // MEMOIZED: Filter active investments (quantity > 0)
   const activeInvestments = useMemo(() => {
     return investments.filter(item => item.quantity > 0);
   }, [investments]);
 
-  // MEMOIZED: Group sold items (expensive operation)
+  // MEMOIZED: Group sold items (consolidate duplicate entries )
   const groupedSoldItems = useMemo(() => {
     return groupSoldItems(soldItems);
   }, [soldItems, groupSoldItems]);
@@ -67,28 +81,35 @@ const InvestmentsPage = ({ userSession }) => {
   const currentItems = useMemo(() => {
     let filteredItems;
     
+    // Determine base dataset based on active tab
     if (activeTab === 'Sold') {
       filteredItems = groupedSoldItems;
     } else {
       filteredItems = activeInvestments;
       
+      // Apply category filter for specific tabs (skip 'All' tab)
       if (activeTab !== 'All') {
         let typeFilter;
+
+        // Handle special naming cases where tab name doesn't match database type
         if (activeTab === 'Graffiti') {
           typeFilter = 'graffiti';
         } else if (activeTab === 'Patches') {
           typeFilter = 'patch';
         } else {
+          // Convert plural tab names to singular for database matching (e.g., "Cases" -> "case")
           typeFilter = activeTab.toLowerCase().slice(0, -1);
         }
         filteredItems = filteredItems.filter(item => item.type === typeFilter);
       }
     }
 
+    // Apply search filter if user has entered search terms
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filteredItems = filteredItems.filter(item => {
         if (activeTab === 'Sold') {
+          // Search fields for sold items (different field names from active items)
           const itemName = item.item_name || '';
           const skinName = item.item_skin_name || '';
           const condition = item.item_condition || '';
@@ -99,6 +120,7 @@ const InvestmentsPage = ({ userSession }) => {
                 condition.toLowerCase().includes(query) ||
                 variant.toLowerCase().includes(query);
         } else {
+          // Search fields for active investments (handles potential field name variations)
           const itemName = item.item_name || item.name || '';
           const skinName = item.skin_name || '';
           const condition = item.condition || '';
@@ -118,17 +140,21 @@ const InvestmentsPage = ({ userSession }) => {
   // MEMOIZED: Portfolio summary calculation
   const portfolioSummary = useMemo(() => {
     if (activeTab === 'Sold') {
+      // For sold items, calculate realized profit/loss from all investments
       const totalRealizedPL = investments.reduce((sum, inv) => 
         sum + parseFloat(inv.realized_profit_loss), 0);
       
+      // Total revenue from all sales
       const totalSaleValue = investments.reduce((sum, inv) => 
         sum + parseFloat(inv.total_sale_value), 0);
       
+      // Calculate original investment cost for sold quantities only
       const totalBuyValue = investments.reduce((sum, inv) => {
         const soldQuantity = parseFloat(inv.total_sold_quantity);
         return sum + (parseFloat(inv.buy_price) * soldQuantity);
       }, 0);
       
+      // Calculate percentage return on sold investments
       const profitPercentage = totalBuyValue > 0 ? ((totalRealizedPL / totalBuyValue) * 100) : 0;
 
       return {
@@ -139,10 +165,12 @@ const InvestmentsPage = ({ userSession }) => {
         itemCount: groupedSoldItems.length
       };
     } else {
+      // For active investments, calculate current market performance
       const totalBuyValue = currentItems.reduce((sum, item) => sum + (item.buy_price * item.quantity), 0);
       const totalCurrentValue = currentItems.reduce((sum, item) => {
         return sum + (item.current_price * item.quantity);
       }, 0);
+      // Unrealized profit (difference between current value and purchase cost)
       const totalProfit = totalCurrentValue - totalBuyValue;
       const profitPercentage = totalBuyValue > 0 ? ((totalProfit / totalBuyValue) * 100) : 0;
 
@@ -169,25 +197,31 @@ const InvestmentsPage = ({ userSession }) => {
 
   // STABLE CALLBACKS: Prevent unnecessary re-renders
   const handleItemUpdate = useCallback((itemId, updates) => {
+    // update local state for immediate UI feedback
     setInvestments(prev => prev.map(inv => 
       inv.id === itemId ? { ...inv, ...updates } : inv
     ));
+    // Refresh data from database to ensure consistency
     fetchData();
   }, []);
 
+  // handle the removal of item form ui, selling or deleting
   const handleItemRemove = useCallback((itemId) => {
     setInvestments(prev => prev.filter(inv => inv.id !== itemId));
-    fetchData();
+    fetchData(); // Refresh to ensure data consistency
   }, []);
 
+  // set the item to delete
   const handleItemDelete = useCallback((itemToDelete) => {
     setItemToDelete(itemToDelete);
   }, []);
 
+  // trigger manual refresh of db investment data
   const handleRefreshData = useCallback(() => {
     fetchData();
   }, []);
 
+  // handle addition of new investment items
   const handleAddItem = useCallback((newItem) => {
     setInvestments(prev => [newItem, ...prev]);
     setNewItemIds(prev => new Set([...prev, newItem.id]));
@@ -234,15 +268,13 @@ const InvestmentsPage = ({ userSession }) => {
     }
   }, [userSession]);
 
-  const refreshData = () => {
-    fetchData();
-  };
-
+  // Fetches investment and sold item data from db (main data loading function)
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
 
+      // Validate user session before making database calls
       if (!userSession?.id || typeof userSession.id !== 'string') {
         setError('Invalid user session. Please re-validate your beta key.');
         return;
@@ -250,34 +282,42 @@ const InvestmentsPage = ({ userSession }) => {
 
       console.log('Fetching data for user:', userSession.id);
 
+      // Make parallel database calls for better performance
       const [investmentsResult, soldItemsResult] = await Promise.all([
+        // Fetch investment summary view
         supabase.rpc('fetch_user_investment_summary', {
           context_user_id: userSession.id
         }),
+        // Fetch user historical sales data
         supabase.rpc('fetch_user_investment_sales', {
           context_user_id: userSession.id
         })
       ]);
 
+      // Handle investments query errors (critical failure)
       if (investmentsResult.error) {
         console.error('Investments query failed:', investmentsResult.error);
         setError('Access denied. Please verify your beta key is valid and active.');
         return;
       }
 
+      // Handle sold items query errors (non-critical, continue with investments only)
       if (soldItemsResult.error) {
         console.error('Sold items query failed:', soldItemsResult.error);
         console.warn('Could not fetch sold items, continuing with investments only');
       }
 
+      // Parse investments data (handle both array and JSON string responses)
       const investmentsArray = Array.isArray(investmentsResult.data) 
         ? investmentsResult.data 
         : JSON.parse(investmentsResult.data || '[]');
       
+      // Sold items should always be an array, fallback to empty array if null
       let soldItemsArray = soldItemsResult.data || [];
 
       console.log(`Successfully loaded ${investmentsArray.length} investments and ${soldItemsArray.length} sold items`);
       
+      // Update component state with fetched data
       setInvestments(investmentsArray);
       setSoldItems(soldItemsArray);
 
@@ -285,16 +325,17 @@ const InvestmentsPage = ({ userSession }) => {
       console.error('Unexpected error:', err);
       setError('An unexpected error occurred. Please try again.');
     } finally {
+      // Always clear loading state, regardless of success or failure
       setLoading(false);
     }
   };
 
-
-
-  const handleDeleteItem = async () => {  
+  const handleDeleteItem = async () => {
+    // Safety check - should not be called without an item selected  
     if (!itemToDelete) return;
     
     try {
+      // Call database RPC function with user context for security
       const { data, error } = await supabase.rpc('delete_investment_with_context', {
         investment_id: itemToDelete.id,
         context_user_id: userSession.id
@@ -307,11 +348,15 @@ const InvestmentsPage = ({ userSession }) => {
       
       console.log('Investment deleted successfully');
       
+      // Remove item from local state for immediate UI update
       setInvestments(prev => prev.filter(inv => inv.id !== itemToDelete.id));
+
+      // Close the confirmation modal
       setItemToDelete(null);
     } catch (err) {
       console.error('Error deleting investment:', err);
       
+      // Provide user-friendly error messages based on error type
       if (err.message.includes('Invalid user context')) {
         alert('Authentication error: Please refresh the page and re-enter your beta key.');
       } else if (err.message.includes('not found or access denied')) {
@@ -323,10 +368,16 @@ const InvestmentsPage = ({ userSession }) => {
   };
 
   const validateUserSession = (session) => {
+    // Check if session object exists
     if (!session) return false;
+
+    // Check if session has an ID field
     if (!session.id) return false;
+
+    // Ensure ID is a string (UUIDs should be strings)
     if (typeof session.id !== 'string') return false;
     
+    // Validate UUID format using regex
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(session.id)) return false;
     
@@ -341,6 +392,7 @@ const InvestmentsPage = ({ userSession }) => {
     }
   };
 
+  // Loading state - show spinner while data is being fetched
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center">
@@ -352,6 +404,7 @@ const InvestmentsPage = ({ userSession }) => {
     );
   }
 
+  // Error state - show error message with retry option
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center">
@@ -369,6 +422,7 @@ const InvestmentsPage = ({ userSession }) => {
     );
   }
 
+  // Main application render
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 p-4">
       <div className="max-w-7xl mx-auto">
@@ -380,9 +434,10 @@ const InvestmentsPage = ({ userSession }) => {
           <p className="text-gray-400">Track your Counter-Strike skin investments and performance</p>
         </div>
 
-        {/* Portfolio Summary */}
+        {/* Portfolio Summary Cards - only show if user has data */}
         {(investments.length > 0 || soldItems.length > 0) && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            {/* Total Invested/Sold Value Card */}
             <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
               <div className="text-gray-400 text-sm">
                 {activeTab === 'Sold' ? 'Total Sold' : 'Current Invested'}
@@ -391,6 +446,8 @@ const InvestmentsPage = ({ userSession }) => {
                 ${activeTab === 'Sold' ? portfolioSummary.totalCurrentValue.toFixed(2) : portfolioSummary.totalBuyValue.toFixed(2)}
               </div>
             </div>
+
+            {/* Current Value/Total Invested Card */}
             <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
               <div className="text-gray-400 text-sm">
                 {activeTab === 'Sold' ? 'Total Invested' : 'Current Value'}
@@ -399,6 +456,8 @@ const InvestmentsPage = ({ userSession }) => {
                 ${activeTab === 'Sold' ? portfolioSummary.totalBuyValue.toFixed(2) : portfolioSummary.totalCurrentValue.toFixed(2)}
               </div>
             </div>
+
+            {/* Profit/Loss Card with color coding and trend icons */}
             <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
               <div className="text-gray-400 text-sm">
                 {activeTab === 'Sold' ? 'Realized P&L' : 'Unrealized P&L'}
@@ -410,6 +469,8 @@ const InvestmentsPage = ({ userSession }) => {
                 <span>${Math.abs(portfolioSummary.totalProfit).toFixed(2)} ({portfolioSummary.profitPercentage.toFixed(2)}%)</span>
               </div>
             </div>
+
+            {/* Item Count Card */}
             <div className="bg-gradient-to-br from-gray-800 to-slate-800 p-4 rounded-lg border border-gray-700">
               <div className="text-gray-400 text-sm">
                 {activeTab === 'Sold' ? 'Sales' : 'Items'}
@@ -419,7 +480,7 @@ const InvestmentsPage = ({ userSession }) => {
           </div>
         )}
 
-        {/* Search Bar - Centered */}
+        {/* Search Bar*/}
         <div className="mb-6 flex justify-center">
           <div className="relative max-w-md w-full">
             <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
@@ -433,7 +494,7 @@ const InvestmentsPage = ({ userSession }) => {
           </div>
         </div>
 
-        {/* Tabs - Centered */}
+        {/* Tabs Navigation */}
         <div className="mb-6">
           {/* Main Category Tabs */}
           <div className="flex flex-wrap justify-center gap-2 mb-4">
@@ -452,7 +513,7 @@ const InvestmentsPage = ({ userSession }) => {
             ))}
           </div>
           
-          {/* Sold Tab - Visually Separated and Centered */}
+          {/* Sold Tab */}
           <div className="flex items-center justify-center gap-4">
             <div className="flex-1 border-t border-gray-700"></div>
             <button
@@ -469,7 +530,7 @@ const InvestmentsPage = ({ userSession }) => {
           </div>
         </div>
 
-        {/* Add Item Button - Don't show for All or Sold tabs, Centered */}
+        {/* Add Item Button */}
         {activeTab !== 'All' && activeTab !== 'Sold' && (
           <div className="mb-6 flex justify-center">
             <button
@@ -503,6 +564,7 @@ const InvestmentsPage = ({ userSession }) => {
           ))}
         </div>
 
+        {/* Empty State - Shows when no items match current filters */}
         {currentItems.length === 0 && (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -539,6 +601,7 @@ const InvestmentsPage = ({ userSession }) => {
         )}
       </div>
 
+      {/* Delete Confirmation Modal */}
       {itemToDelete && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-gradient-to-br from-gray-900 to-slate-900 p-6 rounded-xl border border-red-500/20 max-w-sm w-full mx-4">

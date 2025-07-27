@@ -7,6 +7,7 @@ import { supabase } from '@/supabaseClient';
 import { useScrollLock, useAdvancedDebounce } from '@/hooks/util';
 import { useCalculatePortfolioHealth } from '@/hooks/portfolio';
 
+// Array of quick actions
 const createQuickActions = (setShowQuickAdd, setShowQuickSell) => [
   {
     title: 'Check Prices',
@@ -50,21 +51,28 @@ const createQuickActions = (setShowQuickAdd, setShowQuickSell) => [
   },
 ];
 
-// Calculate portfolio metrics (memoized for performance)
+// Calculate portfolio metrics from investments
 const calculatePortfolioMetrics = (investments) => {
+    // Calculate total amount invested (buy price * original quantity)
     const totalBuyValue = investments.reduce((sum, inv) => 
       sum + (parseFloat(inv.buy_price) * parseFloat(inv.original_quantity)), 0);
     
+    // Calculate current portfolio value (current price * remaining quantity + sales value)
     const totalCurrentValue = investments.reduce((sum, inv) => 
       sum + (parseFloat(inv.current_price) * parseFloat(inv.quantity)) + parseFloat(inv.total_sale_value), 0);
     
+    // Sum up all realized profits/losses from completed sales
     const totalRealizedPL = investments.reduce((sum, inv) => 
       sum + parseFloat(inv.realized_profit_loss), 0);
     
+    // Sum up all unrealized profits/losses from current holdings
     const totalUnrealizedPL = investments.reduce((sum, inv) => 
       sum + parseFloat(inv.unrealized_profit_loss), 0);
     
+    // Total profit/loss combines both realized and unrealized
     const totalProfitLoss = totalRealizedPL + totalUnrealizedPL;
+
+    // Calculate overall growth percentage (avoid division by zero)
     const overallGrowthPercent = totalBuyValue > 0 ? (totalProfitLoss / totalBuyValue) * 100 : 0;
     
     return {
@@ -77,23 +85,23 @@ const calculatePortfolioMetrics = (investments) => {
     };
 };
 
-// get the recent added and sold items
+// Processes and combines recent investment purchases and sales into a unified activity feed
 const getRecentActivity = (investments, soldItems) => {
-  // Create recent purchases from investments (using created_at from investments table)
-  // Only include purchases that actually have a positive original_quantity
+  // Process recent purchases from investments table
+  // Filter for valid purchases with positive quantities and prices
   const recentInvestments = investments
   .filter(inv => {
     return inv.created_at && 
            parseFloat(inv.original_quantity || inv.quantity) > 0 &&
            parseFloat(inv.buy_price) > 0;
   })
-  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-  .slice(0, 10)
+  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) // Sort by date (newest first)
+  .slice(0, 10) // Take top 10 recent purchases
   .map(inv => {
     const purchaseQuantity = parseFloat(inv.original_quantity || inv.quantity);
     const purchasePrice = parseFloat(inv.buy_price);
     
-    // Updated subtitle logic
+    // Create subtitle with condition info if available, otherwise just quantity
     const subtitle = inv.condition && inv.condition.toLowerCase() !== 'unknown' 
       ? `${inv.condition} • Qty: ${purchaseQuantity}`
       : `Qty: ${purchaseQuantity}`;
@@ -104,19 +112,20 @@ const getRecentActivity = (investments, soldItems) => {
       date: new Date(inv.created_at),
       title: `${inv.name}${inv.skin_name ? ` (${inv.skin_name})` : ''}`,
       subtitle: subtitle,
-      amount: purchasePrice * purchaseQuantity,
-      isPositive: false,
+      amount: purchasePrice * purchaseQuantity, // Total purchase amount
+      isPositive: false, // Purchases are negative cash flow
       image_url: inv.image_url
     };
   });
 
-  // Create recent sales from sold items (using sale_date from investment_sales table)
+  // Process recent sales from investment_sales table
+  // Filter for valid sales with positive sale values
   const recentSales = soldItems
   .filter(sale => sale.sale_date && parseFloat(sale.total_sale_value) > 0)
-  .sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date))
-  .slice(0, 10)
+  .sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date)) // Sort by date (newest first)
+  .slice(0, 10) // Take top 10 recent sales
   .map(sale => {
-    // Updated subtitle logic
+    // Create subtitle with condition info if available, otherwise just quantity
     const subtitle = sale.item_condition && sale.item_condition.toLowerCase() !== 'unknown'
       ? `${sale.item_condition} • Qty: ${sale.quantity_sold}`
       : `Qty: ${sale.quantity_sold}`;
@@ -128,14 +137,15 @@ const getRecentActivity = (investments, soldItems) => {
       title: `${sale.item_name}${sale.item_skin_name ? ` (${sale.item_skin_name})` : ''}`,
       subtitle: subtitle,
       amount: parseFloat(sale.total_sale_value),
-      isPositive: true,
+      isPositive: true, // Sales are positive cash flow
       image_url: sale.image_url,
-      variant: sale.item_variant, // Add this line to map the variant correctly
-      quantity: sale.quantity_sold // Also add quantity for consistency
+      variant: sale.item_variant, // Map variant for consistency
+      quantity: sale.quantity_sold // Map quantity for consistency
     };
   });
 
-  // Combine and sort by date (most recent first)
+  // Combine both arrays and sort by date (most recent first)
+  // Limit to 8 most recent activities for display
   const combinedActivity = [...recentInvestments, ...recentSales]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 8); // Show last 8 activities
@@ -143,7 +153,7 @@ const getRecentActivity = (investments, soldItems) => {
   return combinedActivity;
 };
 
-// Formatting 
+// Formats numeric price values as USD currency
 const formatPrice = (price) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -152,33 +162,44 @@ const formatPrice = (price) => {
     }).format(price);
 };
 
+// Main InvestmentDashboard component
 const InvestmentDashboard = ({ userSession }) => {
+  // User data states
   const [investments, setInvestments] = useState([]);
   const [soldItems, setSoldItems] = useState([]);
+
+  // UI States
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Chart data states
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('MAX');
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
+
+  // Quick action states
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showQuickSell, setShowQuickSell] = useState(false);
   
-  // Ref to track if initial load is complete
+  // Ref for performance optimization
   const initialLoadComplete = useRef(false);
   const lastDataFetchRef = useRef(0);
   
   // Apply scroll lock when popups are open
   useScrollLock(showQuickAdd || showQuickSell);
 
+  // Memoized quick actions to prevent unnecessary re-renders
   const quickActions = useMemo(() => 
     createQuickActions(setShowQuickAdd, setShowQuickSell), 
     []
   );
 
+  // Calculate portfolio health metrics using custom hook
   const portfolioHealth = useCalculatePortfolioHealth(investments);
 
-  // Memoize portfolio metrics calculation with deep comparison
+  // Memoized portfolio metrics calculation with deep comparison to prevent unnecessary recalculations
   const portfolioMetrics = useMemo(() => {
+    // Return zero values if no investments
     if (investments.length === 0) {
       return {
         totalBuyValue: 0,
@@ -190,20 +211,21 @@ const InvestmentDashboard = ({ userSession }) => {
       };
     }
     return calculatePortfolioMetrics(investments);
-  }, [investments]);
+  }, [investments]); // Only recalculate when investments change
 
-  // Memoize recent activity with both dependencies
+  // Memoized recent activity calculation to prevent unnecessary processing
   const recentActivityMemo = useMemo(() => {
     if (investments.length === 0 && soldItems.length === 0) return [];
     return getRecentActivity(investments, soldItems);
-  }, [investments, soldItems]);
+  }, [investments, soldItems]); // Recalculate when either data source changes
 
-  // Non-debounced fetch data for initial load and critical updates
+  // Fetches critical data (investments and sales) without debouncing
   const fetchCriticalData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
+      // Validate user session before making API calls
       if (!validateUserSession(userSession)) {
         setError('Invalid user session. Please re-validate your beta key.');
         return;
@@ -211,6 +233,8 @@ const InvestmentDashboard = ({ userSession }) => {
 
       console.log('Fetching data for user:', userSession.id);
 
+      // Fetch both investments and sales data concurrently using Promise.allSettled
+      // This allows one to succeed even if the other fails
       const [investmentsResult, soldItemsResult] = await Promise.allSettled([
         supabase.rpc('fetch_user_investment_summary', {
           context_user_id: userSession.id
@@ -220,10 +244,9 @@ const InvestmentDashboard = ({ userSession }) => {
         })
       ]);
 
-      // Declare investmentsArray outside the if block
       let investmentsArray = [];
 
-      // Handle investments result
+      // Handle investments result (critical - must succeed)
       if (investmentsResult.status === 'fulfilled' && !investmentsResult.value.error) {
         investmentsArray = Array.isArray(investmentsResult.value.data) 
           ? investmentsResult.value.data 
@@ -246,11 +269,12 @@ const InvestmentDashboard = ({ userSession }) => {
         setSoldItems([]);
       }
 
-      // Only fetch chart data if we have investments and it's the initial load
+      // Fetch chart data only if we have investments and it's the initial load
       if (investmentsArray.length > 0 && !initialLoadComplete.current) {
         await debouncedFetchChartData(selectedTimePeriod);
       }
 
+      // Update tracking variables
       lastDataFetchRef.current = Date.now();
       initialLoadComplete.current = true;
 
@@ -262,53 +286,61 @@ const InvestmentDashboard = ({ userSession }) => {
     }
   }, [userSession?.id]);
 
-  // DEBOUNCED REFRESH for user-initiated actions
+  // Debounced refresh function for user-initiated actions
   const { debouncedFunction: debouncedRefresh } = useAdvancedDebounce(
     useCallback(async () => {
-      // Only refresh if enough time has passed since last fetch
+      // Rate limiting: only refresh if enough time has passed since last fetch
       const timeSinceLastFetch = Date.now() - lastDataFetchRef.current;
       if (timeSinceLastFetch < 1000) return; // Minimum 1 second between refreshes
       
       await fetchCriticalData();
     }, [fetchCriticalData]),
-    800, // Slightly longer delay for user actions
+    800, // 800ms delay for user actions
     { 
-      leading: false, 
-      trailing: true, 
+      leading: false, // Don't execute immediately
+      trailing: true, // Execute after delay
       maxWait: 2000 // Ensure execution within 2 seconds max
     }
   );
 
-  // Handle sale completion with debounced data refresh
+  // Handles completion of a sale transaction
   const handleSaleComplete = useCallback((investmentId, quantitySold, salePrice, remainingQuantity) => {
-    // Immediately update local state for responsive UI
+    // Immediately update local state for responsive UI feedback
     setInvestments(prev => prev.map(inv => 
       inv.id === investmentId 
         ? { ...inv, quantity: remainingQuantity }
         : inv
     ));
     
-    // Debounce the full data refresh
+    // Debounce the full data refresh to get updated totals and metrics
     debouncedRefresh();
   }, [debouncedRefresh]);
 
+  // Validates user session object for security and data integrity
   const validateUserSession = (session) => {
+    // Check if session exists
     if (!session) return false;
+
+    // Check if session has ID
     if (!session.id) return false;
+
+    // Check if ID is a string
     if (typeof session.id !== 'string') return false;
     
+    // Validate UUID format using regex
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(session.id)) return false;
     
     return true;
   };
 
-  // Debounced chart data fetching for time period changes
+  // Debounced chart data fetching function (time-period changes)
   const { debouncedFunction: debouncedFetchChartData } = useAdvancedDebounce(
     useCallback(async (timePeriod) => {
       try {
         setChartLoading(true);
         
+        // Fetch chart data for the specified time period
         const { data, error } = await supabase.rpc('get_chart_data', {
           context_user_id: userSession.id,
           time_period: timePeriod
@@ -319,27 +351,31 @@ const InvestmentDashboard = ({ userSession }) => {
           return;
         }
 
+        // Parse response data (handle both string and object responses)
         const chartResult = typeof data === 'string' ? JSON.parse(data) : data;
         
-        // Pre-calculate current date once
+        // Pre-calculate current date info for optimization
         const currentDate = new Date();
         const currentDateString = currentDate.toDateString();
         const currentMonth = currentDate.getMonth();
         
-        // Transform the data for the chart with optimized date handling
+        // Transform API data for chart component with optimized date handling
         const transformedData = chartResult.data.map(point => {
           const date = new Date(point.date);
           const isToday = date.toDateString() === currentDateString;
           
+          // Format date based on chart granularity
           let formattedDate;
           if (chartResult.granularity === 'hourly') {
             if (isToday) {
+              // Today's hours: show time only
               formattedDate = date.toLocaleTimeString('en-US', {
                 hour: 'numeric',
                 minute: '2-digit',
                 hour12: true
               });
             } else {
+              // Other days: show date and hour
               formattedDate = date.toLocaleDateString('en-US', {
                 month: 'short',
                 day: 'numeric',
@@ -348,11 +384,13 @@ const InvestmentDashboard = ({ userSession }) => {
               });
             }
           } else if (chartResult.granularity === 'daily') {
+            // Daily view: show month and day
             formattedDate = date.toLocaleDateString('en-US', {
               month: 'short',
               day: 'numeric'
             });
           } else {
+            // Monthly/yearly view: show month and year
             formattedDate = date.toLocaleDateString('en-US', {
               month: 'short',
               year: 'numeric'
@@ -362,16 +400,18 @@ const InvestmentDashboard = ({ userSession }) => {
           return {
             date: formattedDate,
             rawDate: date,
-            totalValue: parseFloat(point.value),
+            totalValue: parseFloat(point.value), // Keep raw date for sorting
             invested: parseFloat(point.invested),
             profitLoss: parseFloat(point.profit_loss),
             returnPercentage: parseFloat(point.return_percentage),
+            // Mark current data points for highlighting
             isCurrentValue: isToday && chartResult.granularity === 'hourly' || 
                            (chartResult.granularity === 'daily' && isToday) ||
                            (chartResult.granularity === 'monthly' && date.getMonth() === currentMonth)
           };
         });
 
+        // Sort data chronologically for proper chart display
         transformedData.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
         setChartData(transformedData);
         
@@ -381,10 +421,10 @@ const InvestmentDashboard = ({ userSession }) => {
         setChartLoading(false);
       }
     }, [userSession?.id]),
-    500, // delay for chart data updates
+    500, // 500ms delay for chart data updates
     { leading: false,
       trailing: true,
-      maxWait: 1500 
+      maxWait: 1500 // Maximum wait of 1.5 seconds
     }
   );
 
@@ -393,7 +433,7 @@ const InvestmentDashboard = ({ userSession }) => {
     if (!userSession) return;
 
     if (validateUserSession(userSession)) {
-      fetchCriticalData();
+      fetchCriticalData(); // No debouncing for initial load
     } else {
       setLoading(false);
       setError('Invalid user session. Please validate your beta key.');
@@ -426,6 +466,7 @@ const InvestmentDashboard = ({ userSession }) => {
     );
   }
 
+  // Main Render
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -440,6 +481,7 @@ const InvestmentDashboard = ({ userSession }) => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {/* Total Portfolio Value Card */}
           <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
             <div className="flex items-center justify-between">
               <div>
@@ -452,6 +494,7 @@ const InvestmentDashboard = ({ userSession }) => {
             </div>
           </div>
 
+          {/* Total Profit/Loss Card */}
           <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
             <div className="flex items-center justify-between">
               <div>
@@ -460,6 +503,7 @@ const InvestmentDashboard = ({ userSession }) => {
                   <p className={`text-2xl font-bold ${portfolioMetrics.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {portfolioMetrics.totalProfitLoss >= 0 ? '+' : ''}{formatPrice(portfolioMetrics.totalProfitLoss)}
                   </p>
+                  {/* Trending icon based on P&L */}
                   {portfolioMetrics.overallGrowthPercent >= 0 ? (
                     <TrendingUp className="w-5 h-5 text-green-400" />
                   ) : (
@@ -472,7 +516,8 @@ const InvestmentDashboard = ({ userSession }) => {
               </div>
             </div>
           </div>
-
+          
+          {/* Overall Growth Percentage Card */}
           <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
             <div className="flex items-center justify-between">
               <div>
@@ -488,7 +533,7 @@ const InvestmentDashboard = ({ userSession }) => {
           </div>
         </div>
 
-        {/* Chart Section */}
+        {/* Portfolio Performance Chart */}
         <PortfolioPerformanceChart userSession={userSession} />
 
         {/* Recent Price Changes */}
@@ -498,11 +543,12 @@ const InvestmentDashboard = ({ userSession }) => {
             <RecentPriceChanges investments={investments} />
           </div>
 
-          {/* Quick Actions */}
+          {/* Quick Actions Sidebar */}
           <div className="lg:col-span-1">
             <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 mb-8 border border-gray-700/50">
               <h2 className="text-xl font-semibold text-white mb-6">Quick Actions</h2>
               
+              {/* Quick Action Buttons */}
               <div className="space-y-4">
                 {quickActions.map((action, index) => {
                   const Icon = action.icon;
@@ -529,8 +575,9 @@ const InvestmentDashboard = ({ userSession }) => {
                 })}
               </div>
 
-              {/* Portfolio Summary */}
+              {/* Portfolio P&L Summary */}
               <div className="mt-6 mb-1 space-y-3">
+                {/* Realized P&L */}
                 <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
                   <div className="flex justify-between items-center">
                     <span className="text-md text-gray-400">Realized P&L</span>
@@ -539,6 +586,8 @@ const InvestmentDashboard = ({ userSession }) => {
                     </span>
                   </div>
                 </div>
+
+                {/* Unrealized P&L */}
                 <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
                   <div className="flex justify-between items-center">
                     <span className="text-md text-gray-400">Unrealized P&L</span>
@@ -552,14 +601,14 @@ const InvestmentDashboard = ({ userSession }) => {
           </div>
         </div>
 
-        {/* New Widgets Row */}
+        {/* Recent Activity Widget */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
         <RecentActivity 
           recentActivity={recentActivityMemo} 
           formatPrice={formatPrice} 
         />
 
-        {/* QuickAddItemForm */}
+        {/* QuickAddItemForm (Quick Action Popup) */}
         {showQuickAdd && (
           <QuickAddItemForm
             onClose={() => setShowQuickAdd(false)}
@@ -572,7 +621,7 @@ const InvestmentDashboard = ({ userSession }) => {
           />
         )}
 
-        {/* QuickSellModal */}
+        {/* QuickSellModal (Quick Action Popup) */}
         {showQuickSell && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <QuickSellModal

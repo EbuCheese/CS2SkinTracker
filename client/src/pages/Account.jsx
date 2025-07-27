@@ -2,15 +2,17 @@ import React, { useState } from 'react';
 import { User, LogOut, Shield, Calendar, Key, IdCardLanyard, AlertTriangle, X, Eye, EyeOff, Copy, Check } from 'lucide-react';
 
 const AccountPage = ({ userSession, onLogout, onRevoke }) => {
+  // State management for loading states and UI controls
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isRevoking, setIsRevoking] = useState(false);
   const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
   const [showFields, setShowFields] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
 
-  // Get beta key from localStorage
+  // Retrieve beta key from localStorage with fallback
   const betaKey = localStorage.getItem('beta_key') || 'N/A';
 
+  // Handles user logout with optional beta key clearing
   const handleLogout = async (clearBetaKey = false) => {
     setIsLoggingOut(true);
     // Add a small delay for better UX
@@ -19,10 +21,12 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
     }, 1000);
   };
 
+  // Initiates the beta key revocation confirmation flow
   const handleRevokeClick = () => {
     setShowRevokeConfirm(true);
   };
 
+  // Confirms and executes beta key revocation
   const handleRevokeConfirm = async () => {
     setIsRevoking(true);
     setShowRevokeConfirm(false);
@@ -43,14 +47,17 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
     }
   };
 
+  // Cancels the beta key revocation process
   const handleRevokeCancel = () => {
     setShowRevokeConfirm(false);
   };
 
+  // Toggles the visibility of sensitive account fields
   const toggleFieldVisibility = () => {
     setShowFields(!showFields);
   };
 
+  // Copies text to clipboard and provides visual feedback
   const copyToClipboard = async (text, fieldName) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -61,12 +68,14 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
     }
   };
 
+  // Masks sensitive values for security display
   const maskValue = (value, showFull = false) => {
     if (!value || value === 'N/A') return 'N/A';
     if (showFull || showFields) return value;
     return '••••••••••••••••';
   };
 
+  // Reusable copy button component with success feedback
   const CopyButton = ({ text, fieldName }) => (
     <button
       onClick={() => copyToClipboard(text, fieldName)}
@@ -84,24 +93,29 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
+
+        {/* Page Header Section */}
         <div className="text-center mb-8">
+          {/* Avatar Circle with User Icon */}
           <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center shadow-xl mx-auto mb-4">
             <User className="w-10 h-10 text-white" />
           </div>
+          {/* Page Title and Description */}
           <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent mb-2">
             Account Settings
           </h1>
           <p className="text-gray-400">Manage your SkinTracker beta account</p>
         </div>
 
-        {/* Account Info Card */}
+        {/* Account Information Display Card */}
         <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 p-6 mb-6 shadow-xl">
+        {/* Card Header with Toggle Visibility Button */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
               <Shield className="w-6 h-6 text-orange-500" />
               <h2 className="text-xl font-semibold text-white">Beta Account Information</h2>
             </div>
+            {/* Toggle button for showing/hiding sensitive fields */}
             <button
               onClick={toggleFieldVisibility}
               className="p-2 text-gray-400 hover:text-orange-400 transition-colors duration-200 rounded-lg hover:bg-gray-700/30"
@@ -111,8 +125,10 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
             </button>
           </div>
           
+          {/* Account Information Fields Grid */}
           <div className="space-y-4">
-            {/* Session ID - Top Left */}
+
+            {/* Session ID Field */}
             <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
               <div className="flex items-center space-x-3">
                 <Calendar className="w-5 h-5 text-orange-400" />
@@ -126,7 +142,7 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
               <CopyButton text={userSession?.session_id || ''} fieldName="session_id" />
             </div>
             
-            {/* User ID - Below Session ID */}
+            {/* User ID Field */}
             <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
               <div className="flex items-center space-x-3">
                 <User className="w-5 h-5 text-blue-400" />
@@ -140,7 +156,7 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
               <CopyButton text={userSession?.id || ''} fieldName="user_id" />
             </div>
             
-            {/* Beta Key - Replacing Beta Active */}
+            {/* Beta Key Field (from localStorage) */}
             <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
               <div className="flex items-center space-x-3">
                 <Key className="w-5 h-5 text-green-400" />
@@ -154,7 +170,7 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
               <CopyButton text={betaKey} fieldName="beta_key" />
             </div>
             
-            {/* Beta Key ID - Below Beta Key */}
+            {/* Beta Key ID Field (from session) */}
             <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
               <div className="flex items-center space-x-3">
                 <IdCardLanyard className="w-5 h-5 text-purple-400" />
@@ -170,11 +186,12 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
           </div>
         </div>
 
-        {/* Actions Card */}
+        {/* Account Actions Card */}
         <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 p-6 shadow-xl">
           <h2 className="text-xl font-semibold text-white mb-6">Account Actions</h2>
           
           <div className="space-y-4">
+
             {/* Quick Sign Out */}
             <div className="p-4 bg-orange-900/20 border border-orange-500/30 rounded-lg">
               <div className="flex items-center justify-between">
@@ -184,8 +201,9 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
                     Sign out but keep your beta key saved for quick re-login.
                   </p>
                 </div>
+                {/* Quick Sign Out Button */}
                 <button
-                  onClick={() => handleLogout(false)}
+                  onClick={() => handleLogout(false)} // Don't clear beta key
                   disabled={isLoggingOut || isRevoking}
                   className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${
                     isLoggingOut || isRevoking
@@ -208,7 +226,7 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
               </div>
             </div>
 
-            {/* Revoke Beta Key */}
+            {/* Beta Key Revocation Action */}
             <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg relative">
               <div className="flex items-center justify-between">
                 <div>
@@ -219,6 +237,7 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
                   <p className="text-gray-400 text-sm">
                     Permanently revoke your beta key and clear all saved data.
                   </p>
+                  {/* Warning Messages */}
                   <p className="text-red-300 text-sm mt-2 font-medium">
                     Warning: Your beta key will be permanently deactivated
                   </p>
@@ -226,6 +245,7 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
                     and you'll need a new one for future access.
                   </p>
                 </div>
+                {/* Revoke Key Button */}
                 <button
                   onClick={handleRevokeClick}
                   disabled={isLoggingOut || isRevoking}
@@ -249,10 +269,12 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
                 </button>
               </div>
 
-              {/* Confirmation Modal Overlay */}
+              {/* Revocation Confirmation Modal */}
               {showRevokeConfirm && (
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-sm rounded-lg flex items-center justify-center p-4">
                   <div className="bg-gray-800 border border-red-500/50 rounded-xl p-6 max-w-md w-full shadow-2xl">
+
+                    {/* Modal Header */}
                     <div className="flex items-center space-x-3 mb-4">
                       <div className="w-10 h-10 bg-red-600/20 rounded-full flex items-center justify-center">
                         <AlertTriangle className="w-5 h-5 text-red-400" />
@@ -260,10 +282,12 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
                       <h3 className="text-lg font-semibold text-white">Confirm Key Revocation</h3>
                     </div>
                     
+                    {/* Warning Content */}
                     <div className="space-y-3 mb-6">
                       <p className="text-gray-300 text-sm">
                         <strong>Warning:</strong> This action cannot be undone.
                       </p>
+                      {/* Consequences List */}
                       <ul className="text-red-300 text-sm space-y-1 list-disc list-inside bg-red-900/20 p-3 rounded border border-red-500/30">
                         <li>Your beta key will be permanently deactivated</li>
                         <li>All saved account data will be cleared</li>
@@ -272,7 +296,9 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
                       </ul>
                     </div>
 
+                    {/* Modal Action Buttons */}
                     <div className="flex space-x-3">
+                      {/* Cancel Button */}
                       <button
                         onClick={handleRevokeCancel}
                         disabled={isRevoking}
@@ -280,6 +306,7 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
                       >
                         Cancel
                       </button>
+                      {/* Confirm Revocation Button */}
                       <button
                         onClick={handleRevokeConfirm}
                         disabled={isRevoking}
@@ -302,7 +329,7 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
           </div>
         </div>
 
-        {/* Beta Notice */}
+        {/* Beta Version Notice */}
         <div className="mt-8 text-center">
           <div className="inline-flex items-center space-x-2 px-4 py-2 bg-orange-500/10 border border-orange-500/30 rounded-full">
             <Shield className="w-4 h-4 text-orange-400" />
