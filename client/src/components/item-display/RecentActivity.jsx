@@ -4,14 +4,14 @@ import { Activity, Plus, DollarSign } from 'lucide-react';
 const RecentActivity = ({ recentActivity, formatPrice }) => {
   const [visibleItems, setVisibleItems] = useState(3);
   const [cardHeight, setCardHeight] = useState('auto');
-  const [imageStates, setImageStates] = useState({}); // Persistent image states
+  const [imageStates, setImageStates] = useState({}); // Track loading/error states for each activity image
   const containerRef = useRef(null);
   const headerRef = useRef(null);
   const resizeObserverRef = useRef(null);
   const timeoutRef = useRef(null);
-  const imageStateInitialized = useRef(new Set()); // Track initialized states
+  const imageStateInitialized = useRef(new Set()); // Prevent re-initializing image states for existing activities
 
-  // Optimized image loading handlers - use functional updates to avoid stale closures
+  // Use functional updates to prevent stale closure issues with async image loading
   const handleImageLoad = useCallback((activityId) => {
     setImageStates(prev => {
       if (prev[activityId]?.loading === false) return prev; // Avoid unnecessary updates
@@ -36,7 +36,7 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
     return imageStates[activityId] || { loading: true, error: false };
   }, [imageStates]);
 
-  // More efficient image state initialization - only initialize new items
+  // Only initialize image states for new activities to prevent unnecessary re-renders
   useEffect(() => {
     let hasNewStates = false;
     const newImageStates = {};
@@ -55,7 +55,7 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
     }
   }, [recentActivity]);
 
-  // Cleanup tracking for removed activities
+  // Clean up image states for activities that no longer exist to prevent memory leaks
   useEffect(() => {
     const activeIds = new Set(recentActivity.map(activity => activity.id || activity.title));
     const currentIds = Array.from(imageStateInitialized.current);
@@ -72,7 +72,8 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
     }
   }, [recentActivity]);
 
-  // Memoize the calculation function to prevent recreation on every render
+  // Calculate how many items can fit based on available container height
+  // Balances between showing more items vs maintaining readable card sizes
   const calculateOptimalLayout = useCallback(() => {
     if (!containerRef.current || !headerRef.current) return;
 
@@ -92,6 +93,7 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
     let optimalItems = 1;
     let optimalHeight = maxCardHeight;
 
+    // Find the sweet spot between number of items and card readability
     for (let items = 1; items <= Math.min(recentActivity.length, 8); items++) {
       const totalSpacing = (items - 1) * spacing;
       const heightPerCard = (availableHeight - totalSpacing) / items;
@@ -106,7 +108,7 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
     setCardHeight(optimalHeight);
   }, [recentActivity.length]);
 
-  // Debounced resize handler
+  // Debounce resize events to prevent excessive recalculations
   const handleResize = useCallback(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -119,7 +121,7 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
 
     window.addEventListener('resize', handleResize);
     
-    // Create ResizeObserver only once
+    // Create ResizeObserver only once to avoid multiple observers
     if (!resizeObserverRef.current) {
       resizeObserverRef.current = new ResizeObserver(calculateOptimalLayout);
     }
@@ -190,7 +192,7 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
                 const activityId = activity.id || activity.title;
                 const imageState = getImageState(activityId);
                 
-                // Direct calculation without useMemo to avoid hook order issues
+                // Calculate date format inline to avoid hook order issues in map
                 const formattedDate = (() => {
                   if (!activity.date || isNaN(activity.date.getTime())) {
                     return 'Unknown date';
@@ -218,7 +220,7 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
                       style={{ minHeight: `${cardHeight}px` }}
                     >
                       <div className="flex items-center space-x-4 flex-1 min-w-0">
-                        {/* Optimized image container */}
+                        {/* Three-state image container: loading spinner, actual image, or fallback */}
                         <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 relative">
                           {/* Loading Spinner - only show if loading and not error */}
                           {imageState.loading && !imageState.error && activity.image_url && (
@@ -269,10 +271,12 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
                             <p className={`text-gray-400 truncate ${isCompact ? 'text-xs' : 'text-sm'}`}>
                               {activity.subtitle && activity.subtitle.toLowerCase() !== 'unknown' 
                                 ? (() => {
+                                    // Parse and format item details (condition, variant, quantity)
                                     const parts = activity.subtitle.split(' • ');
                                     const condition = parts[0];
                                     const qtyPart = parts.find(part => part.startsWith('Qty:')) || `Qty: ${activity.quantity || 1}`;
                                     
+                                    // Convert variant names to abbreviations for space efficiency
                                     const variant = (activity.variant || activity.item_variant) && 
                                                 (activity.variant || activity.item_variant).toLowerCase() !== 'normal' 
                                     ? ` (${(activity.variant || activity.item_variant).toLowerCase() === 'stattrak' ? 'ST' : 

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
+// Memoized component for rendering individual distribution items in the list
 const DistributionItem = React.memo(({ 
   item, 
   index, 
@@ -17,6 +18,7 @@ const DistributionItem = React.memo(({
     }`}
     onClick={onClick}
   >
+    {/* Left side: Color indicator and item name */}
     <div className="flex items-center space-x-3">
       <div 
         className={`w-3 h-3 rounded-full ${item.isGrouped ? 'ring-1 ring-gray-500' : ''}`}
@@ -26,6 +28,8 @@ const DistributionItem = React.memo(({
         {item.name} {item.isGrouped && `(${item.items.length} items)`}
       </span>
     </div>
+
+    {/* Right side: Value, percentage, and item count */}
     <div className="text-right">
       <div className="flex items-center gap-3">
         <span className="text-sm font-medium text-green-400">{formatCurrency(item.value)}</span>
@@ -36,32 +40,40 @@ const DistributionItem = React.memo(({
   </div>
 ));
 
+// Main Portfolio Health Pie Chart Component
 const PortfolioHealthPieChart = ({ portfolioHealth }) => {
+  // Toggle types
   const [activeToggle, setActiveToggle] = useState('type');
-  const [currentPage, setCurrentPage] = useState(0);
-  const [showSmallSlices, setShowSmallSlices] = useState(true);
   const [viewMode, setViewMode] = useState('chart'); // 'chart' or 'table'
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(0);
+
+  // Slice states
+  const [showSmallSlices, setShowSmallSlices] = useState(true);
   const [selectedSlice, setSelectedSlice] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [stickyTooltip, setStickyTooltip] = useState(null);
+
+  // Search states
+  const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
 
-  // Reset selected slice when switching tabs or view modes
+  // Reset UI state when switching between major view modes
   useEffect(() => {
-  setSelectedSlice(null);
-  setStickyTooltip(null);
-}, [activeToggle, viewMode, showSmallSlices]);
+    setSelectedSlice(null);
+    setStickyTooltip(null);
+  }, [activeToggle, viewMode, showSmallSlices]);
 
-// simple debounce effect for search
-useEffect(() => {
-  const timer = setTimeout(() => {
-    setDebouncedSearchTerm(searchTerm);
-  }, 300);
-  
-  return () => clearTimeout(timer);
-}, [searchTerm]);
+  // Debounce search input to improve performance
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
-  // Memoized color palettes
+  // Color palettes for different visualization modes
   const colors = useMemo(() => ({
     type: {
       liquid: '#10B981',
@@ -89,7 +101,7 @@ useEffect(() => {
     ]
   }), []);
 
-  // Memoized format percentage function
+  // Optimized percentage formatter with dynamic precision
   const formatPercentage = useMemo(() => (percentage) => {
     if (percentage >= 1) return `${percentage.toFixed(1)}%`;
     if (percentage >= 0.1) return `${percentage.toFixed(2)}%`;
@@ -97,7 +109,7 @@ useEffect(() => {
     return percentage > 0 ? '<0.001%' : '0%';
   }, []);
 
-  // Format currency
+  // Currency formatter with consistent USD formatting
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -107,14 +119,16 @@ useEffect(() => {
     }).format(value);
   };
 
-  // Memoized consolidation function
+  // Item name consolidation logic for grouping similar items
   const consolidateItems = useMemo(() => (itemName) => {
     const lowerName = itemName.toLowerCase();
     
+    // Handle special items (★ indicates StatTrak or special quality)
     if (itemName.startsWith('★')) {
       return lowerName.includes('gloves') || lowerName.includes('wraps') ? 'Gloves' : 'Knives';
     }
     
+    // Category-based consolidation
     if (lowerName.includes('sticker')) return 'Stickers';
     if (lowerName.includes('patch')) return 'Patches';
     if (lowerName.includes('sealed graffiti')) return 'Graffiti';
@@ -122,43 +136,47 @@ useEffect(() => {
     if (lowerName.includes('agent')) return 'Agents';
     if (lowerName.includes('case')) return itemName;
     
+    // Default: use first part of item name (before |) or first word
     const parts = itemName.split(' | ');
     return parts.length > 1 ? parts[0] : itemName.split(' ')[0];
   }, []);
 
-  // Mock data for demonstration
-  const mockPortfolioHealth = useMemo(() => ({
-    typeBreakdown: [
-      { name: 'liquid', value: 25000, percentage: 45.5, count: 50 },
-      { name: 'craft', value: 15000, percentage: 27.3, count: 30 },
-      { name: 'case', value: 8000, percentage: 14.5, count: 100 },
-      { name: 'sticker', value: 4000, percentage: 7.3, count: 200 },
-      { name: 'agent', value: 2000, percentage: 3.6, count: 15 },
-      { name: 'keychain', value: 1000, percentage: 1.8, count: 25 }
-    ],
-    typeDiversityScore: 72,
-    typeFeedback: "Good type diversification with strong liquid asset base. Consider reducing case concentration.",
-    itemDiversityScore: 68,
-    itemFeedback: "Reasonable item spread but heavily weighted towards knives. Consider more glove investments.",
-    investments: [
-      { name: '★ AK-47 | Redline', quantity: 5, current_price: 50 },
-      { name: '★ Karambit | Doppler', quantity: 2, current_price: 800 },
-      { name: '★ Driver Gloves | King Snake', quantity: 1, current_price: 400 },
-      { name: 'AWP | Dragon Lore', quantity: 1, current_price: 3000 },
-      { name: 'M4A4 | Howl', quantity: 3, current_price: 600 },
-      { name: 'Sticker | Katowice 2014', quantity: 10, current_price: 100 },
-      { name: 'Agent | Sir Bloody Miami Darryl', quantity: 2, current_price: 150 },
-      { name: 'Sealed Graffiti | Lambda', quantity: 50, current_price: 2 },
-      { name: 'Spectrum Case', quantity: 100, current_price: 1.5 },
-      { name: 'Music Kit | AWOLNATION', quantity: 1, current_price: 25 }
-    ]
-  }), []);
+  // Mock data for development and demonstration purposes
+  // const mockPortfolioHealth = useMemo(() => ({
+  //   typeBreakdown: [
+  //     { name: 'liquid', value: 25000, percentage: 45.5, count: 50 },
+  //     { name: 'craft', value: 15000, percentage: 27.3, count: 30 },
+  //     { name: 'case', value: 8000, percentage: 14.5, count: 100 },
+  //     { name: 'sticker', value: 4000, percentage: 7.3, count: 200 },
+  //     { name: 'agent', value: 2000, percentage: 3.6, count: 15 },
+  //     { name: 'keychain', value: 1000, percentage: 1.8, count: 25 }
+  //   ],
+  //   typeDiversityScore: 72,
+  //   typeFeedback: "Good type diversification with strong liquid asset base. Consider reducing case concentration.",
+  //   itemDiversityScore: 68,
+  //   itemFeedback: "Reasonable item spread but heavily weighted towards knives. Consider more glove investments.",
+  //   investments: [
+  //     { name: '★ AK-47 | Redline', quantity: 5, current_price: 50 },
+  //     { name: '★ Karambit | Doppler', quantity: 2, current_price: 800 },
+  //     { name: '★ Driver Gloves | King Snake', quantity: 1, current_price: 400 },
+  //     { name: 'AWP | Dragon Lore', quantity: 1, current_price: 3000 },
+  //     { name: 'M4A4 | Howl', quantity: 3, current_price: 600 },
+  //     { name: 'Sticker | Katowice 2014', quantity: 10, current_price: 100 },
+  //     { name: 'Agent | Sir Bloody Miami Darryl', quantity: 2, current_price: 150 },
+  //     { name: 'Sealed Graffiti | Lambda', quantity: 50, current_price: 2 },
+  //     { name: 'Spectrum Case', quantity: 100, current_price: 1.5 },
+  //     { name: 'Music Kit | AWOLNATION', quantity: 1, current_price: 25 }
+  //   ]
+  // }), []);
 
-  const actualPortfolio = portfolioHealth || mockPortfolioHealth;
+  // Use provided data or fall back to mock data
+  const actualPortfolio = portfolioHealth;
 
-  // Memoized consolidated breakdown calculation
+  // Consolidated breakdown calculation for item view
   const consolidatedBreakdown = useMemo(() => {
     const investments = actualPortfolio.investments || [];
+
+    // Filter out invalid investments (zero quantity or invalid numbers)
     const activeInvestments = investments.filter(inv => {
       const quantity = parseFloat(inv.quantity);
       return !isNaN(quantity) && quantity > 0;
@@ -169,15 +187,18 @@ useEffect(() => {
     const itemGroups = {};
     let totalValue = 0;
 
+    // Group investments by consolidated category
     activeInvestments.forEach(inv => {
       const consolidatedName = consolidateItems(inv.name);
       const currentPrice = parseFloat(inv.current_price);
       const quantity = parseFloat(inv.quantity);
       
+      // Skip invalid price/quantity data
       if (isNaN(currentPrice) || isNaN(quantity)) return;
       
       const value = currentPrice * quantity;
       
+      // Initialize group if it doesn't exist
       if (!itemGroups[consolidatedName]) {
         itemGroups[consolidatedName] = {
           name: consolidatedName,
@@ -187,12 +208,14 @@ useEffect(() => {
         };
       }
       
+      // Accumulate group data
       itemGroups[consolidatedName].count += quantity;
       itemGroups[consolidatedName].totalValue += value;
       itemGroups[consolidatedName].items.push(inv);
       totalValue += value;
     });
 
+    // Convert to array format with percentage calculations
     return Object.values(itemGroups)
       .map(group => ({
         ...group,
@@ -202,31 +225,31 @@ useEffect(() => {
       .sort((a, b) => b.percentage - a.percentage);
   }, [actualPortfolio.investments, consolidateItems]);
 
-  // Enhanced data processing with small slice handling for chart view only
+  // Main data processing pipeline with search filtering and small slice handling
   const processedData = useMemo(() => {
+    // Select base data based on current toggle
     const rawData = activeToggle === 'item' ? consolidatedBreakdown : (actualPortfolio.typeBreakdown || []);
     
-    // Filter by search term
+    // Apply search filter
     const filteredData = rawData.filter(item =>
       item.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
     );
     
-    // Only apply small slice grouping logic for item view and chart mode
+    // Small slice grouping logic - only for item view in chart mode
     if (activeToggle === 'item' && viewMode === 'chart') {
-      // Separate large and small slices
       const threshold = 2; // 2% threshold for small slices
       const largeSlices = filteredData.filter(item => item.percentage >= threshold);
       const smallSlices = filteredData.filter(item => item.percentage < threshold);
       
       let processedData = [...largeSlices];
       
-      // Group small slices if there are any and showSmallSlices is false
+      // Handle small slices based on user preference
       if (smallSlices.length > 0) {
         if (showSmallSlices) {
           // Show individual small slices
           processedData = [...processedData, ...smallSlices];
         } else {
-          // Group small slices into "Others"
+          // Group small slices into "Others" category
           const othersValue = smallSlices.reduce((sum, item) => sum + item.value, 0);
           const othersPercentage = smallSlices.reduce((sum, item) => sum + item.percentage, 0);
           const othersCount = smallSlices.reduce((sum, item) => sum + item.count, 0);
@@ -247,31 +270,34 @@ useEffect(() => {
       return processedData.sort((a, b) => b.percentage - a.percentage);
     }
     
-    // For type view or table view, return filtered data as-is (no grouping)
+    // For type view or table view, return filtered data without grouping
     return filteredData.sort((a, b) => b.percentage - a.percentage);
   }, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, showSmallSlices, debouncedSearchTerm, viewMode]);
 
-  // Table data - always shows all items without grouping
+  // Table-specific data processing
   const tableData = useMemo(() => {
   const rawData = activeToggle === 'item' ? consolidatedBreakdown : (actualPortfolio.typeBreakdown || []);
   
-  // Use debouncedSearchTerm instead of searchTerm
   return rawData.filter(item =>
     item.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
   ).sort((a, b) => b.percentage - a.percentage);
 }, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, debouncedSearchTerm]);
 
-  // Memoized color getter
+  // Color assignment function with fallback logic
   const getItemColor = useMemo(() => (item, index) => {
-    if (item.isGrouped) return '#64748B'; // Gray for "Others"
+    // Special color for grouped items
+    if (item.isGrouped) return '#64748B';
     
     if (activeToggle === 'item') {
+      // Use predefined item colors or fall back to weapon color array
       return colors.item[item.name] || colors.weapon[index % colors.weapon.length];
     }
+
+    // Use type-specific colors or default gray
     return colors.type[item.name.toLowerCase()] || '#6B7280';
   }, [activeToggle, colors]);
 
-  // Current metrics
+  // Get current diversity metrics based on active toggle
   const currentScore = activeToggle === 'item' ? 
     actualPortfolio.itemDiversityScore : 
     actualPortfolio.typeDiversityScore;
@@ -280,21 +306,20 @@ useEffect(() => {
     actualPortfolio.itemFeedback : 
     actualPortfolio.typeFeedback;
 
-  // Check if there are small slices in item view
+  // Check if small slices exist in current item view
   const hasSmallSlices = activeToggle === 'item' && consolidatedBreakdown.some(item => item.percentage < 2);
 
-// Enhanced tooltip that shows for ALL slices
+  // Custom tooltip component for pie chart hover interactions
   const CustomTooltip = React.memo(({ active, payload, coordinate }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       
-      // Don't close sticky tooltip on hover - let it stay until user clicks
-      // Only prevent showing hover tooltip if sticky is open for the same slice
+      // Prevent hover tooltip when sticky tooltip is open for the same slice
       if (data.isGrouped && stickyTooltip && stickyTooltip.name === data.name) {
         return null; // Don't show hover tooltip when sticky is open for same slice
       }
       
-      // Position non-Others tooltips more on the left side to avoid overlap with sticky tooltip
+      // Adjust tooltip position to avoid overlap with sticky tooltips
       const tooltipStyle = data.isGrouped ? {} : {
         transform: 'translateX(-65%)',
         marginLeft: '-15px'
@@ -316,7 +341,7 @@ useEffect(() => {
             <p className="text-gray-300 text-sm">
               <span className="text-purple-400">Items:</span> {data.count}
             </p>
-            {/* Show grouped items hint in hover tooltip */}
+            {/* Interactive hint for grouped items */}
             {data.isGrouped && (
               <p className="text-yellow-400 text-xs mt-1">
                 {selectedSlice === data.name 
@@ -332,6 +357,7 @@ useEffect(() => {
     return null;
   });
 
+  // Sticky tooltip component for expanded "Others" group details
   const StickyTooltip = React.memo(() => {
     if (!stickyTooltip) return null;
     
@@ -344,6 +370,7 @@ useEffect(() => {
           top: '250px'
         }}
       >
+        {/* Header with close button */}
         <div className="flex items-center justify-between mb-2">
           <p className="text-white font-medium text-base">{data.name}</p>
           <button
@@ -353,6 +380,8 @@ useEffect(() => {
             ✕
           </button>
         </div>
+
+        {/* Summary information */}
         <div className="space-y-1">
           <p className="text-gray-300 text-sm">
             <span className="text-green-400">Value:</span> {formatCurrency(data.value)}
@@ -363,6 +392,8 @@ useEffect(() => {
           <p className="text-gray-300 text-sm">
             <span className="text-purple-400">Items:</span> {data.count}
           </p>
+
+          {/* Detailed breakdown of grouped items */}
           <div className="mt-2 pt-2 border-t border-gray-600">
             <p className="text-yellow-400 text-xs mb-1">
               Contains {data.items.length} items:
@@ -378,14 +409,15 @@ useEffect(() => {
     );
   });
 
-  // Enhanced label rendering with minimum size
+  // Custom label renderer for pie chart slices
   const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percentage, name, startAngle, endAngle }) => {
-    // Calculate slice angle
+    // Calculate slice angle to determine if label should be shown
     const sliceAngle = Math.abs(endAngle - startAngle);
     
-    // Show labels for slices >= 3% or if slice angle is large enough
+    // Only show labels for significant slices or "Others" group
     if (percentage < 2 && sliceAngle < 15 && name !== 'Others') return null;
     
+    // Calculate label position
     const RADIAN = Math.PI / 180;
     const radius = innerRadius + (outerRadius - innerRadius) * 0.7;
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
@@ -409,13 +441,15 @@ useEffect(() => {
     );
   };
 
-  // Pagination logic - use appropriate data based on view mode
+  // Pagination logic
+  // Select appropriate data source based on current view mode
   const currentData = viewMode === 'table' ? tableData : processedData;
   const ITEMS_PER_PAGE = 8;
   const totalPages = Math.ceil(currentData.length / ITEMS_PER_PAGE);
   const startIndex = currentPage * ITEMS_PER_PAGE;
   const currentPageData = currentData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
+  // Handle clicks on distribution list items
   const handleDistributionItemClick = useCallback((item) => {
   if (item.isGrouped) {
     const isCurrentlySelected = selectedSlice === item.name;
@@ -423,7 +457,7 @@ useEffect(() => {
       setStickyTooltip(null);
       setSelectedSlice(null);
     } else {
-      setStickyTooltip(item);
+      setStickyTooltip(item); // Show detailed breakdown
       setSelectedSlice(item.name);
     }
   } else {
@@ -432,47 +466,51 @@ useEffect(() => {
   }
 }, [selectedSlice]);
 
+  // Handle toggle changes between type and item views
   const handleToggleChange = useCallback((newToggle) => {
-  setActiveToggle(newToggle);
-  setCurrentPage(0);
-  setSearchTerm('');
-  setSelectedSlice(null);
-}, []);
+    setActiveToggle(newToggle);
+    setCurrentPage(0);
+    setSearchTerm('');
+    setSelectedSlice(null);
+  }, []);
 
-const handleSliceClick = useCallback((data, index) => {
-  if (data.isGrouped) {
-    const isCurrentlySelected = selectedSlice === data.name;
-    if (isCurrentlySelected) {
-      setStickyTooltip(null);
-      setSelectedSlice(null);
+  // Handle pie chart slice clicks
+  const handleSliceClick = useCallback((data, index) => {
+    if (data.isGrouped) {
+      const isCurrentlySelected = selectedSlice === data.name;
+      if (isCurrentlySelected) {
+        setStickyTooltip(null);
+        setSelectedSlice(null);
+      } else {
+        setStickyTooltip(data);
+        setSelectedSlice(data.name);
+      }
     } else {
-      setStickyTooltip(data);
-      setSelectedSlice(data.name);
+      setStickyTooltip(null);
+      setSelectedSlice(selectedSlice === data.name ? null : data.name);
     }
-  } else {
-    setStickyTooltip(null);
-    setSelectedSlice(selectedSlice === data.name ? null : data.name);
-  }
-}, [selectedSlice]);
+  }, [selectedSlice]);
 
-  // Handle clicking outside the chart to deselect
+  // Handle clicks outside chart elements to deselect
   const handleChartContainerClick = useCallback((e) => {
-  // Check if the click target is the ResponsiveContainer div or PieChart svg
+  // Only deselect if clicking on container elements, not chart slices
   if (e.target.tagName === 'DIV' || e.target.tagName === 'svg') {
     setSelectedSlice(null);
     setStickyTooltip(null);
   }
 }, []);
 
+  // Toggle button configuration
   const toggleOptions = [
     { id: 'type', label: 'By Type', description: 'Investment type distribution' },
     { id: 'item', label: 'By Item', description: 'Consolidated item distribution' }
   ];
 
-  // Table view component
+  // Table view component for tabular data display
   const TableView = () => (
     <div className="h-full overflow-auto">
     <table className="w-full text-sm">
+      {/* Sticky header */}
       <thead className="sticky top-0 bg-gray-800/90 backdrop-blur-sm">
         <tr className="border-b border-gray-600">
           <th className="text-left py-3 px-1 text-gray-300">Item</th>
@@ -481,12 +519,15 @@ const handleSliceClick = useCallback((data, index) => {
           <th className="text-right py-3 px-1 text-gray-300">Count</th>
         </tr>
       </thead>
+
+        {/* Data rows */}
         <tbody>
           {currentPageData.map((item, index) => (
             <tr 
               key={`${item.name}-${index}`} 
               className="border-b border-gray-700/50 hover:bg-gray-700/20 transition-colors"
             >
+              {/* Item name with color indicator */}
               <td className="py-4 px-1">
                 <div className="flex items-center space-x-3">
                   <div 
@@ -498,6 +539,8 @@ const handleSliceClick = useCallback((data, index) => {
                   </span>
                 </div>
               </td>
+
+              {/* Financial data columns */}
               <td className="py-4 text-right font-medium text-white">
                 {formatCurrency(item.value)}
               </td>
@@ -514,8 +557,11 @@ const handleSliceClick = useCallback((data, index) => {
     </div>
   );
 
+  // Main render
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 h-full flex flex-col relative" style={{ minHeight: '600px' }}>
+
+      {/* Header Section */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-semibold text-white">Portfolio Distribution</h2>
@@ -523,6 +569,8 @@ const handleSliceClick = useCallback((data, index) => {
             Total: {formatCurrency(currentData.reduce((sum, item) => sum + item.value, 0))}
           </p>
         </div>
+
+        {/* Diversity Score Badge */}
         <div className={`px-3 py-1 rounded-full text-sm font-medium ${
           currentScore >= 80 ? 'bg-green-500/20 text-green-400' :
           currentScore >= 60 ? 'bg-yellow-500/20 text-yellow-400' :
@@ -555,7 +603,7 @@ const handleSliceClick = useCallback((data, index) => {
 
       {/* Controls Row */}
       <div className={`flex items-center justify-between gap-4 ${viewMode === 'table' ? 'mb-4' : ''}`}>
-        {/* Search */}
+        {/* Search Input */}
         <div className="flex-1 max-w-xs">
           <input
             type="text"
@@ -590,7 +638,7 @@ const handleSliceClick = useCallback((data, index) => {
             </button>
           </div>
 
-          {/* Small slice toggle - only show for item view when there are small slices and chart mode */}
+          {/* Small slice toggle - Conditional visibility based on multiple criteria */}
           {hasSmallSlices && viewMode === 'chart' && activeToggle === 'item' && (
             <button
               onClick={() => setShowSmallSlices(!showSmallSlices)}
@@ -606,10 +654,11 @@ const handleSliceClick = useCallback((data, index) => {
         </div>
       </div>
 
-      {/* Chart or Table View */}
+      {/* Main content area - Chart or Table View */}
       <div className={viewMode === 'table' ? 'mb-6' : ''}></div>
       {viewMode === 'chart' ? (
         <div className="flex-1" style={{ minHeight: '320px', maxHeight: '320px' }} onClick={handleChartContainerClick}>
+          {/* Recharts ResponsiveContainer - Automatically adjusts to parent dimensions */}
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -630,6 +679,7 @@ const handleSliceClick = useCallback((data, index) => {
                 className="cursor-pointer"
                 minAngle={2}
               >
+                {/* Individual slice styling - Each slice gets custom colors and selection states */}
                 {processedData.map((entry, index) => (
                   <Cell 
                     key={`cell-${index}`} 
@@ -640,12 +690,15 @@ const handleSliceClick = useCallback((data, index) => {
                   />
                 ))}
               </Pie>
+              {/* Interactive tooltip that follows mouse cursor */}
               <Tooltip content={<CustomTooltip />} />
             </PieChart>
           </ResponsiveContainer>
+          {/* Sticky tooltip for "Others" group details - Positioned absolutely, stays visible */}
           <StickyTooltip />
         </div>
       ) : (
+        /* Table View Container */
         <div className="flex-1 mb-6">
           <TableView />
         </div>
@@ -654,11 +707,14 @@ const handleSliceClick = useCallback((data, index) => {
       {/* Diversity Score Bar */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
+          {/* Dynamic label based on current analysis type */}
           <span className="text-sm text-gray-400">
             {activeToggle === 'item' ? 'Item' : 'Type'} Diversity Score
           </span>
+          {/* Percentage display with consistent formatting */}
           <span className="text-sm font-medium text-white">{currentScore}%</span>
         </div>
+        {/* Progress bar container with rounded styling */}
         <div className="w-full bg-gray-700 rounded-full h-2">
           <div 
             className={`h-2 rounded-full transition-all duration-500 ${
@@ -677,15 +733,19 @@ const handleSliceClick = useCallback((data, index) => {
         <p className="text-sm text-gray-300">{currentFeedback}</p>
       </div>
 
-      {/* Distribution List (for chart view) or Pagination (for table view) */}
+      {/* Distribution List or Pagination */}
       {viewMode === 'chart' ? (
         <div>
+          {/* Distribution list header with dynamic counts and pagination controls */}
           <div className="flex items-center justify-between mb-3">
+            {/* Dynamic title showing current filter results */}
             <h3 className="text-sm font-medium text-white">
               {activeToggle === 'item' ? 'Item' : 'Type'} Distribution ({currentData.length} {activeToggle === 'item' ? 'categories' : 'types'})
             </h3>
+            {/* Pagination controls - Only show when data spans multiple pages */}
             {totalPages > 1 && (
               <div className="flex items-center">
+                {/* Previous page button - Disabled on first page */}
                 <button
                   onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
                   disabled={currentPage === 0}
@@ -693,9 +753,11 @@ const handleSliceClick = useCallback((data, index) => {
                 >
                   ← Prev
                 </button>
+                {/* Page indicator - Shows current position */}
                 <span className="text-xs text-gray-400 px-2">
                   {currentPage + 1} of {totalPages}
                 </span>
+                {/* Next page button - Disabled on last page */}
                 <button
                   onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
                   disabled={currentPage === totalPages - 1}
@@ -706,7 +768,9 @@ const handleSliceClick = useCallback((data, index) => {
               </div>
             )}
           </div>
+          {/* Distribution items container with fixed minimum height for layout stability */}
           <div className="space-y-1" style={{ minHeight: '255px' }}>
+            {/* Render current page of distribution items using memoized component */}
             {currentPageData.map((item, index) => (
               <DistributionItem
                 key={`${item.name}-${index}`}
@@ -723,8 +787,10 @@ const handleSliceClick = useCallback((data, index) => {
           </div>
         </div>
       ) : (
+        /* Table View Pagination - Only show pagination controls when needed */
         totalPages > 1 && (
           <div className="flex items-center justify-center">
+            {/* Centered pagination controls with same styling as chart view */}
             <button
               onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
               disabled={currentPage === 0}

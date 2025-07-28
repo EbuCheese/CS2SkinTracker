@@ -9,20 +9,23 @@ const InvestmentItem = React.memo(({
   handleImageError, 
   getImageState 
 }) => {
+  // Get current image loading/error state for this specific investment
   const imageState = getImageState(investment.id);
   
   return (
     <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-colors duration-200">
+      {/* Left side: Image and item details */}
       <div className="flex items-center space-x-4">
+        {/* Image container with loading states */}
         <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 relative">
-          {/* Loading Spinner */}
+          {/* Loading spinner - shown while image is loading and no error occurred */}
           {imageState.loading && !imageState.error && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
           )}
           
-          {/* Image */}
+          {/* Actual image element with lazy loading */}
           {investment.image_url && (
             <img 
               src={investment.image_url} 
@@ -32,23 +35,28 @@ const InvestmentItem = React.memo(({
               }`}
               onLoad={() => handleImageLoad(investment.id)}
               onError={() => handleImageError(investment.id)}
-              loading="lazy"
+              loading="lazy" // Native lazy loading for performance
             />
           )}
           
-          {/* Fallback for no image or error */}
+          {/* Fallback display when no image URL or image failed to load */}
           {(!investment.image_url || imageState.error) && !imageState.loading && (
             <div className="w-full h-full flex items-center justify-center">
+              {/* Show first 2 letters of item name as fallback */}
               <span className="text-xs font-medium text-white">
                 {investment.name.substring(0, 2).toUpperCase()}
               </span>
             </div>
           )}
         </div>
+
+        {/* Item information */}
         <div className="min-w-0 flex-1">
+          {/* Item name with optional skin name */}
           <h3 className="font-medium text-white truncate">
             {investment.name}{investment.skin_name && ` (${investment.skin_name})`}
           </h3>
+          {/* Condition, variant, and quantity information */}
           <p className="text-sm text-gray-400">
             {investment.condition && investment.condition.toLowerCase() !== 'unknown' 
               ? `${investment.condition}${investment.variant && investment.variant.toLowerCase() !== 'normal' ? ` (${investment.variant === 'stattrak' ? 'ST' : investment.variant === 'souvenir' ? 'SV' : investment.variant})` : ''} • Qty: ${investment.quantity}`
@@ -58,24 +66,30 @@ const InvestmentItem = React.memo(({
         </div>
       </div>
       
+      {/* Right side: Price information and trend indicator */}
       <div className="text-right flex-shrink-0">
         <div className="flex items-center space-x-2">
+          {/* Current price */}
           <span className="text-white font-medium">
             {formatPrice(investment.current_price)}
           </span>
+          {/* Trend indicator with percentage change */}
           <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${
             investment.trend === 'up' 
               ? 'bg-green-500/20 text-green-400' 
               : 'bg-red-500/20 text-red-400'
           }`}>
+            {/* Trend icon */}
             {investment.trend === 'up' ? (
               <TrendingUp className="w-3 h-3" />
             ) : (
               <TrendingDown className="w-3 h-3" />
             )}
+            {/* Percentage change (always show absolute value) */}
             <span>{Math.abs(investment.changePercent).toFixed(1)}%</span>
           </div>
         </div>
+        {/* Original purchase price */}
         <p className="text-sm text-gray-400">
           from {formatPrice(investment.buy_price)}
         </p>
@@ -84,7 +98,7 @@ const InvestmentItem = React.memo(({
   );
 });
 
-// Memoized pagination component
+// Memoized pagination component for navigating through multiple pages of results
 const PaginationControls = React.memo(({ 
   currentPage, 
   totalPages, 
@@ -92,16 +106,22 @@ const PaginationControls = React.memo(({
   onNext, 
   onPageClick 
 }) => {
+  // Calculate which page numbers to show (max 3 pages)
+  // Logic ensures current page stays in view when possible
   const pageNumbers = useMemo(() => {
     return Array.from({ length: Math.min(totalPages, 3) }, (_, i) => {
       let pageIndex;
       if (totalPages <= 3) {
+        // Show all pages if 3 or fewer total
         pageIndex = i;
       } else if (currentPage === 0) {
+        // Show first 3 pages when on first page
         pageIndex = i;
       } else if (currentPage === totalPages - 1) {
+        // Show last 3 pages when on last page
         pageIndex = totalPages - 3 + i;
       } else {
+        // Show current page in middle with one page on each side
         pageIndex = currentPage - 1 + i;
       }
       return pageIndex;
@@ -110,6 +130,7 @@ const PaginationControls = React.memo(({
 
   return (
     <div className="flex items-center justify-center mt-4 space-x-2 pt-4 border-t border-gray-700/50">
+      {/* Previous page button */}
       <button
         onClick={onPrevious}
         disabled={currentPage === 0}
@@ -120,6 +141,7 @@ const PaginationControls = React.memo(({
         </svg>
       </button>
       
+      {/* Page number buttons */}
       {pageNumbers.map((pageIndex) => (
         <button
           key={pageIndex}
@@ -130,10 +152,11 @@ const PaginationControls = React.memo(({
               : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 hover:text-white'
           }`}
         >
-          {pageIndex + 1}
+          {pageIndex + 1} {/* Display 1-based page numbers to users */}
         </button>
       ))}
       
+      {/* Next page button */}
       <button
         onClick={onNext}
         disabled={currentPage === totalPages - 1}
@@ -147,29 +170,31 @@ const PaginationControls = React.memo(({
   );
 });
 
+// Main component that displays recent price changes for investments
 const RecentPriceChanges = React.memo(({ investments = [] }) => {
-  const [currentPage, setCurrentPage] = useState(0);
-  const [showAll, setShowAll] = useState(false);
-  const [sortOrder, setSortOrder] = useState('most'); // 'most' or 'least'
-  const [imageStates, setImageStates] = useState({});
+  const [currentPage, setCurrentPage] = useState(0); // pagination state
+  const [showAll, setShowAll] = useState(false); // toggle state for top 10 vs all items
+  const [sortOrder, setSortOrder] = useState('most'); // state for sorting by 'most' or 'least'
+  const [imageStates, setImageStates] = useState({}); // image loading states
   
-  // Fixed items per page
+  // Configuration constants
   const itemsPerPage = 5;
-  const maxItemsToShow = showAll ? investments.length : 10; // Show top 10 when not showing all
+  const maxItemsToShow = showAll ? investments.length : 10;
 
-  // Create shared NumberFormat instance to avoid recreating it
+  // Create shared price formatter to avoid recreating on each render
+  // Uses Intl.NumberFormat for consistent currency formatting
   const priceFormatter = useMemo(() => new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2
   }), []);
 
-  // Format price utility - memoized with useCallback
+  // Memoized price formatting function to prevent unnecessary re-renders of child components
   const formatPrice = useCallback((price) => {
     return priceFormatter.format(price);
   }, [priceFormatter]);
 
-  // Handle image loading states - memoized callbacks
+  // Called when an image successfully loads
   const handleImageLoad = useCallback((investmentId) => {
     setImageStates(prev => ({
       ...prev,
@@ -177,6 +202,7 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
     }));
   }, []);
 
+  // Called when an image fails to load
   const handleImageError = useCallback((investmentId) => {
     setImageStates(prev => ({
       ...prev,
@@ -184,6 +210,7 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
     }));
   }, []);
 
+  // Gets the current loading/error state for a specific investment image
   const getImageState = useCallback((investmentId) => {
     return imageStates[investmentId] || { loading: true, error: false };
   }, [imageStates]);
@@ -195,7 +222,7 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
     
     const changes = [];
     
-    // Process items in a single pass
+    // Process each investment in a single pass for efficiency
     for (let i = 0; i < investments.length; i++) {
       const inv = investments[i];
       const quantity = parseFloat(inv.quantity);
@@ -203,10 +230,12 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
       // Skip items with quantity <= 0 early
       if (quantity <= 0) continue;
       
+      // Calculate price change metrics
       const currentPrice = parseFloat(inv.current_price);
       const buyPrice = parseFloat(inv.buy_price);
       const changePercent = ((currentPrice - buyPrice) / buyPrice) * 100;
       
+      // Add calculated fields to investment data
       changes.push({
         ...inv,
         changePercent,
@@ -215,17 +244,18 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
       });
     }
     
-    // Sort based on absolute change percentage
+    // Sort by absolute change percentage (largest changes first/last based on sortOrder)
     changes.sort((a, b) => {
       const comparison = Math.abs(b.changePercent) - Math.abs(a.changePercent);
       return sortOrder === 'most' ? comparison : -comparison;
     });
     
-    // Limit results based on showAll state
+    // Apply item limit based on showAll state
     return changes.slice(0, maxItemsToShow);
   }, [investments, maxItemsToShow, sortOrder]);
 
-  // Pagination calculations - separate from main data processing
+  // Calculate pagination data separately to avoid recalculating when only page changes
+  // Determines total pages needed and items to show on current page
   const paginationData = useMemo(() => {
     const totalPages = Math.ceil(priceChanges.length / itemsPerPage);
     const startIndex = currentPage * itemsPerPage;
@@ -237,39 +267,45 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
 
   const { totalPages, currentPageItems } = paginationData;
 
-  // Event handlers - memoized to prevent unnecessary re-renders
+  // Toggles between showing all items vs top 10
   const handleShowAllToggle = useCallback(() => {
     setShowAll(prev => !prev);
     setCurrentPage(0);
   }, []);
 
+  // Toggles sort order between most changed and least changed
   const handleSortToggle = useCallback(() => {
     setSortOrder(prev => prev === 'most' ? 'least' : 'most');
     setCurrentPage(0);
   }, []);
 
+  // Navigate to previous page
   const handlePreviousPage = useCallback(() => {
     setCurrentPage(prev => Math.max(0, prev - 1));
   }, []);
 
+  // Navigate to next page
   const handleNextPage = useCallback(() => {
     setCurrentPage(prev => Math.min(totalPages - 1, prev + 1));
   }, [totalPages]);
 
+  // Navigate to specific page by clicking page number
   const handlePageClick = useCallback((pageIndex) => {
     setCurrentPage(pageIndex);
   }, []);
 
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl mb-8 p-6 border border-gray-700/50 h-[700px] flex flex-col">
+      {/* Header section with title, item count, and controls */}
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold text-white">Recent Price Changes</h2>
         <div className="flex items-center space-x-3">
+          {/* Active items counter */}
           <div className="text-sm text-gray-400">
             {priceChanges.length} active items
           </div>
           
-          {/* Sort Toggle */}
+          {/* Sort order toggle button */}
           <button
             onClick={handleSortToggle}
             className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-gray-700/60 hover:bg-gray-600/60 text-gray-300 hover:text-white transition-all duration-200 text-sm border border-gray-600/50 hover:border-gray-500/50"
@@ -287,7 +323,7 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
             )}
           </button>
           
-          {/* Show All Toggle */}
+          {/* Show All/Top 10 toggle - only shown when there are more than 10 items */}
           {investments.length > 10 && (
             <div className="relative">
               <button
@@ -315,8 +351,9 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
         </div>
       </div>
       
-      {/* Content area that grows to fill space */}
+      {/* Main content area - uses flexbox to fill available space */}
       <div className="flex-grow flex flex-col overflow-hidden">
+        {/* Investment items list */}
         <div className="space-y-4 flex-grow">
           {currentPageItems.map((investment) => (
             <InvestmentItem 
@@ -329,7 +366,7 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
             />
           ))}
           
-          {/* Empty state when no items */}
+          {/* Empty state when no items to display */}
           {currentPageItems.length === 0 && (
             <div className="flex items-center justify-center py-12 text-gray-400">
               <div className="text-center">
@@ -341,7 +378,7 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
           )}
         </div>
 
-        {/* Pagination - pinned to bottom */}
+        {/* Pagination controls - pinned to bottom of container */}
         {totalPages > 1 && (
           <PaginationControls
             currentPage={currentPage}

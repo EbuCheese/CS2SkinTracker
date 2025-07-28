@@ -4,6 +4,7 @@ import { Search } from 'lucide-react';
 import { useCSData } from '@/contexts/CSDataContext';
 import { useAdvancedDebounce } from '@/hooks/util';
 
+// CSItemSearch Component - Advanced search interface for CS2 items
 const CSItemSearch = ({ 
   type = 'skins', 
   placeholder = 'Search items...', 
@@ -16,23 +17,27 @@ const CSItemSearch = ({
   showLargeView = false,
   excludeSpecialItems = false
 }) => {
+  // Context and state management
   const { searchIndices, loading: globalLoading, error: globalError, getSearchIndexForType } = useCSData();
-  const [results, setResults] = useState([]);
-  const [isOpen, setIsOpen] = useState(false);
-  const [selectedVariant, setSelectedVariant] = useState({});
+  const [results, setResults] = useState([]); // Current search results
+  const [isOpen, setIsOpen] = useState(false); // Dropdown visibility
+  const [selectedVariant, setSelectedVariant] = useState({}); // Variant selection per item
+
+  // Intersection observer for lazy image loading
   const intersectionObserver = useRef(null);
 
-  // Get processed data for current type
+  // Process and filter data for the current item type
   const typeData = useMemo(() => {
     const rawData = getSearchIndexForType(type);
     
+    // Return unfiltered data if no filtering needed
     if (!rawData || !excludeSpecialItems) {
       return rawData;
     }
 
-    // Filter out knives and gloves from the items array
+    // Filter out knives and gloves (items starting with ★)
     const filteredItems = rawData.items.filter(item => {
-      // Check if item exists and has required properties
+      // Validate item structure
       if (!item || typeof item !== 'object') return false;
       
       const baseName = item.baseName || '';
@@ -66,6 +71,7 @@ const CSItemSearch = ({
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             const img = entry.target;
+            // Load image if it has a data-src attribute
             if (img.dataset.src && !img.src) {
               img.src = img.dataset.src;
               img.removeAttribute('data-src');
@@ -80,12 +86,13 @@ const CSItemSearch = ({
       }
     );
 
+    // Cleanup observer on unmount
     return () => {
       intersectionObserver.current?.disconnect();
     };
   }, []);
 
-  // Enhanced search function using preprocessed data
+  // Enhanced search function using preprocessed inverted index
   const performSearch = useCallback((query) => {
     if (!query || !typeData || query.length < 2) {
       setResults([]);
@@ -93,6 +100,7 @@ const CSItemSearch = ({
       return;
     }
 
+    // Normalize query for consistent searching
     const normalizedQuery = query.toLowerCase()
       .replace(/[★]/g, 'star')
       .replace(/[|]/g, ' ')
@@ -100,6 +108,7 @@ const CSItemSearch = ({
       .replace(/\s+/g, ' ')
       .trim();
 
+    // Split into individual search terms (minimum 2 characters)
     const queryWords = normalizedQuery.split(/\s+/).filter(w => w.length >= 2);
     const { items, searchIndex } = typeData;
     let matchingIndices = [];
@@ -134,7 +143,7 @@ const CSItemSearch = ({
       .map(idx => items[idx])
       .filter(Boolean);
 
-    // Sort results by relevance
+    // Sort results by relevance (exact matches first)
     searchResults.sort((a, b) => {
       const aExact = a.searchTokens.some(token => token === normalizedQuery) ? 1 : 0;
       const bExact = b.searchTokens.some(token => token === normalizedQuery) ? 1 : 0;
@@ -146,7 +155,7 @@ const CSItemSearch = ({
     setIsOpen(searchResults.length > 0);
   }, [typeData, maxResults]);
 
-  // Use custom debounce hook instead of lodash
+  // Debounced search function to prevent excessive API calls
   const { debouncedFunction: debouncedSearch } = useAdvancedDebounce(
     performSearch, 
     200, 
@@ -154,12 +163,14 @@ const CSItemSearch = ({
     [performSearch] // Dependencies
   );
 
+  // Handle input changes with debounced search
   const handleInputChange = useCallback((e) => {
     const newValue = e.target.value;
     onChange?.(e);
     debouncedSearch(newValue);
   }, [onChange, debouncedSearch]);
 
+  // Handle item selection with variant support
   const handleItemSelect = useCallback((item, variant = 'normal') => {
     // Get the appropriate variant item from the Map
     const selectedItem = item.variants.get(variant) || item.variants.get('normal') || Array.from(item.variants.values())[0];
@@ -174,11 +185,14 @@ const CSItemSearch = ({
     };
     
     onSelect?.(itemWithVariant);
+
+    // Close dropdown and clear results
     setIsOpen(false);
     setResults([]);
     setSelectedVariant({});
   }, [onSelect]);
 
+  // Handle variant selection for individual items
   const handleVariantChange = useCallback((itemId, variant) => {
     setSelectedVariant(prev => ({
       ...prev,
@@ -186,6 +200,7 @@ const CSItemSearch = ({
     }));
   }, []);
 
+  // Event handlers for dropdown management
   const handleFocus = () => {
     if (results.length > 0 && value.length >= 2) {
       setIsOpen(true);
@@ -193,6 +208,7 @@ const CSItemSearch = ({
   };
 
   const handleBlur = () => {
+    // Delay closing to allow for click events
     setTimeout(() => setIsOpen(false), 150);
   };
 
@@ -202,6 +218,7 @@ const CSItemSearch = ({
     }
   };
 
+  // Loading state
   if (globalLoading) {
     return (
       <div className={`relative ${className}`}>
@@ -213,6 +230,7 @@ const CSItemSearch = ({
     );
   }
 
+  // Error state
   if (globalError) {
     return (
       <div className={`relative ${className}`}>
@@ -223,6 +241,7 @@ const CSItemSearch = ({
     );
   }
 
+  // Data preparation state
   if (!typeData) {
     return (
       <div className={`relative ${className}`}>
@@ -236,6 +255,7 @@ const CSItemSearch = ({
 
   return (
     <div className={`relative ${className}`}>
+      {/* Search Input */}
       <div className="relative">
         <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
         <input
@@ -282,7 +302,7 @@ const CSItemSearch = ({
   );
 };
 
-// Updated SearchResultItem to work with new data structure
+// OptimizedSearchResultItem - Individual search result item component
 const OptimizedSearchResultItem = React.memo(({ 
   item, 
   type, 
@@ -292,6 +312,7 @@ const OptimizedSearchResultItem = React.memo(({
   showLargeView = false, 
   intersectionObserver 
 }) => {
+  // Image loading states
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
   const imgRef = useRef(null);
@@ -318,14 +339,17 @@ const OptimizedSearchResultItem = React.memo(({
     }
   }, [currentVariantItem?.image, intersectionObserver]);
 
+  // Get rarity color with fallback
   const getRarityColor = (rarity, rarityColor) => {
     return rarityColor || '#6B7280';
   };
 
+  // Extract metadata and set responsive sizing
   const metadata = item.metadata || [];
   const imageSize = showLargeView ? 'w-16 h-16' : 'w-12 h-12';
   const paddingSize = showLargeView ? 'p-4' : 'p-3';
 
+  // Image event handlers
   const handleImageLoad = () => {
     setImageLoading(false);
     setImageError(false);
@@ -334,8 +358,10 @@ const OptimizedSearchResultItem = React.memo(({
   const handleImageError = (e) => {
     setImageLoading(false);
     setImageError(true);
+    // Set fallback image if not already set
     if (!e.target.dataset.fallback) {
       e.target.dataset.fallback = 'true';
+      // Base64 encoded placeholder SVG
       e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjMzc0MTUxIi8+CjxwYXRoIGQ9Ik0yNCAzNkMzMC42Mjc0IDM2IDM2IDMwLjYyNzQgMzYgMjRDMzYgMTcuMzcyNiAzMC42Mjc0IDEyIDI0IDEyQzE3LjM3MjYgMTIgMTIgMTcuMzcyNiAxMiAyNEMxMiAzMC42Mjc0IDE3LjM3MjYgMzYgMjQgMzZaIiBzdHJva2U9IiM2QjczODAiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMjQgMjBWMjgiIHN0cm9rZT0iIzZCNzM4MCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4K';
     }
   };
@@ -343,8 +369,9 @@ const OptimizedSearchResultItem = React.memo(({
   // Get available variants from the Map
   const availableVariants = Array.from(item.variants.keys());
 
+  // Event handlers
   const handleVariantButtonClick = (e, variant) => {
-    e.stopPropagation();
+    e.stopPropagation(); // Prevent item selection when clicking variant
     onVariantChange(variant);
   };
 
@@ -352,20 +379,25 @@ const OptimizedSearchResultItem = React.memo(({
     onClick(currentVariant);
   };
 
+  // Skip rendering if no variant item found
   if (!currentVariantItem) {
-    return null; // Skip rendering if no variant item found
+    return null;
   }
 
   return (
     <div className={`${paddingSize} hover:bg-gray-700 cursor-pointer transition-colors border-b border-gray-700 last:border-b-0`}>
       {/* Main item content */}
       <div className="flex items-center" onClick={handleItemClick}>
+        {/* Item Image */}
         <div className={`relative ${imageSize} ${showLargeView ? 'mr-4' : 'mr-3'} flex-shrink-0 bg-gray-700 rounded overflow-hidden`}>
+          {/* Loading spinner */}
           {imageLoading && !imageError && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
           )}
+
+          {/* Actual image */}
           <img 
             ref={imgRef}
             alt={item.baseName}
@@ -376,10 +408,15 @@ const OptimizedSearchResultItem = React.memo(({
             onError={handleImageError}
           />
         </div>
+
+        {/* Item Information */}
         <div className="flex-1 min-w-0">
+          {/* Item Name */}
           <p className={`text-white font-medium truncate ${showLargeView ? 'text-base' : 'text-sm'}`}>
             {currentVariantItem.name}
           </p>
+
+          {/* Item Metadata */}
           {metadata.length > 0 && (
             <div className={`flex items-center space-x-2 ${showLargeView ? 'text-sm mt-1' : 'text-xs'}`}>
               {metadata.map((text, index) => (
@@ -391,6 +428,8 @@ const OptimizedSearchResultItem = React.memo(({
             </div>
           )}
         </div>
+
+        {/* Rarity Badge */}
         {currentVariantItem.rarity && (
           <div className="flex-shrink-0 ml-2">
             <span 
@@ -405,7 +444,7 @@ const OptimizedSearchResultItem = React.memo(({
         )}
       </div>
 
-      {/* Variant selection buttons */}
+      {/* Variant Selection Buttons */}
       {availableVariants.length > 1 && (
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-600">
           <span className="text-xs text-gray-400 mr-2">Variant:</span>
@@ -423,6 +462,7 @@ const OptimizedSearchResultItem = React.memo(({
                   : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
               }`}
             >
+              {/* Display appropriate variant label */}
               {variant === 'normal' ? 'Normal' : 
                variant === 'stattrak' ? 'StatTrak™' : 
                'Souvenir'}

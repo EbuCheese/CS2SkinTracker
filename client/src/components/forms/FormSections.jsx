@@ -17,8 +17,13 @@ export const ItemSelectionSection = ({
   onSearchChange,
   compact = false 
 }) => {
+  // Determine if we're working with crafts (special handling required)
   const isCrafts = type === 'Crafts';
   
+  // Memoize the search component to prevent unnecessary re-renders
+  // Different behavior for crafts vs standard items:
+  // - Crafts: Search for base skins using 'liquids' type
+  // - Standard: Search for items using the specified searchType
   const itemSearch = useMemo(() => (
     <CSItemSearch
       type={isCrafts ? 'liquids' : searchType}
@@ -32,7 +37,7 @@ export const ItemSelectionSection = ({
       className="w-full"
       showLargeView={true}
       maxResults={15}
-      excludeSpecialItems={isCrafts}
+      excludeSpecialItems={isCrafts} // Exclude special items for craft base selection
     />
   ), [type, searchType, formData, handleFormDataChange, handleItemSelect, handleSkinSelect, searchValue, onSearchChange, isCrafts]);
 
@@ -46,7 +51,7 @@ export const ItemSelectionSection = ({
   );
 };
 
-// Consolidate selected item display
+// Shows the currently selected item with image, name, variant controls, and notes section.
 export const SelectedItemDisplay = ({ 
   formData, 
   type, 
@@ -55,9 +60,12 @@ export const SelectedItemDisplay = ({
   compact = false 
 }) => {
   const isCrafts = type === 'Crafts';
+
+  // For crafts, use skin_name; for standard items, use name
   const displayName = isCrafts ? formData.skin_name : formData.name;
   const displayImage = formData.image_url;
   
+  // Don't render anything if no item is selected
   if (!displayName) return null;
 
   return (
@@ -65,6 +73,8 @@ export const SelectedItemDisplay = ({
       <label className="block text-sm font-medium text-gray-300 mb-2">
         {isCrafts ? 'Selected Base Skin' : 'Selected Item'}
       </label>
+
+      {/* Item preview with image and basic info */}
       <div className="flex items-center space-x-3 mb-3">
         {displayImage && (
           <img 
@@ -78,10 +88,12 @@ export const SelectedItemDisplay = ({
           <p className="text-gray-400 text-sm">
             {isCrafts ? 'Base skin selected' : 'Ready to add'}
           </p>
+          {/* Show current variant status (StatTrak/Souvenir) */}
           <VariantBadge stattrak={formData.stattrak} souvenir={formData.souvenir} />
         </div>
       </div>
       
+      {/* StatTrak/Souvenir variant controls */}
       <VariantControls
         hasStatTrak={formData.hasStatTrak}
         hasSouvenir={formData.hasSouvenir}
@@ -90,6 +102,7 @@ export const SelectedItemDisplay = ({
         type={isCrafts ? "Skin" : "Item"}
       />
       
+      {/* Notes section for additional item details */}
       <div className="border-t border-gray-600 pt-3 mt-3">
         <label className="block text-sm font-medium text-gray-300 mb-2">
           <div className="flex items-center space-x-2">
@@ -110,13 +123,14 @@ export const SelectedItemDisplay = ({
           rows={compact ? 2 : 3}
           maxLength={300}
         />
+        {/* Character count indicator */}
         <p className="text-gray-400 text-xs mt-1">{formData.notes.length}/300 characters</p>
       </div>
     </div>
   );
 };
 
-// Consolidate craft name input for crafts
+// Specialized input field for craft items to enter a custom craft name.
 export const CraftNameInput = ({ formData, handleFormDataChange }) => (
   <div>
     <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -135,13 +149,14 @@ export const CraftNameInput = ({ formData, handleFormDataChange }) => (
   </div>
 );
 
-// Consolidate buy price input
+// Standardized price input field with currency symbol and validation.
 export const BuyPriceInput = ({ formData, handleFormDataChange, compact = false }) => (
   <div>
     <label className="block text-sm font-medium text-gray-300 mb-2">
       Buy Price <span className="text-red-400">*</span>
     </label>
     <div className="relative">
+      {/* Dollar sign prefix */}
       <span className={`absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 ${compact ? 'text-sm' : ''}`}>
         $
       </span>

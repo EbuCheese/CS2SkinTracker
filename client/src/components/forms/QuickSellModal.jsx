@@ -1,31 +1,41 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, X, TrendingUp, TrendingDown, Loader2, Save, DollarSign } from 'lucide-react';
 
+// A reusable image component that handles loading states, errors, and fallbacks.
 const ImageWithLoading = ({ src, alt, className, fallbackClassName }) => {
+  // Track image loading and error states
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
 
+  // Handle successful image load
   const handleImageLoad = () => {
     setImageLoading(false);
     setImageError(false);
   };
 
+  // Handle image load errors with fallback mechanism
   const handleImageError = (e) => {
     setImageLoading(false);
     setImageError(true);
+
+    // Only set fallback SVG if we haven't already tried it (prevents infinite loop)
     if (!e.target.dataset.fallback) {
       e.target.dataset.fallback = 'true';
+      // Base64 encoded SVG placeholder - gray background with circle and exclamation
       e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjMzc0MTUxIi8+CjxwYXRoIGQ9Ik0yNCAzNkMzMC42Mjc0IDM2IDM2IDMwLjYyNzQgMzYgMjRDMzYgMTcuMzcyNiAzMC42Mjc0IDEyIDI0IDEyQzE3LjM3MjYgMTIgMTIgMTcuMzcyNiAxMiAyNEMxMiAzMC42Mjc0IDE3LjM3MjYgMzYgMjQgMzZaIiBzdHJva2U9IiM2QjczODAiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMjQgMjBWMjgiIHN0cm9rZT0iIzZCNzM4MCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4K';
     }
   };
 
   return (
     <div className={`relative ${className}`}>
+      {/* Loading spinner - shown while image is loading and no error occurred */}
       {imageLoading && !imageError && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
         </div>
       )}
+
+      {/* Main image or text fallback */}
       {src ? (
         <img 
           src={src} 
@@ -37,6 +47,7 @@ const ImageWithLoading = ({ src, alt, className, fallbackClassName }) => {
           onError={handleImageError}
         />
       ) : (
+        // Text fallback when no src is provided - shows first 2 characters of alt text
         <div className={fallbackClassName}>
           {alt.substring(0, 2).toUpperCase()}
         </div>
@@ -45,6 +56,7 @@ const ImageWithLoading = ({ src, alt, className, fallbackClassName }) => {
   );
 };
 
+// Main Component - A modal that allows users to quickly sell their investment items.
 const QuickSellModal = ({ 
   isOpen, 
   onClose,
@@ -53,19 +65,27 @@ const QuickSellModal = ({
   onSaleComplete,
   supabase
 }) => {
+  // Search and selection state
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
+
+  // Sale form state
   const [soldPrice, setSoldPrice] = useState('');
   const [soldQuantity, setSoldQuantity] = useState(1);
+
+  // UI state
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Memoize available items with profit calculations
+  // Process investments data to add profit calculations
   const availableItemsWithProfits = useMemo(() => {
     return investments
-      .filter(item => item.quantity > 0)
+      .filter(item => item.quantity > 0) // Only show items that can be sold
       .map(item => {
+        // Calculate total profit/loss for all quantity of this item
         const profitLoss = (item.current_price - item.buy_price) * item.quantity;
+
+        // Calculate profit percentage based on original investment
         const profitPercentage = item.buy_price > 0 ? 
           ((profitLoss / (item.buy_price * item.quantity)) * 100) : 0;
         
@@ -77,13 +97,13 @@ const QuickSellModal = ({
       });
   }, [investments]);
 
-  // Optimize search with debouncing concept built into useMemo
+  // Filter items based on search query
   const filteredItems = useMemo(() => {
     if (!searchQuery) return availableItemsWithProfits;
     
     const query = searchQuery.toLowerCase();
     return availableItemsWithProfits.filter(item => {
-      // Pre-lowercase and cache these values would be ideal, but this is still better
+      // Create searchable text from multiple fields
       const searchableText = [
         item.name || '',
         item.skin_name || '',
@@ -126,7 +146,7 @@ const QuickSellModal = ({
     }
   }, [selectedItem]);
 
-  // Memoize item selection handler
+  // Handle item selection from search results
   const handleItemSelect = useCallback((item) => {
     setSelectedItem(item);
     setSoldQuantity(Math.min(1, item.quantity));
@@ -134,22 +154,38 @@ const QuickSellModal = ({
     setError('');
   }, []);
 
-  // Memoize search change handler
+  // Handle search input changes
   const handleSearchChange = useCallback((e) => {
     setSearchQuery(e.target.value);
   }, []);
 
-  // Memoize quantity change handler
+  // Handle returning to search view from sale form
+  const handleBackToSearch = useCallback(() => {
+    setSelectedItem(null);
+    setSoldPrice('');
+    setSoldQuantity(1);
+    setError('');
+  }, []);
+
+  // Handle quantity input changes with validation
   const handleQuantityChange = useCallback((e) => {
     const value = Math.min(parseInt(e.target.value) || 1, selectedItem?.quantity || 1);
     setSoldQuantity(value);
   }, [selectedItem?.quantity]);
 
-  // Memoize price change handler
+  // Handle price input changes
   const handlePriceChange = useCallback((e) => {
     setSoldPrice(e.target.value);
   }, []);
 
+  // Handle backdrop clicks to close modal
+  const handleBackdropClick = useCallback((e) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  }, [onClose]);
+
+  // Process the sale confirmation
   const handleSellConfirm = async () => {
     if (!selectedItem || !soldPrice || !soldQuantity) {
       setError('Please fill in all fields');
@@ -199,20 +235,6 @@ const QuickSellModal = ({
     }
   };
 
-  const handleBackToSearch = useCallback(() => {
-    setSelectedItem(null);
-    setSoldPrice('');
-    setSoldQuantity(1);
-    setError('');
-  }, []);
-
-  // Memoize backdrop click handler
-  const handleBackdropClick = useCallback((e) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  }, [onClose]);
-
   // Calculate sale preview values
   const salePreview = useMemo(() => {
     if (!selectedItem || !soldPrice || !soldQuantity) return null;
@@ -234,16 +256,18 @@ const QuickSellModal = ({
     };
   }, [selectedItem, soldPrice, soldQuantity]);
 
+  // Don't render anything if modal is closed
   if (!isOpen) return null;
 
   return (
     <div className="flex min-h-full items-center justify-center p-4">
+      {/* Modal backdrop with blur effect */}
       <div
         className="fixed inset-0 bg-black/60 backdrop-blur-md transition-opacity duration-200"
         onClick={handleBackdropClick}
       />
       <div className="relative w-full max-w-2xl transform overflow-hidden rounded-xl bg-gradient-to-br from-gray-900 to-slate-900 border border-orange-500/20 shadow-2xl transition-all duration-200 scale-100 opacity-100 max-h-[90vh]">
-        {/* Header */}
+        {/* Modal container */}
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <h3 className="text-xl font-semibold text-white flex items-center">
             <DollarSign className="w-5 h-5 mr-2 mt-1" />
@@ -257,12 +281,12 @@ const QuickSellModal = ({
           </button>
         </div>
 
-        {/* Content */}
+        {/* Modal Content - switches between search view and sale form */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
           {!selectedItem ? (
             // Search and item selection view
             <>
-              {/* Search */}
+              {/* Search Input */}
               <div className="relative mb-6">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
@@ -274,22 +298,24 @@ const QuickSellModal = ({
                 />
               </div>
 
-              {/* Items list */}
+              {/* Items List */}
               <div className="space-y-3">
                 {filteredItems.length === 0 ? (
+                  // Empty state - shown when no items match search or no items available
                   <div className="text-center py-12 text-gray-400">
                     <div className="bg-gray-800/50 rounded-lg p-8 border border-gray-700">
                       {searchQuery ? 'No items found matching your search' : 'No items available to sell'}
                     </div>
                   </div>
                 ) : (
+                  // Render filtered items as clickable cards
                   filteredItems.map((item) => (
                     <div
                       key={item.id}
                       onClick={() => handleItemSelect(item)}
                       className="flex items-center space-x-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-orange-500/50 hover:bg-gray-800 cursor-pointer transition-all duration-200"
                     >
-                      {/* Image */}
+                      {/* Item Image */}
                       <ImageWithLoading
                         src={item.image_url}
                         alt={item.name}
@@ -297,13 +323,14 @@ const QuickSellModal = ({
                         fallbackClassName="w-full h-full flex items-center justify-center text-white text-xs font-medium"
                       />
 
-                      {/* Item info */}
+                      {/* Item Information */}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-white truncate">{item.name}</h3>
                         {item.skin_name && (
                           <p className="text-sm text-gray-400 truncate">{item.skin_name}</p>
                         )}
                         <div className="flex items-center space-x-2 mt-1">
+                          {/* Only show condition if it's not 'unknown' */}
                           {item.condition && item.condition.toLowerCase() !== 'unknown' && (
                             <span className="text-xs text-gray-400">{item.condition}</span>
                           )}
@@ -311,10 +338,11 @@ const QuickSellModal = ({
                         </div>
                       </div>
 
-                      {/* Price and profit */}
+                      {/* Price and Profit Indicator */}
                       <div className="text-right flex-shrink-0">
                         <div className="flex items-center space-x-2 mb-1">
                           <div className="text-white font-medium">${item.current_price.toFixed(2)}</div>
+                          {/* Profit/Loss badge with color coding and trending icon */}
                           <div className={`text-xs flex items-center space-x-1 px-2 py-1 mt-1 rounded-full font-medium ${
                             item.profitLoss >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
                           }`}>
@@ -334,7 +362,7 @@ const QuickSellModal = ({
           ) : (
             // Sale form view
             <div className="space-y-6">
-              {/* Back button */}
+              {/* Back to Search Button */}
               <button
                 onClick={handleBackToSearch}
                 className="text-orange-400 hover:text-orange-300 text-sm flex items-center space-x-1 transition-colors duration-200"
@@ -342,7 +370,7 @@ const QuickSellModal = ({
                 <span>← Back to search</span>
               </button>
 
-              {/* Selected item display */}
+              {/* Selected Item Display */}
               <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
                 <div className="flex items-center space-x-4">
                   <ImageWithLoading
@@ -374,8 +402,9 @@ const QuickSellModal = ({
                 </div>
               </div>
 
-              {/* Sale form */}
+              {/* Sale Form Inputs */}
               <div className="grid grid-cols-2 gap-4">
+                {/* Quantity Input */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Quantity to sell
@@ -389,6 +418,8 @@ const QuickSellModal = ({
                     className="w-full px-3 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-orange-500 focus:outline-none transition-colors duration-200"
                   />
                 </div>
+
+                {/* Price Input */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Sale price per item ($)
@@ -404,9 +435,10 @@ const QuickSellModal = ({
                 </div>
               </div>
 
-              {/* Sale preview */}
+              {/* Sale Preview Section */}
               {salePreview && (
                 <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                  {/* Per-item comparison */}
                   <div className="grid grid-cols-3 gap-4 text-sm">
                     <div>
                       <span className="text-gray-400 block">Buy Price (each)</span>
@@ -425,6 +457,8 @@ const QuickSellModal = ({
                       </span>
                     </div>
                   </div>
+
+                  {/* Total sale summary */}
                   <div className="border-t border-gray-600 mt-3 pt-3">
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-gray-400">Total sale value:</span>
@@ -444,15 +478,16 @@ const QuickSellModal = ({
                 </div>
               )}
 
-              {/* Error message */}
+              {/* Error Message Display */}
               {error && (
                 <div className="bg-red-500/20 border border-red-500/30 text-red-400 p-4 rounded-lg">
                   {error}
                 </div>
               )}
 
-              {/* Actions */}
+              {/* Action Buttons */}
               <div className="flex items-center space-x-3">
+                {/* Confirm Sale Button */}
                 <button
                   onClick={handleSellConfirm}
                   disabled={isLoading || !soldPrice || !soldQuantity}
@@ -470,6 +505,8 @@ const QuickSellModal = ({
                     </>
                   )}
                 </button>
+
+                {/* Cancel Button */}
                 <button
                   onClick={handleBackToSearch}
                   className="px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200 font-medium"

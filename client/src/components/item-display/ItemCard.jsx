@@ -4,6 +4,7 @@ import { supabase } from '@/supabaseClient';
 import { PopupManager } from '@/components/ui';
 import { useScrollLock } from '@/hooks/util';
 
+  // Dropdown options for item conditions (CS2 skin wear levels)
   const CONDITION_OPTIONS = [
     { value: '', label: 'Select condition' },
     { value: 'Factory New', label: 'Factory New' },
@@ -13,36 +14,40 @@ import { useScrollLock } from '@/hooks/util';
     { value: 'Battle-Scarred', label: 'Battle-Scarred' }
   ];
 
+  // Dropdown options for item variants (special types)
   const VARIANT_OPTIONS = [
     { value: 'normal', label: 'Normal' },
     { value: 'stattrak', label: 'StatTrak™' },
     { value: 'souvenir', label: 'Souvenir' }
   ];
 
+// Main ItemCard Component - Displays individual investment items with interactive features
 const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, isNew = false, isSoldItem = false }) => {
+  // UI state management
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingItem, setIsEditingItem] = useState(false);
   const [soldPrice, setSoldPrice] = useState('');
   const [soldQuantity, setSoldQuantity] = useState(1);
   const [animationClass, setAnimationClass] = useState('');
 
+  // Reference to dropdown options (could be moved outside component for better performance)
   const conditionOptions = CONDITION_OPTIONS;
   const variantOptions = VARIANT_OPTIONS;
 
-  // Consolidated popup state
+  // Consolidated popup state management - handles all modal dialogs
   const [popup, setPopup] = useState({
     isOpen: false,
-    type: 'info',
+    type: 'info', // 'info', 'error', 'confirm', 'success', 'note'
     title: '',
     message: '',
     onConfirm: null,
     onCancel: null,
     confirmText: 'OK',
     cancelText: 'Cancel',
-    data: null
+    data: null // Additional data for complex popups
   });
 
-  // Helper function to show popup
+  // Helper function to display popup dialogs
   const showPopup = (config) => {
     setPopup({
       isOpen: true,
@@ -58,19 +63,22 @@ const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, 
     });
   };
 
-  // Helper function to close popup
+  // Helper function to close popup dialogs
   const closePopup = () => {
     setPopup(prev => ({ ...prev, isOpen: false }));
   };
 
+  // Async operation state management - tracks loading states and errors
   const [asyncState, setAsyncState] = useState({
   isLoading: false,
   operation: null,
   error: null
 });
 
+// Prevent body scroll when popup is open
 useScrollLock(popup.isOpen);
 
+// Generic async operation handler with loading states and error handling
 const handleAsyncOperation = useCallback(async (operation, operationFn, ...args) => {
   setAsyncState({ isLoading: true, operation, error: null });
   
@@ -84,14 +92,15 @@ const handleAsyncOperation = useCallback(async (operation, operationFn, ...args)
   }
 }, []);
 
+  // Memoized calculation of all item metrics and profit/loss data
   const itemMetrics = useMemo(() => {
-  // sale variables for supabase
+    // Initialize variables for profit/loss calculations
     let soldItems, availableQuantity, originalQuantity, isFullySold;
     let realizedProfitLoss, unrealizedProfitLoss, totalProfitLoss;
     let totalInvestment, buyPrice, currentPrice, quantity;
 
     if (isSoldItem) {
-      // For sold items from investment_sales table
+      // For sold items from investment_sales table - all items are sold
       buyPrice = item.buy_price_per_unit || 0;
       currentPrice = item.price_per_unit || 0;
       quantity = item.quantity_sold || 0;
@@ -99,6 +108,8 @@ const handleAsyncOperation = useCallback(async (operation, operationFn, ...args)
       originalQuantity = quantity;
       isFullySold = true;
       soldItems = 0;
+
+      // Calculate profit/loss for completed sale
       totalProfitLoss = (item.price_per_unit - item.buy_price_per_unit) * item.quantity_sold;
       realizedProfitLoss = totalProfitLoss;
       unrealizedProfitLoss = 0;
@@ -114,11 +125,11 @@ const handleAsyncOperation = useCallback(async (operation, operationFn, ...args)
       isFullySold = availableQuantity === 0;
       
       if (item.realized_profit_loss !== undefined && item.unrealized_profit_loss !== undefined) {
-        // Existing item with summary data from view
+        // Existing item with summary data from database view
         realizedProfitLoss = item.realized_profit_loss || 0;
         unrealizedProfitLoss = item.unrealized_profit_loss || 0;
       } else {
-        // Newly added item - calculate P&L manually
+        // Newly added item - calculate P&L manually since view data isn't available yet
         realizedProfitLoss = 0; // No sales yet
         unrealizedProfitLoss = (currentPrice - buyPrice) * quantity;
       }
@@ -127,9 +138,10 @@ const handleAsyncOperation = useCallback(async (operation, operationFn, ...args)
       totalInvestment = buyPrice * originalQuantity;
     }
       
+      // Calculate profit percentage based on total investment
       const profitPercentage = totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00';
 
-      // Additional sales metrics from view
+      // Additional sales metrics from database view
       const totalSaleValue = item.total_sale_value || 0;
       const averageSalePrice = item.average_sale_price || 0;
 
@@ -141,7 +153,7 @@ const handleAsyncOperation = useCallback(async (operation, operationFn, ...args)
     };
 }, [item, isSoldItem]);
   
-// destructure itemMetrics
+  // Destructure calculated metrics for easier access
   const {
     soldItems, availableQuantity, originalQuantity, isFullySold,
     realizedProfitLoss, unrealizedProfitLoss, totalProfitLoss,
@@ -149,6 +161,7 @@ const handleAsyncOperation = useCallback(async (operation, operationFn, ...args)
     totalSaleValue, averageSalePrice
   } = itemMetrics;
 
+// Handles different field names between sold items and active investments
 const editFormDefaults = useMemo(() => ({
   condition: isSoldItem ? (item.item_condition || '') : (item.condition || ''),
   variant: item.variant || 'normal',
@@ -157,14 +170,17 @@ const editFormDefaults = useMemo(() => ({
   notes: item.notes || ''
 }), [item, isSoldItem]);
 
+// Edit form state management
 const [editForm, setEditForm] = useState(editFormDefaults);
 
+// Initialize edit form and open edit mode
 const handleStartEdit = useCallback(() => {
   setEditForm(editFormDefaults);
   setIsEditingItem(true);
   setIsEditing(false); // Close sell form
 }, [editFormDefaults]);
 
+// Initialize sell form and open sell mode
 const handleStartSell = useCallback(() => {
   setIsEditing(true);
   setIsEditingItem(false); // Close edit form if open
@@ -172,7 +188,7 @@ const handleStartSell = useCallback(() => {
   setSoldPrice('');
 }, [availableQuantity]);
 
-  // Handle new item animation
+  // Handle slide-in animation for newly added items
   useEffect(() => {
     if (isNew) {
       setAnimationClass('animate-slide-in-from-top');
@@ -183,7 +199,7 @@ const handleStartSell = useCallback(() => {
     }
   }, [isNew]);
 
-  // Reset sold quantity when editing starts
+  // Reset sold quantity when starting to edit sales
   useEffect(() => {
   if (isEditing) {
     setSoldQuantity(Math.min(1, availableQuantity));
@@ -191,10 +207,12 @@ const handleStartSell = useCallback(() => {
   }
 }, [isEditing, availableQuantity]); // Update dependency
 
+// Handle partial sale submission with validation and confirmation
 const handlePartialSale = useCallback(async () => {
   const pricePerUnit = parseFloat(soldPrice);
   const quantity = parseInt(soldQuantity);
  
+  // Validate price input
   if (!soldPrice || isNaN(pricePerUnit) || pricePerUnit <= 0) {
     showPopup({
       type: 'error',
@@ -204,6 +222,7 @@ const handlePartialSale = useCallback(async () => {
     return;
   }
  
+  // Validate quantity input
   if (!quantity || quantity < 1 || quantity > itemMetrics.availableQuantity) {
     showPopup({
       type: 'error',
@@ -213,11 +232,13 @@ const handlePartialSale = useCallback(async () => {
     return;
   }
  
+  // Calculate sale summary for confirmation
   const totalSaleValue = parseFloat(soldPrice) * soldQuantity;
   const profitLoss = (parseFloat(soldPrice) - item.buy_price) * soldQuantity;
   const investment = item.buy_price * soldQuantity;
   const percentage = investment > 0 ? ((profitLoss / investment) * 100).toFixed(2) : '0.00';
 
+  // Show confirmation popup with sale details
   showPopup({
     type: 'confirm',
     title: 'Confirm Sale',
@@ -233,10 +254,12 @@ const handlePartialSale = useCallback(async () => {
   });
 }, [soldPrice, soldQuantity, itemMetrics.availableQuantity, item.buy_price, handleAsyncOperation]);
 
+  // Process confirmed sale through database RPC function
   const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profitLoss) => {
     try {
       closePopup();
       
+      // Call database RPC function to process the sale
       const { data: saleResult, error: saleError } = await supabase.rpc('process_investment_sale', {
         p_investment_id: item.id,
         p_price_per_unit: pricePerUnit,
@@ -250,11 +273,13 @@ const handlePartialSale = useCallback(async () => {
       
       const remainingQuantity = saleResult.remaining_quantity;
       
+      // Item fully sold - remove from active investments
       if (remainingQuantity === 0) {
         if (onRemove) {
           onRemove(item.id);
         }
       } else {
+        // Partial sale - update item with new quantities and values
         const updatedItem = {
           ...item,
           quantity: remainingQuantity,
@@ -265,17 +290,19 @@ const handlePartialSale = useCallback(async () => {
         onUpdate(item.id, updatedItem);
       }
       
+      // Show success confirmation
       showPopup({
         type: 'success',
         title: 'Success',
         message: `Successfully sold ${quantity} units for $${totalSaleValue.toFixed(2)}\nProfit/Loss: ${profitLoss >= 0 ? '+' : ''}$${profitLoss.toFixed(2)}\nRemaining quantity: ${remainingQuantity}`
       });
       
-      // Refresh to get updated data from server
+      // Refresh data if callback provided
       if (onRefresh) {
         onRefresh();
       }
-
+    
+      // Reset form state
       setIsEditing(false);
       setSoldPrice('');
       setSoldQuantity(1);
@@ -290,10 +317,13 @@ const handlePartialSale = useCallback(async () => {
     }
   };
 
+// Handle quantity adjustment for liquid items (cases, etc.) with rpc func  
 const handleQuantityUpdate = useCallback(async (newQuantity) => {
+  // Basic validation
   if (newQuantity < 1 || newQuantity > 9999) return;
   
   await handleAsyncOperation('QUANTITY_UPDATE', async () => {
+    // Update through database RPC with user context
     const { error } = await supabase.rpc('update_investment_with_context', {
       investment_id: item.id,
       investment_data: { quantity: newQuantity },
@@ -302,6 +332,7 @@ const handleQuantityUpdate = useCallback(async (newQuantity) => {
 
     if (error) throw error;
     
+    // Update local state immediately for responsive UI
     const updatedItem = {
       ...item,
       quantity: newQuantity,
@@ -312,6 +343,7 @@ const handleQuantityUpdate = useCallback(async (newQuantity) => {
   }).catch(err => {
     console.error('Error updating quantity:', err);
     
+    // Provide user-friendly error messages
     let errorMessage = 'Failed to update quantity: ' + err.message;
     if (err.message.includes('Invalid user context')) {
       errorMessage = 'Authentication error: Please refresh the page and re-enter your beta key.';
@@ -327,8 +359,10 @@ const handleQuantityUpdate = useCallback(async (newQuantity) => {
   });
 }, [handleAsyncOperation, item, userSession.id, onUpdate]);
 
+// Handle edit form submission with validation with rpc func
 const handleEditFormSubmit = useCallback(async () => {
   await handleAsyncOperation('EDIT_SUBMIT', async () => {
+    // Prepare update data with type conversion
     const updateData = {
       condition: editForm.condition,
       variant: editForm.variant,
@@ -337,6 +371,7 @@ const handleEditFormSubmit = useCallback(async () => {
       notes: editForm.notes?.trim() || null
     };
 
+    // Validate input data
     if (updateData.quantity < 1 || updateData.quantity > 9999) {
       throw new Error('Quantity must be between 1 and 9999');
     }
@@ -345,6 +380,7 @@ const handleEditFormSubmit = useCallback(async () => {
       throw new Error('Buy price must be greater than 0');
     }
 
+    // Update through database RPC with user context
     const { error } = await supabase.rpc('update_investment_with_context', {
       investment_id: item.id,
       investment_data: updateData,
@@ -353,6 +389,7 @@ const handleEditFormSubmit = useCallback(async () => {
 
     if (error) throw error;
     
+    // Update local state with new values and recalculated metrics
     const updatedItem = {
       ...item,
       ...updateData,
@@ -365,6 +402,7 @@ const handleEditFormSubmit = useCallback(async () => {
   }).catch(err => {
     console.error('Error updating item:', err);
     
+    // Provide user-friendly error messages
     let errorMessage = 'Failed to update item: ' + err.message;
     if (err.message.includes('Invalid user context')) {
       errorMessage = 'Authentication error: Please refresh the page and re-enter your beta key.';
@@ -380,11 +418,13 @@ const handleEditFormSubmit = useCallback(async () => {
   });
 }, [handleAsyncOperation, editForm, item, userSession.id, onUpdate]);
 
+  // Cancel edit form and reset to defaults
   const handleEditFormCancel = useCallback(() => {
   setEditForm(editFormDefaults);
   setIsEditingItem(false);
 }, [editFormDefaults]);
 
+// Handle edit form field changes
 const handleEditFormChange = useCallback((field, value) => {
   setEditForm(prev => ({
     ...prev,
@@ -407,7 +447,7 @@ const handleEditFormChange = useCallback((field, value) => {
             <div className="text-gray-400 text-xs text-center">No Image</div>
           )}
           
-          {/* Variant badges */}
+          {/* Variant badges overlay (StatTrak/Souvenir indicators) */}
           {((isSoldItem ? item.item_variant : item.variant) && (isSoldItem ? item.item_variant : item.variant) !== 'normal') && (
             <div className="absolute top-0 right-0 flex flex-col gap-0.5">
               {(isSoldItem ? item.item_variant : item.variant) === 'stattrak' && (
@@ -423,7 +463,7 @@ const handleEditFormChange = useCallback((field, value) => {
             </div>
           )}
 
-          {/* Sold indicator */}
+          {/* Sold indicator overlay for fully sold items */}
           {isFullySold && (
             <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
               <span className="text-green-400 text-xs font-medium">SOLD</span>
@@ -431,18 +471,21 @@ const handleEditFormChange = useCallback((field, value) => {
           )}
         </div>
         
+        {/* Main content area with item details */}
         <div className="flex-1 min-w-0">
-          {/* FIXED: Handle different field names for sold vs active items */}
+          {/* Item name - handles different field names for sold vs active items */}
           <h3 className="font-medium text-white truncate">
             {isSoldItem ? item.item_name : item.name}
           </h3>
+
+          {/* Skin name if available */}
           {(isSoldItem ? item.item_skin_name : item.skin_name) && (
             <p className="text-sm text-gray-400 truncate">
               {isSoldItem ? item.item_skin_name : item.skin_name}
             </p>
           )}
 
-          {/* Show different info for sold items vs active investments */}
+          {/* Conditional rendering based on item type (sold vs active) */}
           {isSoldItem ? (
             // Sold item display
             <>
@@ -452,6 +495,7 @@ const handleEditFormChange = useCallback((field, value) => {
                   <p className="text-xs text-gray-500 truncate">{isSoldItem ? item.item_condition : item.condition}</p>
                 )}
                 
+                {/* Variant badges for sold items */}
                 {((isSoldItem ? item.item_variant : item.variant) && (isSoldItem ? item.item_variant : item.variant) !== 'normal') && (
                   <div className="flex items-center space-x-1">
                     {(isSoldItem ? item.item_variant : item.variant) === 'stattrak' && (
@@ -468,6 +512,7 @@ const handleEditFormChange = useCallback((field, value) => {
                 )}
               </div>
 
+              {/* Price comparison grid for sold items */}
               <div className="mt-2 text-sm">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -480,6 +525,7 @@ const handleEditFormChange = useCallback((field, value) => {
                   </div>
                 </div>
 
+                {/* Notes display with popup on click */}
                 {item.notes && (
                   <div className="mt-1">
                     <button
@@ -497,6 +543,7 @@ const handleEditFormChange = useCallback((field, value) => {
                   </div>
                 )}
 
+                {/* Additional sale details */}
                 <div className="mt-1">
                   <span className="text-gray-400">Quantity: </span>
                   <span className="text-white">{item.quantity_sold}</span>
@@ -513,12 +560,13 @@ const handleEditFormChange = useCallback((field, value) => {
             </>
           ) : (
             <>
-              {/* Condition Display */}
+              {/* Condition and Variant Display for Active Items */}
               <div className="flex items-center space-x-2 mt-1">
                 {(isSoldItem ? item.item_condition : item.condition) && (
                   <p className="text-xs text-gray-500 truncate">{isSoldItem ? item.item_condition : item.condition}</p>
                 )}
                 
+                {/* Variant badges for active items */}
                 {((isSoldItem ? item.item_variant : item.variant) && (isSoldItem ? item.item_variant : item.variant) !== 'normal') && (
                   <div className="flex items-center space-x-1">
                     {(isSoldItem ? item.item_variant : item.variant) === 'stattrak' && (
@@ -535,7 +583,7 @@ const handleEditFormChange = useCallback((field, value) => {
                 )}
               </div>
 
-              {/* ADD NOTES DISPLAY HERE */}
+              {/* Notes display with popup on click */}
               {item.notes && (
                 <div className="mt-1">
                   <button
@@ -553,13 +601,14 @@ const handleEditFormChange = useCallback((field, value) => {
                 </div>
               )}
               
-              {/* Price Display */}
+              {/* Price comparison grid for active investments */}
               <div className="mt-2 text-sm">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <div className="text-gray-400 mb-0.5">Buy:</div>
                     <div className="text-white">
                       ${item.buy_price.toFixed(2)}
+                      {/* Show original quantity if different from current */}
                       {originalQuantity > 1 && (
                         <span className="text-gray-400"> x{originalQuantity}</span>
                       )}
@@ -572,11 +621,12 @@ const handleEditFormChange = useCallback((field, value) => {
                 </div>
               </div>
 
-              {/* Quantity Display with Sold Status */}
+              {/* Quantity display with sold status indicator */}
               <div className="mt-2 text-sm">
                 <div className="flex items-center space-x-2">
                   <span className="text-gray-400">Remaining:</span>
                   <span className="text-white">{availableQuantity}</span>
+                  {/* Show sold quantity if any items have been sold */}
                   {soldItems > 0 && (
                     <span className="text-green-400">
                       ({soldItems} sold)
@@ -585,7 +635,7 @@ const handleEditFormChange = useCallback((field, value) => {
                 </div>
               </div>
 
-              {/* Sales Summary for partially sold items */}
+              {/* Sales summary section for partially sold items */}
               {soldItems > 0 && (
                 <div className="mt-2 text-sm">
                   <div className="grid grid-cols-2 gap-4">
@@ -603,7 +653,7 @@ const handleEditFormChange = useCallback((field, value) => {
                 </div>
               )}
               
-              {/* Quantity Controls - only show if not fully sold and item supports quantity changes */}
+              {/* Quantity adjustment controls - only available for liquid/case items that support bulk quantities */}
               {!isFullySold && (item.type === 'liquid' || item.type === 'case') && !isEditingItem && (
                 <div className="mt-2 flex items-center space-x-2">
                   <span className="text-gray-400 text-sm">Adjust:</span>
@@ -627,7 +677,7 @@ const handleEditFormChange = useCallback((field, value) => {
           )}
         </div>
         
-        {/* Right side profit/loss and actions */}
+        {/* Right sidebar - P&L display and action buttons */}
         <div className="text-right flex-shrink-0 self-start">
           <div className={`flex items-center space-x-1 ${
             totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'
@@ -637,7 +687,7 @@ const handleEditFormChange = useCallback((field, value) => {
             <span className="text-xs">({profitPercentage}%)</span>
           </div>
           
-          {/* Show breakdown for items with both realized and unrealized gains */}
+          {/* P&L breakdown for items with mixed realized/unrealized gains - helps users understand split */}
           {soldItems > 0 && availableQuantity > 0 && (
             <div className="text-xs text-gray-400 mt-1">
               <div>Realized: {realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(realizedProfitLoss).toFixed(2)}</div>
@@ -645,7 +695,7 @@ const handleEditFormChange = useCallback((field, value) => {
             </div>
           )}
           
-          {/* Only show action buttons for active investments, not sold items */}
+          {/* Action buttons - only shown for active investments, not sold items */}
           {!isSoldItem && (
             <div className="mt-2 space-y-1">
               {/* Edit Button */}
@@ -657,7 +707,7 @@ const handleEditFormChange = useCallback((field, value) => {
                 <span>Edit</span>
               </button>
               
-              {/* Sell Button - show different states */}
+              {/* Dynamic sell button - changes text based on sale history */}
               {!isFullySold ? (
                 <button
                   onClick={handleStartSell}
@@ -682,7 +732,7 @@ const handleEditFormChange = useCallback((field, value) => {
         </div>
       </div>
       
-      {/* Edit Item Form - only show for active investments */}
+      {/* Edit form modal - comprehensive item details editing */}
       {isEditingItem && !isSoldItem && (
         <div className="mt-4 pt-4 border-t border-gray-600">
           <div className="flex items-center justify-between mb-3">
@@ -695,6 +745,7 @@ const handleEditFormChange = useCallback((field, value) => {
             </button>
           </div>
           
+          {/* Two-column layout for form efficiency */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">
@@ -759,6 +810,7 @@ const handleEditFormChange = useCallback((field, value) => {
             </div>
           </div>
 
+          {/* Notes field with character counter for user guidance */}
           <div className="mt-3">
             <label className="block text-xs font-medium text-gray-400 mb-1">
               Notes (Optional)
@@ -793,14 +845,13 @@ const handleEditFormChange = useCallback((field, value) => {
         </div>
       )}
       
-      {/* Partial Sale Form - only show for active investments */}
+      {/* Partial sale form - handles selling portions of investment positions */}
       {isEditing && !isFullySold && !isSoldItem && (
         <div className="mt-3 pt-3 border-t border-gray-700">
           <h5 className="text-sm font-medium text-white mb-2">
             Sell Items ({availableQuantity} available)
           </h5>
           <div className="space-y-3">
-            {/* Quantity to sell */}
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">
                 Quantity to sell
@@ -815,7 +866,7 @@ const handleEditFormChange = useCallback((field, value) => {
               />
             </div>
             
-            {/* Sold price */}
+            {/* Real-time sale preview - helps users understand transaction impact before confirming */}
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1">
                 Sale price per item ($)
@@ -870,6 +921,7 @@ const handleEditFormChange = useCallback((field, value) => {
         </div>
       )}
 
+        {/* Centralized popup system - handles all modal dialogs (confirmations, errors, notes, etc.) */}
         <PopupManager
         isOpen={popup.isOpen}
         onClose={closePopup}

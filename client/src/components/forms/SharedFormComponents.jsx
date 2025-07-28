@@ -1,8 +1,9 @@
 import React, { memo, useMemo } from 'react';
 import { Upload, Loader2, Plus, Minus } from 'lucide-react';
 
-// Move VariantBadge to shared components
+// Displays a colored badge indicating the variant type of a CS2 item.
 export const VariantBadge = memo(({ stattrak, souvenir }) => {
+  // StatTrak™ items get orange badge with highest priority
   if (stattrak) {
     return (
       <span className="inline-block px-2 py-0.5 bg-orange-600 text-white rounded text-xs mt-1 mr-1">
@@ -11,6 +12,7 @@ export const VariantBadge = memo(({ stattrak, souvenir }) => {
     );
   }
   
+  // Souvenir items get yellow badge with second priority
   if (souvenir) {
     return (
       <span className="inline-block px-2 py-0.5 bg-yellow-600 text-white rounded text-xs mt-1">
@@ -19,6 +21,7 @@ export const VariantBadge = memo(({ stattrak, souvenir }) => {
     );
   }
   
+  // Default to normal variant with blue badge
   return (
     <span className="inline-block px-2 py-0.5 bg-blue-600 text-white rounded text-xs mt-1">
       Normal
@@ -26,7 +29,7 @@ export const VariantBadge = memo(({ stattrak, souvenir }) => {
   );
 });
 
-// Consolidate ImageUploadSection with responsive sizing
+// Provides drag-and-drop and click-to-upload functionality for custom item images
 export const ImageUploadSection = memo(({ 
   isDragOver, 
   uploadingImage, 
@@ -37,7 +40,7 @@ export const ImageUploadSection = memo(({
   onDrop, 
   onImageUpload, 
   onRemoveImage,
-  compact = false // Add compact mode for QuickAdd
+  compact = false // Default to full-size layout
 }) => (
   <div>
     <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -54,6 +57,7 @@ export const ImageUploadSection = memo(({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
+      {/* Hidden file input - triggered by label clicks */}
       <input
         type="file"
         accept="image/*"
@@ -63,12 +67,14 @@ export const ImageUploadSection = memo(({
         disabled={uploadingImage}
       />
       
+      {/* Loading state during image processing */}
       {uploadingImage ? (
         <div className="flex flex-col items-center">
           <Loader2 className={`text-orange-500 mb-2 animate-spin ${compact ? 'w-8 h-8' : 'w-10 h-10'}`} />
           <span className={`text-gray-400 ${compact ? 'text-xs' : 'text-sm'}`}>Processing image...</span>
         </div>
       ) : customImageUrl ? (
+        /* Image preview state with options to change or remove */
         <div className="flex flex-col items-center">
           <img 
             src={customImageUrl} 
@@ -88,6 +94,7 @@ export const ImageUploadSection = memo(({
           </button>
         </div>
       ) : (
+        /* Default upload prompt state */
         <label htmlFor="image-upload" className="cursor-pointer flex flex-col items-center">
           <Upload className={`text-orange-500 mb-2 ${compact ? 'w-8 h-8' : 'w-10 h-10'}`} />
           <span className={`text-gray-400 ${compact ? 'text-xs' : 'text-sm'}`}>Click to upload or drag & drop</span>
@@ -100,11 +107,12 @@ export const ImageUploadSection = memo(({
   </div>
 ));
 
-// Consolidate QuantitySelector with responsive sizing
+// Provides increment/decrement buttons and direct input for selecting item quantities.
 export const QuantitySelector = memo(({ quantity, onQuantityChange, compact = false }) => (
   <div>
     <label className="block text-sm font-medium text-gray-300 mb-2">Quantity</label>
     <div className={`flex items-center ${compact ? 'space-x-3' : 'justify-center space-x-4'}`}>
+      {/* Decrement button */}
       <button
         type="button"
         onClick={() => onQuantityChange(-1)}
@@ -114,6 +122,8 @@ export const QuantitySelector = memo(({ quantity, onQuantityChange, compact = fa
       >
         <Minus className={`${compact ? 'w-4 h-4' : 'w-5 h-5'}`} />
       </button>
+
+      {/* Direct input with validation - converts absolute value to delta for consistency */}
       <input
         type="number"
         min="1"
@@ -126,6 +136,8 @@ export const QuantitySelector = memo(({ quantity, onQuantityChange, compact = fa
             : 'w-20 px-3 py-2'
         }`}
       />
+
+      {/* Increment button */}
       <button
         type="button"
         onClick={() => onQuantityChange(1)}
@@ -136,13 +148,14 @@ export const QuantitySelector = memo(({ quantity, onQuantityChange, compact = fa
         <Plus className={`${compact ? 'w-4 h-4' : 'w-5 h-5'}`} />
       </button>
     </div>
+    {/* Show current quantity feedback in full-size mode only */}
     {!compact && (
       <p className="text-gray-400 text-xs text-center mt-2">Current quantity: {quantity}</p>
     )}
   </div>
 ));
 
-// Variant controls for StatTrak and Souvenir selection
+// Allows users to select between different item variants (Normal, StatTrak™, Souvenir).
 export const VariantControls = memo(({
   hasStatTrak,
   hasSouvenir,
@@ -150,15 +163,19 @@ export const VariantControls = memo(({
   onVariantChange,
   type = 'Item' // 'Item' or 'Skin' for different labels
 }) => {
+  // Memoize variant list to prevent unnecessary recalculations
   const variants = useMemo(() => {
+    // Always include normal variant as the base option
     const baseVariants = [
       { key: 'normal', label: 'Normal', bgColor: 'bg-blue-600' }
     ];
    
+    // Add StatTrak™ option if available for this item
     if (hasStatTrak) {
       baseVariants.push({ key: 'stattrak', label: 'StatTrak™', bgColor: 'bg-orange-600' });
     }
    
+    // Add Souvenir option if available for this item
     if (hasSouvenir) {
       baseVariants.push({ key: 'souvenir', label: 'Souvenir', bgColor: 'bg-yellow-600' });
     }
@@ -166,7 +183,8 @@ export const VariantControls = memo(({
     return baseVariants;
   }, [hasStatTrak, hasSouvenir]);
 
-  // Don't render if no variants available
+  // Don't render the component if no special variants are available
+  // This prevents showing a single "Normal" button which would be redundant
   if (!hasStatTrak && !hasSouvenir) return null;
 
   return (
@@ -182,8 +200,8 @@ export const VariantControls = memo(({
             onClick={() => onVariantChange(key)}
             className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
               selectedVariant === key
-                ? `${bgColor} text-white`
-                : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                ? `${bgColor} text-white` // Active state with variant-specific color
+                : 'bg-gray-600 text-gray-300 hover:bg-gray-500' // Inactive state
             }`}
           >
             {label}
@@ -206,11 +224,13 @@ const CONDITION_OPTIONS = [
   { short: 'BS', full: 'Battle-Scarred' }
 ];
 
+// Provides selection interface for CS2 weapon skin conditions.
 export const ConditionSelector = memo(({ selectedCondition, onConditionChange, required = false }) => (
   <div>
     <label className="block text-sm font-medium text-gray-300 mb-2">
       Condition {required && <span className="text-red-400">*</span>}
     </label>
+    {/* Button grid for condition selection using standard CS:GO abbreviations */}
     <div className="flex items-center gap-2 flex-wrap">
       {CONDITION_OPTIONS.map(({ short, full }) => (
         <button
@@ -219,14 +239,15 @@ export const ConditionSelector = memo(({ selectedCondition, onConditionChange, r
           onClick={() => onConditionChange(full)}
           className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
             selectedCondition === full
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+              ? 'bg-blue-600 text-white' // Active condition
+              : 'bg-gray-600 text-gray-300 hover:bg-gray-500' // Inactive conditions
           }`}
         >
           {short}
         </button>
       ))}
     </div>
+    {/* Show selected condition feedback with full name for clarity */}
     {selectedCondition && (
       <p className="text-gray-400 text-xs mt-2">Selected: {selectedCondition}</p>
     )}

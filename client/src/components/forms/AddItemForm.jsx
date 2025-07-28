@@ -20,10 +20,12 @@ import {
   useFormLogic 
 } from '@/hooks/item-forms';
 
+// A modal form for adding different types of items to a user's inventory.
 const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
+  // Form submission hook - handles the actual submission process
   const { submitting, handleSubmit: submitForm } = useFormSubmission(supabase);
 
-  // from useItemForm hook
+  // from useItemform hook
   const {
     formData,
     dispatch,
@@ -60,9 +62,10 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
     submitForm
   });
 
-  // Render craft-specific form sections
+  // Renders form sections specific to craft items
   const renderCraftSections = () => (
     <>
+      {/* Base Skin Selection - Crafts use existing skins as base */}
       <ItemSelectionSection
         type={type}
         searchType="liquids"
@@ -72,6 +75,7 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
         handleSkinSelect={handleSkinSelect}
       />
 
+      {/* Display Selected Base Skin with Variant Controls */}
       <SelectedItemDisplay
         formData={formData}
         type={type}
@@ -79,17 +83,20 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
         handleFormDataChange={handleFormDataChange}
       />
 
+      {/* Condition Selector - Required for crafts */}
       <ConditionSelector
         selectedCondition={formData.condition}
         onConditionChange={handleConditionChange}
         required={true}
       />
 
+      {/* Custom Craft Name Input - Crafts need unique names */}
       <CraftNameInput
         formData={formData}
         handleFormDataChange={handleFormDataChange}
       />
 
+      {/* Image Upload Section - For custom craft images */}
       <ImageUploadSection
         isDragOver={isDragOver}
         uploadingImage={uploadingImage}
@@ -104,9 +111,10 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
     </>
   );
 
-  // Render standard item form sections
+  // Renders form sections for standard item types (non-crafts)
   const renderStandardSections = () => (
     <>
+      {/* Item Selection - Search in appropriate category */}
       <ItemSelectionSection
         type={type}
         searchType={type.toLowerCase()}
@@ -116,6 +124,7 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
         handleSkinSelect={handleSkinSelect}
       />
 
+      {/* Display Selected Item with Variant Controls */}
       <SelectedItemDisplay
         formData={formData}
         type={type}
@@ -123,6 +132,7 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
         handleFormDataChange={handleFormDataChange}
       />
 
+      {/* Condition Selector - Only for Liquids */}
       {type === 'Liquids' && (
         <ConditionSelector
           selectedCondition={formData.condition}
@@ -131,6 +141,7 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
         />
       )}
 
+      {/* Quantity Selector - For Liquids and Cases that can be bought in bulk */}
       {(type === 'Liquids' || type === 'Cases') && (
         <QuantitySelector
           quantity={formData.quantity}
@@ -140,12 +151,17 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
     </>
   );
 
+  // Main render
   return (
+    /* Modal Backdrop - Handles click-outside-to-close behavior */
     <div 
       className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onClick={handleBackdropClick}
     >
+      {/* Modal Content Container */}
       <div className="bg-gradient-to-br from-gray-900 to-slate-900 p-6 rounded-xl border border-orange-500/20 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+
+        {/* Modal Header */}
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-xl font-semibold text-white">Add {type} Item</h3>
           <button 
@@ -156,14 +172,18 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
           </button>
         </div>
         
+        {/* Dynamic Form Content */}
         <div className="space-y-6">
+          {/* Conditional Rendering Based on Item Type */}
           {type === 'Crafts' ? renderCraftSections() : renderStandardSections()}
           
+          {/* Buy Price Input - Common to all item types */}
           <BuyPriceInput
             formData={formData}
             handleFormDataChange={handleFormDataChange}
           />
           
+          {/* Submit Button */}
           <button
             type="button"
             onClick={handleSubmit}
@@ -171,13 +191,16 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
             className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
           >
             {submitting ? (
+              // Loading State
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
                 <span>Adding Item...</span>
               </>
             ) : (
+              // Normal State
               <>
                 <span>Add {type} Item</span>
+                {/* Show quantity indicator for multi-item additions */}
                 {formData.quantity > 1 && (
                   <span className="text-orange-200">({formData.quantity}x)</span>
                 )}

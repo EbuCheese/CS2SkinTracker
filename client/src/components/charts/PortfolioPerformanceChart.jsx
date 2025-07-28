@@ -3,11 +3,13 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 
+// Displays an interactive line chart showing portfolio performance over various time periods.
 const PortfolioPerformanceChart = ({ userSession }) => {
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('MAX');
 
+  // Available time periods for chart display
   const timePeriods = useMemo(() => [
     { label: '1D', value: '1D' },
     { label: '5D', value: '5D' },
@@ -19,7 +21,7 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     { label: 'MAX', value: 'MAX' }
   ], []);
 
-  // Memoized formatters to prevent recreation on every render
+  // Formats numeric values as currency
   const formatPrice = useCallback((price) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -28,15 +30,17 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     }).format(price);
   }, []);
 
+  // Formats Y-axis tick values with dollar sign
   const formatTickPrice = useCallback((value) => `$${value.toFixed(2)}`, []);
 
-  // Fetch chart data from Supabase with error boundary
+  // Fetches chart data from Supabase RPC function
   const fetchChartData = useCallback(async (timePeriod) => {
     if (!userSession?.id) return;
     
     try {
       setChartLoading(true);
       
+      // Call Supabase RPC function to get portfolio data
       const { data, error } = await supabase.rpc('get_chart_data', {
         context_user_id: userSession.id,
         time_period: timePeriod
@@ -47,14 +51,15 @@ const PortfolioPerformanceChart = ({ userSession }) => {
         return;
       }
 
+      // Parse response (handle both string and object responses)
       const chartResult = typeof data === 'string' ? JSON.parse(data) : data;
       
-      // Transform the data for the chart with proper date handling
+      // Transform raw data for chart consumption
       const transformedData = chartResult.data.map(point => {
         const date = new Date(point.date);
         const isToday = date.toDateString() === new Date().toDateString();
         
-        // Create more detailed date formatting
+        // Format dates based on data granularity
         let formattedDate;
         if (chartResult.granularity === 'hourly') {
           if (isToday) {
@@ -72,11 +77,13 @@ const PortfolioPerformanceChart = ({ userSession }) => {
             });
           }
         } else if (chartResult.granularity === 'daily') {
+          // For daily data, show month and day
           formattedDate = date.toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric'
           });
-        } else { // monthly
+        } else {
+          // For monthly data, show month and year
           formattedDate = date.toLocaleDateString('en-US', {
             month: 'short',
             year: 'numeric'
@@ -90,13 +97,14 @@ const PortfolioPerformanceChart = ({ userSession }) => {
           invested: parseFloat(point.invested),
           profitLoss: parseFloat(point.profit_loss),
           returnPercentage: parseFloat(point.return_percentage),
+          // Flag for highlighting current/latest data points
           isCurrentValue: isToday && chartResult.granularity === 'hourly' || 
                          (chartResult.granularity === 'daily' && isToday) ||
                          (chartResult.granularity === 'monthly' && date.getMonth() === new Date().getMonth())
         };
       });
 
-      // Sort by date to ensure proper order
+      // Sort by date to ensure chronological order
       transformedData.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
 
       setChartData(transformedData);
@@ -108,13 +116,13 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     }
   }, [userSession?.id]);
 
-  // Handle time period change
+  // Handles time period selection changes
   const handleTimePeriodChange = useCallback((period) => {
     setSelectedTimePeriod(period);
     fetchChartData(period);
   }, [fetchChartData]);
 
-  // Calculate time frame change - memoized
+  // Calculates performance change for selected time frame
   const timeFrameChange = useMemo(() => {
     if (!chartData || chartData.length < 2) return { change: 0, percentage: 0 };
     
@@ -126,7 +134,7 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     return { change, percentage };
   }, [chartData]);
 
-  // Calculate Y-axis domain for better chart scaling - memoized
+  // Calculates optimal Y-axis domain for better chart visualization
   const yAxisDomain = useMemo(() => {
     if (!chartData || chartData.length === 0) return ['auto', 'auto'];
     
@@ -134,15 +142,16 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     const minValue = Math.min(...values);
     const maxValue = Math.max(...values);
     
-    // Calculate range
     const range = maxValue - minValue;
     
-    // For very small ranges, add minimum padding
+    // Handle edge case: very small price variations
     if (range < maxValue * 0.005) { // Less than 0.5% variation
       const padding = maxValue * 0.02; // 2% padding
       return [Math.max(0, minValue - padding), maxValue + padding];
     }
     
+    // Dynamic padding based on time period
+    // Shorter periods get less padding, longer periods get more
     let paddingPercent;
     switch (selectedTimePeriod) {
       case '1D':
@@ -169,7 +178,7 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     return [Math.max(0, minValue - padding), maxValue + padding];
   }, [chartData, selectedTimePeriod]);
 
-  // Memoized tooltip formatter
+  // Formats tooltip values based on data type
   const tooltipFormatter = useCallback((value, name) => {
     if (name === 'totalValue') return [formatPrice(value), 'Portfolio Value'];
     if (name === 'invested') return [formatPrice(value), 'Total Invested'];
@@ -177,11 +186,12 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     return [value, name];
   }, [formatPrice]);
 
-  // Memoized tooltip label formatter
+  // Formats tooltip labels (dates) based on selected time period
   const tooltipLabelFormatter = useCallback((label, payload) => {
     if (payload && payload.length > 0 && payload[0].payload.rawDate) {
       const rawDate = payload[0].payload.rawDate;
-      // For hourly data, show full date and time
+
+      // For short-term periods, include time information
       if (['1D', '5D'].includes(selectedTimePeriod)) {
         return rawDate.toLocaleDateString('en-US', {
           weekday: 'short',
@@ -204,7 +214,7 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     return label;
   }, [selectedTimePeriod]);
 
-  // Memoized tooltip content style
+  // Tooltip styling configuration
   const tooltipContentStyle = useMemo(() => ({
     backgroundColor: '#1F2937',
     border: '1px solid #374151',
@@ -212,7 +222,7 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     color: '#F9FAFB'
   }), []);
 
-  // Memoized line props
+  // Line chart properties configuration
   const lineProps = useMemo(() => ({
     type: "monotone",
     dataKey: "totalValue",
@@ -224,21 +234,24 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     activeDot: { r: 6, fill: '#EA580C' }
   }), [selectedTimePeriod]);
 
-  // Memoized tick count
+  // X-axis tick count based on time period
   const tickCount = useMemo(() => 
     ['1D', '5D'].includes(selectedTimePeriod) ? 8 : 6, 
     [selectedTimePeriod]
   );
 
-  // Load initial data
+  // Load initial chart data when component mounts or time period change
   useEffect(() => {
     fetchChartData(selectedTimePeriod);
   }, [fetchChartData, selectedTimePeriod]);
 
+  // Main render
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 mb-8 border border-gray-700/50">
+      {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
         <div className="mb-4 sm:mb-0">
+          {/* Title and Legend */}
           <div className="flex items-center space-x-4 mb-2">
             <h2 className="text-xl font-semibold text-white">Portfolio Performance</h2>
             <div className="flex items-center space-x-2 text-sm text-gray-400">
@@ -247,12 +260,14 @@ const PortfolioPerformanceChart = ({ userSession }) => {
             </div>
           </div>
           
-          {/* Time Frame Change Display - Under Title */}
+          {/* Performance Metrics Display */}
           {chartData.length > 1 && !chartLoading && (
             <div className="flex items-center space-x-2">
+              {/* Change Amount */}
               <span className={`text-xl font-bold ${timeFrameChange.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {timeFrameChange.change >= 0 ? '+' : ''}{formatPrice(timeFrameChange.change)}
               </span>
+              {/* Percentage Change Badge */}
               <span className={`text-sm font-medium px-2 py-1 rounded ${
                 timeFrameChange.change >= 0 
                   ? 'bg-green-500/20 text-green-400' 
@@ -260,7 +275,9 @@ const PortfolioPerformanceChart = ({ userSession }) => {
               }`}>
                 {timeFrameChange.change >= 0 ? '+' : ''}{timeFrameChange.percentage.toFixed(2)}%
               </span>
+              {/* Time Period Label */}
               <span className="text-sm text-gray-400">({selectedTimePeriod})</span>
+              {/* Trend Icon */}
               {timeFrameChange.change >= 0 ? (
                 <TrendingUp className="w-4 h-4 text-green-400" />
               ) : (
@@ -270,7 +287,7 @@ const PortfolioPerformanceChart = ({ userSession }) => {
           )}
         </div>
         
-        {/* Time Period Selection */}
+        {/* Time Period Selection Buttons */}
         <div className="flex flex-wrap gap-2">
           {timePeriods.map((period) => (
             <button
@@ -288,20 +305,28 @@ const PortfolioPerformanceChart = ({ userSession }) => {
         </div>
       </div>
       
+      {/* Chart Container */}
       <div className="h-[28rem]">
         {chartLoading ? (
+          // Loading State
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
           </div>
         ) : (
+          // Chart Rendering
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
+              {/* Grid Lines */}
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+
+              {/* X-Axis (Dates) */}
               <XAxis 
                 dataKey="date" 
                 stroke="#9CA3AF"
                 fontSize={12}
               />
+
+              {/* Y-Axis (Values) */}
               <YAxis 
                 stroke="#9CA3AF"
                 fontSize={12}
@@ -309,12 +334,18 @@ const PortfolioPerformanceChart = ({ userSession }) => {
                 domain={yAxisDomain}
                 tickCount={tickCount}
               />
+
+              {/* Interactive Tooltip */}
               <Tooltip 
                 formatter={tooltipFormatter}
                 labelFormatter={tooltipLabelFormatter}
                 contentStyle={tooltipContentStyle}
               />
+
+              {/* Main Chart Line */}
               <Line {...lineProps} />
+
+              {/* Gradient Definition for Line Color */}
               <defs>
                 <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor="#F97316" />
