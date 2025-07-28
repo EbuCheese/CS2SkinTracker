@@ -1,5 +1,6 @@
 import { useMemo, useCallback } from 'react';
 
+// consolidate item names into broader categories
 const consolidateItems = (() => {
   const cache = new Map();
   return (itemName) => {
@@ -34,8 +35,9 @@ const consolidateItems = (() => {
   };
 })();
 
-// 1. PURE DATA AGGREGATION FUNCTIONS
+// Aggregates raw investment data into organized groups and totals
 const aggregatePortfolioData = (investments) => {
+  // Early return for empty data
   if (!investments?.length) {
     return {
       typeGroups: new Map(),
@@ -50,16 +52,18 @@ const aggregatePortfolioData = (investments) => {
   let totalValue = 0;
   let safeValue = 0;
   
+  // Process each investment
   for (const inv of investments) {
     const quantity = parseFloat(inv.quantity);
     const currentPrice = parseFloat(inv.current_price);
     
+    // Skip invalid entries
     if (isNaN(quantity) || quantity <= 0 || isNaN(currentPrice)) continue;
     
     const value = currentPrice * quantity;
     totalValue += value;
     
-    // Calculate safe allocation
+    // Calculate safe allocation (cases and keys are considered "safe")
     const itemType = inv.type?.toLowerCase() || 'unknown';
     const itemName = inv.name?.toLowerCase() || '';
     if (itemType === 'case' || itemName.includes('case') || itemType === 'key') {
@@ -90,7 +94,7 @@ const aggregatePortfolioData = (investments) => {
   return { typeGroups, itemGroups, totalValue, safeValue };
 };
 
-// 2. BREAKDOWN CALCULATION FUNCTIONS
+// Calculates percentage breakdowns from aggregated data
 const calculateBreakdowns = (typeGroups, itemGroups, totalValue) => {
   const typeBreakdown = Array.from(typeGroups.values())
     .map(group => ({
@@ -111,7 +115,7 @@ const calculateBreakdowns = (typeGroups, itemGroups, totalValue) => {
   return { typeBreakdown, weaponBreakdown };
 };
 
-// 3. SCORE CALCULATION FUNCTIONS
+// Calculates diversification score based on investment type distribution
 const calculateTypeDiversityScore = (typeBreakdown, safeAllocation) => {
   const numTypes = typeBreakdown.length;
   const typeMaxConcentration = typeBreakdown.length > 0 ? 
@@ -119,7 +123,7 @@ const calculateTypeDiversityScore = (typeBreakdown, safeAllocation) => {
   
   let typeDiversityScore = 0;
   
-  // Base scoring for concentration
+  // Base scoring based on maximum concentration in any single typ
   if (typeMaxConcentration >= 98) {
     typeDiversityScore = 5;
   } else if (typeMaxConcentration >= 90) {
@@ -134,7 +138,7 @@ const calculateTypeDiversityScore = (typeBreakdown, safeAllocation) => {
     typeDiversityScore = 90;
   }
 
-  // Type multiplier
+  // Apply multiplier based on number of different types
   let typeMultiplier = 1.0;
   if (numTypes === 1) {
     typeMultiplier = 0.2;
@@ -148,7 +152,7 @@ const calculateTypeDiversityScore = (typeBreakdown, safeAllocation) => {
 
   typeDiversityScore *= typeMultiplier;
 
-  // Safety weighting
+  // Apply safety weighting based on safe allocation percentage
   if (safeAllocation < 15) {
     typeDiversityScore *= 0.5;
   } else if (safeAllocation >= 70) {
@@ -160,13 +164,14 @@ const calculateTypeDiversityScore = (typeBreakdown, safeAllocation) => {
   return Math.min(100, Math.max(0, Math.round(typeDiversityScore)));
 };
 
+// Calculates item-level diversification score
 const calculateItemDiversityScore = (weaponBreakdown) => {
   if (weaponBreakdown.length === 0) return 0;
 
   const numItems = weaponBreakdown.length;
   const itemMaxConcentration = Math.max(...weaponBreakdown.map(w => w.percentage));
 
-  // 1. Concentration penalty
+  // 1. Base concentration penalty
   let concentrationScore = 0;
   if (itemMaxConcentration >= 80) {
     concentrationScore = 5;
@@ -182,7 +187,7 @@ const calculateItemDiversityScore = (weaponBreakdown) => {
     concentrationScore = 90;
   }
 
-  // 2. Top concentration penalty
+  // 2. Additional penalty for top holdings concentration
   const sortedPercentages = weaponBreakdown
     .map(w => w.percentage)
     .sort((a, b) => b - a);
@@ -190,6 +195,7 @@ const calculateItemDiversityScore = (weaponBreakdown) => {
   const top2Concentration = sortedPercentages.slice(0, 2).reduce((sum, p) => sum + p, 0);
   const top3Concentration = sortedPercentages.slice(0, 3).reduce((sum, p) => sum + p, 0);
   
+  // Apply penalties for concentrated top holdings
   if (top2Concentration >= 80) {
     concentrationScore *= 0.6;
   } else if (top2Concentration >= 60) {
@@ -200,7 +206,7 @@ const calculateItemDiversityScore = (weaponBreakdown) => {
     concentrationScore *= 0.7;
   }
 
-  // 3. Diversity multiplier
+  // 3. Diversity multiplier based on total number of items
   let diversityMultiplier = 1.0;
   if (numItems === 1) {
     diversityMultiplier = 0.1;
@@ -220,7 +226,7 @@ const calculateItemDiversityScore = (weaponBreakdown) => {
     diversityMultiplier = 1.2;
   }
 
-  // 4. Category balance scoring
+  // 4. Category balance analysis
   const categories = {
     weapons: weaponBreakdown.filter(w => 
       !['Knives', 'Gloves', 'Stickers', 'Patches', 'Graffiti', 'Charms', 'Agents'].includes(w.name) && 
@@ -239,6 +245,7 @@ const calculateItemDiversityScore = (weaponBreakdown) => {
     percentage: items.reduce((sum, item) => sum + item.percentage, 0)
   }));
 
+  // Penalize excessive concentration in any single category
   const maxCategoryPercentage = Math.max(...categoryPercentages.map(c => c.percentage));
   if (maxCategoryPercentage >= 90) {
     diversityMultiplier *= 0.5;
@@ -248,6 +255,7 @@ const calculateItemDiversityScore = (weaponBreakdown) => {
     diversityMultiplier *= 0.85;
   }
 
+  // Bonus for having multiple active categories
   const activeCategories = categoryPercentages.filter(c => c.percentage > 0).length;
   if (activeCategories >= 4) {
     diversityMultiplier *= 1.15;
@@ -258,7 +266,7 @@ const calculateItemDiversityScore = (weaponBreakdown) => {
   // Apply all multipliers
   let itemDiversityScore = concentrationScore * diversityMultiplier;
 
-  // Special case adjustments
+  // Special case: heavy weapon concentration
   const weaponPercentage = categories.weapons.reduce((sum, item) => sum + item.percentage, 0);
   if (weaponPercentage >= 95) {
     itemDiversityScore *= 0.8;
@@ -269,7 +277,7 @@ const calculateItemDiversityScore = (weaponBreakdown) => {
   return Math.min(100, Math.max(0, Math.round(itemDiversityScore)));
 };
 
-// 4. FEEDBACK GENERATION FUNCTIONS
+// Generates human-readable feedback for type diversification
 const generateTypeFeedback = (score, numTypes, maxConcentration, safeAllocation) => {
   const safeText = `Safe allocation: ${safeAllocation.toFixed(1)}%`;
   
@@ -288,6 +296,7 @@ const generateTypeFeedback = (score, numTypes, maxConcentration, safeAllocation)
   }
 };
 
+// Generates human-readable feedback for item diversification
 const generateItemFeedback = (score, numItems, maxConcentration, weaponBreakdown) => {
   const topHoldings = weaponBreakdown
     .slice(0, 3)
@@ -315,20 +324,20 @@ const generateItemFeedback = (score, numItems, maxConcentration, weaponBreakdown
   }
 };
 
-// 5. MAIN OPTIMIZED FUNCTION
+// Main hook for calculating portfolio health metrics
 export const useCalculatePortfolioHealth = (investments) => {
-  // Memoize the aggregated data
+  // Level 1: Memoize raw data aggregation
   const aggregatedData = useMemo(() => {
     return aggregatePortfolioData(investments);
   }, [investments]);
 
-  // Memoize the breakdowns
+  // Level 2: Memoize breakdown calculations
   const breakdowns = useMemo(() => {
     const { typeGroups, itemGroups, totalValue } = aggregatedData;
     return calculateBreakdowns(typeGroups, itemGroups, totalValue);
   }, [aggregatedData]);
 
-  // Memoize the scores
+  // Level 3: Memoize score calculations
   const scores = useMemo(() => {
     const { totalValue, safeValue } = aggregatedData;
     const { typeBreakdown, weaponBreakdown } = breakdowns;
@@ -340,7 +349,7 @@ export const useCalculatePortfolioHealth = (investments) => {
     return { typeDiversityScore, itemDiversityScore, safeAllocation };
   }, [aggregatedData, breakdowns]);
 
-  // Memoize the feedback
+  // Level 4: Memoize feedback generation
   const feedback = useMemo(() => {
     const { typeBreakdown, weaponBreakdown } = breakdowns;
     const { typeDiversityScore, itemDiversityScore, safeAllocation } = scores;
@@ -358,8 +367,9 @@ export const useCalculatePortfolioHealth = (investments) => {
     };
   }, [breakdowns, scores]);
 
-  // Return the final result
+  // Final result memoization
   return useMemo(() => {
+    // Handle empty state
     if (!investments?.length) {
       return {
         typeDiversityScore: 0,

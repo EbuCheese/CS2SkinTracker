@@ -18,12 +18,19 @@ export const useAdvancedDebounce = (
   deps = []
 ) => {
   const { leading = false, trailing = true, maxWait } = options;
+  
+  // Ref to store the main debounce timeout
   const timeoutRef = useRef(null);
+  // Ref to store the maxWait timeout (prevents infinite delays)
   const maxTimeoutRef = useRef(null);
+  // Timestamp of the last function call attempt
   const lastCallTimeRef = useRef(0);
+  // Store the most recent arguments passed to the debounced function
   const lastArgsRef = useRef(null);
+  // Timestamp of the last actual function execution
   const lastInvokeTimeRef = useRef(0);
 
+  // Cancels all pending timeouts and resets state
   const cancel = useCallback(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -33,14 +40,17 @@ export const useAdvancedDebounce = (
       clearTimeout(maxTimeoutRef.current);
       maxTimeoutRef.current = null;
     }
+    // Clear stored arguments to prevent flush from executing stale calls
     lastArgsRef.current = null;
   }, []);
 
+  // Internal function wrapper that updates invoke time and calls the original callback
   const invokeFunction = useCallback((...args) => {
     lastInvokeTimeRef.current = Date.now();
     return callback(...args);
   }, [callback]);
 
+  // Immediately executes the callback with the last stored arguments
   const flush = useCallback(() => {
     if (lastArgsRef.current) {
       const args = lastArgsRef.current;
@@ -49,41 +59,47 @@ export const useAdvancedDebounce = (
     }
   }, [invokeFunction, cancel]);
 
+  // The main debounced function that handles all the timing logic
   const debouncedFunction = useCallback(
     (...args) => {
       const callTime = Date.now();
       const timeSinceLastInvoke = callTime - lastInvokeTimeRef.current;
       const timeSinceLastCall = callTime - lastCallTimeRef.current;
       
+      // Store the current call's arguments and timestamp
       lastArgsRef.current = args;
       lastCallTimeRef.current = callTime;
 
+      // Check if we should execute immediately (leading edge)
       const shouldCallLeading = leading && timeSinceLastInvoke >= delay;
       
-      // Clear existing timeouts
+      // Clear any existing timeout to reset the delay
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
 
+      // Execute immediately if leading edge is enabled and enough time has passed
       if (shouldCallLeading) {
         return invokeFunction(...args);
       }
 
-      // Set up maxWait timeout if specified
+      // Set up maxWait timeout to prevent infinite delays
+      // Only create if maxWait is specified and we haven't already created one
       if (maxWait && !maxTimeoutRef.current && timeSinceLastInvoke < maxWait) {
         maxTimeoutRef.current = setTimeout(() => {
           const currentArgs = lastArgsRef.current;
-          cancel();
+          cancel(); // This will clear both timeouts and reset state
           if (currentArgs) {
             invokeFunction(...currentArgs);
           }
         }, maxWait - timeSinceLastInvoke);
       }
 
+      // Set up trailing edge execution (the standard debounce behavior)
       if (trailing) {
         timeoutRef.current = setTimeout(() => {
           const currentArgs = lastArgsRef.current;
-          cancel();
+          cancel(); // Clear state after execution
           if (currentArgs) {
             invokeFunction(...currentArgs);
           }
@@ -93,7 +109,7 @@ export const useAdvancedDebounce = (
     [callback, delay, leading, trailing, maxWait, invokeFunction, cancel, ...deps]
   );
 
-  // Cleanup on unmount
+  // Cleanup timeouts when component unmounts to prevent memory leaks
   useEffect(() => {
     return cancel;
   }, [cancel]);

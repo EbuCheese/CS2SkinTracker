@@ -2,33 +2,35 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/supabaseClient';
 
+// Storage keys for localStorage persistence
 const STORAGE_KEYS = {
   USER_SESSION: 'beta_user',
   BETA_KEY: 'beta_key'
 };
 
 export const useAuth = () => {
+  // Core auth states
   const [userSession, setUserSession] = useState(null);
   const [hasValidBetaKey, setHasValidBetaKey] = useState(false);
   const [hasStoredBetaKey, setHasStoredBetaKey] = useState(false);
   const [storedBetaKey, setStoredBetaKey] = useState(null);
+
+  // Loading, error, message states
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // Simplified: Just track the revocation message
   const [revocationMessage, setRevocationMessage] = useState(null);
 
-  // Helper function to set revocation message
+  // Helper function to set revocation alert messages
   const setRevocationAlert = useCallback((type, title, message) => {
     setRevocationMessage({ type, title, message });
   }, []);
 
-  // Simplified: Clear revocation message AND remove stored key if revoked
+  // Clears revocation message and performs cleanup if key was revoked
   const clearRevocationMessage = useCallback(() => {
     const wasRevoked = revocationMessage?.type === 'revoked';
     setRevocationMessage(null);
     
-    // If this was a revocation message, also clear the stored key
+    // Clean up revoked key from storage to prevent reuse attempts
     if (wasRevoked) {
       localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
       setStoredBetaKey(null);
@@ -36,21 +38,21 @@ export const useAuth = () => {
     }
   }, [revocationMessage]);
 
-  // Simplified: Handle revoked key - just clear everything and show message
+  // Handles complete cleanup when a beta key is revoked
   const handleRevokedKey = useCallback((title, message) => {
     console.log('🚫 Handling revoked key cleanup');
     
-    // Clear all stored data
+    // Clear all authentication data from localStorage
     localStorage.removeItem(STORAGE_KEYS.USER_SESSION);
     localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
     
-    // Update state
+    // Reset all auth state to logged-out state
     setUserSession(null);
     setHasValidBetaKey(false);
     setStoredBetaKey(null);
     setHasStoredBetaKey(false);
     
-    // Set revocation message
+    // Show revocation message to user
     setRevocationAlert('revoked', title, message);
   }, [setRevocationAlert]);
 
@@ -81,11 +83,12 @@ export const useAuth = () => {
     }
   }, []);
 
-  // Validate existing session using the function
+  // Validates an existing session with the backend
   const validateSession = useCallback(async (sessionId) => {
     console.log('🔍 Validating session:', sessionId);
     
     try {
+      // Call Supabase function to validate session
       const { data, error } = await supabase
         .rpc('validate_session', { input_session_id: sessionId });
       
@@ -96,11 +99,12 @@ export const useAuth = () => {
         return false;
       }
       
+      // Session is valid - return session data
       if (data && data.valid) {
         return data.session;
       }
       
-      // If session is invalid due to revoked key, handle cleanup
+      // Handle case where session is invalid due to key revocation
       if (data && !data.valid && data.error === 'Beta key has been revoked') {
         handleRevokedKey(
           'Beta Access Revoked',
@@ -115,14 +119,16 @@ export const useAuth = () => {
     }
   }, [handleRevokedKey]);
 
-  // Initialize auth state
+  // Initialize authentication state on app load
   useEffect(() => {
     const initializeAuth = async () => {
       console.log('🚀 Initializing auth...');
       
+      // Debug: Check database connectivity
       await checkTableStructure();
       
       try {
+        // Retrieve stored authentication data
         const storedUser = localStorage.getItem(STORAGE_KEYS.USER_SESSION);
         const storedKey = localStorage.getItem(STORAGE_KEYS.BETA_KEY);
         
@@ -130,12 +136,14 @@ export const useAuth = () => {
         console.log('💾 Stored key:', storedKey ? 'exists' : 'none');
 
         if (storedUser) {
+          // We have a stored session - validate it
           const userData = JSON.parse(storedUser);
           console.log('👤 Parsed user data:', userData);
           
           const validSession = await validateSession(userData.session_id);
           
           if (validSession) {
+            // Session is still valid - restore full auth state
             console.log('✅ Session is still valid');
             setUserSession(userData);
             setHasValidBetaKey(true);
@@ -144,9 +152,8 @@ export const useAuth = () => {
               setHasStoredBetaKey(true);
             }
           } else {
+            // Session invalid - keep stored key if not revoked for potential reuse
             console.log('❌ Session is no longer valid');
-            // Only set stored key if validation didn't fail due to revocation
-            // (if it was revoked, handleRevokedKey would have cleared everything)
             if (storedKey && !revocationMessage) {
               setStoredBetaKey(storedKey);
               setHasStoredBetaKey(true);
@@ -157,13 +164,16 @@ export const useAuth = () => {
           setStoredBetaKey(storedKey);
           setHasStoredBetaKey(true);
         } else {
+          // No stored data - fresh user
           console.log('🆕 New user - no stored data');
         }
       } catch (error) {
+        // Error during initialization - clear potentially corrupted data
         console.error('🚨 Auth initialization error:', error);
         localStorage.removeItem(STORAGE_KEYS.USER_SESSION);
         localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
       } finally {
+        // Always finish loading state
         console.log('✅ Auth initialization complete');
         setIsLoading(false);
       }
@@ -172,6 +182,7 @@ export const useAuth = () => {
     initializeAuth();
   }, [checkTableStructure, validateSession, revocationMessage]);
 
+// Primary login method using a beta key
 const loginWithBetaKey = useCallback(async (betaKey) => {
   console.log('🔐 Attempting login with beta key:', betaKey.substring(0, 4) + '...');
   setError(null);
@@ -182,6 +193,7 @@ const loginWithBetaKey = useCallback(async (betaKey) => {
   try {
     console.log('📡 Calling create_beta_session function...');
     
+    // Call Supabase function to create new session
     const { data, error } = await supabase
       .rpc('create_beta_session', { input_key_value: betaKey });
     
@@ -211,22 +223,27 @@ const loginWithBetaKey = useCallback(async (betaKey) => {
     }
     
     if (data && data.success) {
+      // Login successful - update state and store data
       console.log('✅ Login succeeded!');
       const sessionData = data.session;
       
+      // Update React state
       setUserSession(sessionData);
       setHasValidBetaKey(true);
       setStoredBetaKey(betaKey);
       setHasStoredBetaKey(true);
 
+      // Persist to localStorage for future sessions
       localStorage.setItem(STORAGE_KEYS.USER_SESSION, JSON.stringify(sessionData));
       localStorage.setItem(STORAGE_KEYS.BETA_KEY, betaKey);
 
       return { success: true };
     } else {
+      // Login failed - handle specific error cases
       console.log('❌ Login failed:', data?.error);
       console.log('📊 Full response data:', data);
       
+      // Special handling for revoked keys
       if (data?.error === 'Beta key has been revoked') {
         handleRevokedKey(
           'Beta Key Revoked',
@@ -237,6 +254,7 @@ const loginWithBetaKey = useCallback(async (betaKey) => {
       return { success: false, error: data?.error || 'Unknown error' };
     }
   } catch (error) {
+    // Network or other unexpected errors
     console.error('🚨 Login exception:', error);
     console.error('🚨 Error stack:', error.stack);
     return { success: false, error: `Network error: ${error.message}` };
@@ -245,6 +263,7 @@ const loginWithBetaKey = useCallback(async (betaKey) => {
 
   // Quick login with stored beta key
   const quickLogin = useCallback(async () => {
+    // Pre-flight checks
     if (!storedBetaKey || isStoredKeyRevoked) {
       console.log('❌ No stored beta key or key is revoked for quick login');
       return { success: false, error: isStoredKeyRevoked ? 'Beta key has been revoked' : 'No stored beta key' };
@@ -253,6 +272,7 @@ const loginWithBetaKey = useCallback(async (betaKey) => {
     console.log('⚡ Quick login with stored key');
     
     try {
+      // Call optimized quick login function
       const { data, error } = await supabase
         .rpc('quick_beta_login', { input_key_value: storedBetaKey });
       
@@ -264,16 +284,18 @@ const loginWithBetaKey = useCallback(async (betaKey) => {
       }
       
       if (data && data.success) {
+        // Quick login successful
         console.log('✅ Quick login succeeded!');
         const sessionData = data.session;
         
+        // Update state and refresh session storage
         setUserSession(sessionData);
         setHasValidBetaKey(true);
-
         localStorage.setItem(STORAGE_KEYS.USER_SESSION, JSON.stringify(sessionData));
 
         return { success: true };
       } else {
+        // Quick login failed - handle revocation
         console.log('❌ Quick login failed:', data?.error);
         
         if (data?.error === 'Beta key has been revoked') {
@@ -291,7 +313,7 @@ const loginWithBetaKey = useCallback(async (betaKey) => {
     }
   }, [storedBetaKey, isStoredKeyRevoked, handleRevokedKey]);
 
-  // Revoke beta key
+  // Permanently Revoke the current beta key
   const revokeBetaKey = useCallback(async () => {
     if (!storedBetaKey) {
       console.log('❌ No stored beta key to revoke');
@@ -301,6 +323,7 @@ const loginWithBetaKey = useCallback(async (betaKey) => {
     console.log('🚫 Revoking beta key');
     
     try {
+      // Call revocation function
       const { data, error } = await supabase
         .rpc('revoke_beta_key', { input_key_value: storedBetaKey });
       
@@ -312,6 +335,7 @@ const loginWithBetaKey = useCallback(async (betaKey) => {
       }
       
       if (data && data.success) {
+        // Revocation successful - trigger cleanup
         console.log('✅ Beta key revoked successfully');
         
         handleRevokedKey(
@@ -330,15 +354,17 @@ const loginWithBetaKey = useCallback(async (betaKey) => {
     }
   }, [storedBetaKey, handleRevokedKey]);
 
-  // Logout
+  // Log out the current user
   const logout = useCallback((clearBetaKey = false) => {
     console.log('👋 Logging out, clearBetaKey:', clearBetaKey);
     
+    // Always clear session data
     localStorage.removeItem(STORAGE_KEYS.USER_SESSION);
     setUserSession(null);
     setHasValidBetaKey(false);
     setRevocationMessage(null);
 
+    // Optionally clear beta key for complete logout
     if (clearBetaKey) {
       localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
       setStoredBetaKey(null);
@@ -346,7 +372,7 @@ const loginWithBetaKey = useCallback(async (betaKey) => {
     }
   }, []);
 
-  // Clear stored beta key
+  // Clear stored beta key without logging out
   const clearStoredBetaKey = useCallback(() => {
     console.log('🗑️ Clearing stored beta key');
     localStorage.removeItem(STORAGE_KEYS.BETA_KEY);
@@ -356,14 +382,19 @@ const loginWithBetaKey = useCallback(async (betaKey) => {
   }, []);
 
   return {
+    // Core auth state
     userSession,
     hasValidBetaKey,
     hasStoredBetaKey,
     storedBetaKey,
     isLoading,
+
+    // Revocation handling
     revocationMessage,
-    isStoredKeyRevoked,        // Computed from revocationMessage
+    isStoredKeyRevoked,        
     clearRevocationMessage,
+
+    // Authentication methods
     loginWithBetaKey,
     quickLogin,
     logout,
