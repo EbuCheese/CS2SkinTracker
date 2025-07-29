@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { useCalculatePortfolioHealth } from '@/hooks/portfolio';
 
 // Memoized component for rendering individual distribution items in the list
 const DistributionItem = React.memo(({ 
@@ -120,115 +121,15 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   };
 
   // Item name consolidation logic for grouping similar items
-  const consolidateItems = useMemo(() => (itemName) => {
-    const lowerName = itemName.toLowerCase();
-    
-    // Handle special items (★ indicates StatTrak or special quality)
-    if (itemName.startsWith('★')) {
-      return lowerName.includes('gloves') || lowerName.includes('wraps') ? 'Gloves' : 'Knives';
-    }
-    
-    // Category-based consolidation
-    if (lowerName.includes('sticker')) return 'Stickers';
-    if (lowerName.includes('patch')) return 'Patches';
-    if (lowerName.includes('sealed graffiti')) return 'Graffiti';
-    if (lowerName.includes('charm')) return 'Charms';
-    if (lowerName.includes('agent')) return 'Agents';
-    if (lowerName.includes('case')) return itemName;
-    
-    // Default: use first part of item name (before |) or first word
-    const parts = itemName.split(' | ');
-    return parts.length > 1 ? parts[0] : itemName.split(' ')[0];
-  }, []);
-
-  // Mock data for development and demonstration purposes
-  // const mockPortfolioHealth = useMemo(() => ({
-  //   typeBreakdown: [
-  //     { name: 'liquid', value: 25000, percentage: 45.5, count: 50 },
-  //     { name: 'craft', value: 15000, percentage: 27.3, count: 30 },
-  //     { name: 'case', value: 8000, percentage: 14.5, count: 100 },
-  //     { name: 'sticker', value: 4000, percentage: 7.3, count: 200 },
-  //     { name: 'agent', value: 2000, percentage: 3.6, count: 15 },
-  //     { name: 'keychain', value: 1000, percentage: 1.8, count: 25 }
-  //   ],
-  //   typeDiversityScore: 72,
-  //   typeFeedback: "Good type diversification with strong liquid asset base. Consider reducing case concentration.",
-  //   itemDiversityScore: 68,
-  //   itemFeedback: "Reasonable item spread but heavily weighted towards knives. Consider more glove investments.",
-  //   investments: [
-  //     { name: '★ AK-47 | Redline', quantity: 5, current_price: 50 },
-  //     { name: '★ Karambit | Doppler', quantity: 2, current_price: 800 },
-  //     { name: '★ Driver Gloves | King Snake', quantity: 1, current_price: 400 },
-  //     { name: 'AWP | Dragon Lore', quantity: 1, current_price: 3000 },
-  //     { name: 'M4A4 | Howl', quantity: 3, current_price: 600 },
-  //     { name: 'Sticker | Katowice 2014', quantity: 10, current_price: 100 },
-  //     { name: 'Agent | Sir Bloody Miami Darryl', quantity: 2, current_price: 150 },
-  //     { name: 'Sealed Graffiti | Lambda', quantity: 50, current_price: 2 },
-  //     { name: 'Spectrum Case', quantity: 100, current_price: 1.5 },
-  //     { name: 'Music Kit | AWOLNATION', quantity: 1, current_price: 25 }
-  //   ]
-  // }), []);
-
-  // Use provided data or fall back to mock data
   const actualPortfolio = portfolioHealth;
 
   // Consolidated breakdown calculation for item view
-  const consolidatedBreakdown = useMemo(() => {
-    const investments = actualPortfolio.investments || [];
-
-    // Filter out invalid investments (zero quantity or invalid numbers)
-    const activeInvestments = investments.filter(inv => {
-      const quantity = parseFloat(inv.quantity);
-      return !isNaN(quantity) && quantity > 0;
-    });
-
-    if (activeInvestments.length === 0) return [];
-
-    const itemGroups = {};
-    let totalValue = 0;
-
-    // Group investments by consolidated category
-    activeInvestments.forEach(inv => {
-      const consolidatedName = consolidateItems(inv.name);
-      const currentPrice = parseFloat(inv.current_price);
-      const quantity = parseFloat(inv.quantity);
-      
-      // Skip invalid price/quantity data
-      if (isNaN(currentPrice) || isNaN(quantity)) return;
-      
-      const value = currentPrice * quantity;
-      
-      // Initialize group if it doesn't exist
-      if (!itemGroups[consolidatedName]) {
-        itemGroups[consolidatedName] = {
-          name: consolidatedName,
-          count: 0,
-          totalValue: 0,
-          items: []
-        };
-      }
-      
-      // Accumulate group data
-      itemGroups[consolidatedName].count += quantity;
-      itemGroups[consolidatedName].totalValue += value;
-      itemGroups[consolidatedName].items.push(inv);
-      totalValue += value;
-    });
-
-    // Convert to array format with percentage calculations
-    return Object.values(itemGroups)
-      .map(group => ({
-        ...group,
-        percentage: totalValue > 0 ? (group.totalValue / totalValue) * 100 : 0,
-        value: group.totalValue
-      }))
-      .sort((a, b) => b.percentage - a.percentage);
-  }, [actualPortfolio.investments, consolidateItems]);
+  const consolidatedBreakdown = actualPortfolio.weaponBreakdown || [];
 
   // Main data processing pipeline with search filtering and small slice handling
   const processedData = useMemo(() => {
     // Select base data based on current toggle
-    const rawData = activeToggle === 'item' ? consolidatedBreakdown : (actualPortfolio.typeBreakdown || []);
+    const rawData = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown;
     
     // Apply search filter
     const filteredData = rawData.filter(item =>
@@ -276,7 +177,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
 
   // Table-specific data processing
   const tableData = useMemo(() => {
-  const rawData = activeToggle === 'item' ? consolidatedBreakdown : (actualPortfolio.typeBreakdown || []);
+  const rawData = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown;
   
   return rawData.filter(item =>
     item.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
