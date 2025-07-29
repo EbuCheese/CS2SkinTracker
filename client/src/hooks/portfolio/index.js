@@ -1,1 +1,5 @@
 export { useCalculatePortfolioHealth } from './useCalculatePortfolioHealth'
+export { useChartData } from './useChartData'
+export { usePortfolioData } from './usePortfolioData'
+export { useQuickActions } from './useQuickActions'
+export { useRecentActivity } from './useRecentActivity'

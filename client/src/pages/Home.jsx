@@ -5,151 +5,20 @@ import { RecentPriceChanges, RecentActivity } from '@/components/item-display';
 import { QuickAddItemForm, QuickSellModal } from '@/components/forms';
 import { supabase } from '@/supabaseClient';
 import { useScrollLock, useAdvancedDebounce, formatPrice, formatChartDate } from '@/hooks/util';
-import { useCalculatePortfolioHealth } from '@/hooks/portfolio';
-
-// Array of quick actions
-const createQuickActions = (setShowQuickAdd, setShowQuickSell) => [
-  {
-    title: 'Check Prices',
-    description: 'Look up current market prices',
-    icon: Search,
-    color: 'from-blue-500 to-cyan-600',
-    hoverColor: 'hover:from-blue-600 hover:to-cyan-700',
-    // onClick: () => navigate to price checker or open price modal
-  },
-  {
-    title: 'Add New Investment',
-    description: 'Add a new skin to your portfolio',
-    icon: Plus,
-    color: 'from-green-500 to-emerald-600',
-    hoverColor: 'hover:from-green-600 hover:to-emerald-700',
-    onClick: () => setShowQuickAdd(true)
-  },
-  {
-    title: 'Sell Items',
-    description: 'Record a sale from your portfolio',
-    icon: DollarSign,
-    color: 'from-purple-500 to-violet-600',
-    hoverColor: 'hover:from-purple-600 hover:to-violet-700',
-    onClick: () => setShowQuickSell(true)
-  },
-  {
-    title: 'View Watchlist',
-    description: 'Monitor items you\'re tracking',
-    icon: Eye,
-    color: 'from-orange-500 to-red-600',
-    hoverColor: 'hover:from-orange-600 hover:to-red-700',
-    // onClick: () => setShowWatchlist(true) or navigate to watchlist
-  },
-  {
-    title: 'Market Trends',
-    description: 'View trending skins & market insights',
-    icon: TrendingUp,
-    color: 'from-rose-500 to-pink-600',
-    hoverColor: 'hover:from-rose-600 hover:to-pink-700',
-    // onClick: () => navigate to market trends
-  },
-];
-
-// Processes and combines recent investment purchases and sales into a unified activity feed
-const getRecentActivity = (investments, soldItems) => {
-  // Process recent purchases from investments table
-  // Filter for valid purchases with positive quantities and prices
-  const recentInvestments = investments
-  .filter(inv => {
-    return inv.created_at && 
-           parseFloat(inv.original_quantity || inv.quantity) > 0 &&
-           parseFloat(inv.buy_price) > 0;
-  })
-  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) // Sort by date (newest first)
-  .slice(0, 10) // Take top 10 recent purchases
-  .map(inv => {
-    const purchaseQuantity = parseFloat(inv.original_quantity || inv.quantity);
-    const purchasePrice = parseFloat(inv.buy_price);
-    
-    // Create subtitle with condition info if available, otherwise just quantity
-    const subtitle = inv.condition && inv.condition.toLowerCase() !== 'unknown' 
-      ? `${inv.condition} • Qty: ${purchaseQuantity}`
-      : `Qty: ${purchaseQuantity}`;
-    
-    return {
-      ...inv,
-      type: 'purchase',
-      date: new Date(inv.created_at),
-      title: `${inv.name}${inv.skin_name ? ` (${inv.skin_name})` : ''}`,
-      subtitle: subtitle,
-      amount: purchasePrice * purchaseQuantity, // Total purchase amount
-      isPositive: false, // Purchases are negative cash flow
-      image_url: inv.image_url
-    };
-  });
-
-  // Process recent sales from investment_sales table
-  // Filter for valid sales with positive sale values
-  const recentSales = soldItems
-  .filter(sale => sale.sale_date && parseFloat(sale.total_sale_value) > 0)
-  .sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date)) // Sort by date (newest first)
-  .slice(0, 10) // Take top 10 recent sales
-  .map(sale => {
-    // Create subtitle with condition info if available, otherwise just quantity
-    const subtitle = sale.item_condition && sale.item_condition.toLowerCase() !== 'unknown'
-      ? `${sale.item_condition} • Qty: ${sale.quantity_sold}`
-      : `Qty: ${sale.quantity_sold}`;
-    
-    return {
-      ...sale,
-      type: 'sale',
-      date: new Date(sale.sale_date),
-      title: `${sale.item_name}${sale.item_skin_name ? ` (${sale.item_skin_name})` : ''}`,
-      subtitle: subtitle,
-      amount: parseFloat(sale.total_sale_value),
-      isPositive: true, // Sales are positive cash flow
-      image_url: sale.image_url,
-      variant: sale.item_variant, // Map variant for consistency
-      quantity: sale.quantity_sold // Map quantity for consistency
-    };
-  });
-
-  // Combine both arrays and sort by date (most recent first)
-  // Limit to 8 most recent activities for display
-  const combinedActivity = [...recentInvestments, ...recentSales]
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, 8); // Show last 8 activities
-
-  return combinedActivity;
-};
+import { useCalculatePortfolioHealth, useChartData, usePortfolioData, useQuickActions, useRecentActivity } from '@/hooks/portfolio';
 
 // Main InvestmentDashboard component
 const InvestmentDashboard = ({ userSession }) => {
-  // User data states
-  const [investments, setInvestments] = useState([]);
-  const [soldItems, setSoldItems] = useState([]);
-
-  // UI States
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  // Chart data states
+  const { investments, soldItems, loading, error, refetch, setInvestments } = usePortfolioData(userSession);
+  
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('MAX');
-  const [chartData, setChartData] = useState([]);
-  const [chartLoading, setChartLoading] = useState(false);
-
-  // Quick action states
+  const { chartData, chartLoading } = useChartData(userSession, selectedTimePeriod, investments.length > 0);
+  
+  const recentActivity = useRecentActivity(investments, soldItems);
+  
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showQuickSell, setShowQuickSell] = useState(false);
-  
-  // Ref for performance optimization
-  const initialLoadComplete = useRef(false);
-  const lastDataFetchRef = useRef(0);
-  
-  // Apply scroll lock when popups are open
-  useScrollLock(showQuickAdd || showQuickSell);
-
-  // Memoized quick actions to prevent unnecessary re-renders
-  const quickActions = useMemo(() => 
-    createQuickActions(setShowQuickAdd, setShowQuickSell), 
-    []
-  );
+  const quickActions = useQuickActions(setShowQuickAdd, setShowQuickSell);
 
   // Calculate portfolio health metrics using custom hook
   const portfolioHealth = useCalculatePortfolioHealth(investments);
@@ -165,7 +34,7 @@ const InvestmentDashboard = ({ userSession }) => {
         totalProfitLoss: 0,
         overallGrowthPercent: 0
       };
-    }
+    } 
 
     const {
       totalValue: totalCurrentValue,
@@ -187,96 +56,6 @@ const InvestmentDashboard = ({ userSession }) => {
     };
   }, [portfolioHealth]);
 
-  // Memoized recent activity calculation to prevent unnecessary processing
-  const recentActivityMemo = useMemo(() => {
-    if (investments.length === 0 && soldItems.length === 0) return [];
-    return getRecentActivity(investments, soldItems);
-  }, [investments, soldItems]); // Recalculate when either data source changes
-
-  // Fetches critical data (investments and sales) without debouncing
-  const fetchCriticalData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Validate user session before making API calls
-      if (!validateUserSession(userSession)) {
-        setError('Invalid user session. Please re-validate your beta key.');
-        return;
-      }
-
-      console.log('Fetching data for user:', userSession.id);
-
-      // Fetch both investments and sales data concurrently using Promise.allSettled
-      // This allows one to succeed even if the other fails
-      const [investmentsResult, soldItemsResult] = await Promise.allSettled([
-        supabase.rpc('fetch_user_investment_summary', {
-          context_user_id: userSession.id
-        }),
-        supabase.rpc('fetch_user_investment_sales', {
-          context_user_id: userSession.id
-        })
-      ]);
-
-      let investmentsArray = [];
-
-      // Handle investments result (critical - must succeed)
-      if (investmentsResult.status === 'fulfilled' && !investmentsResult.value.error) {
-        investmentsArray = Array.isArray(investmentsResult.value.data) 
-          ? investmentsResult.value.data 
-          : (investmentsResult.value.data || []);
-        setInvestments(investmentsArray);
-      } else {
-        console.error('Investments query failed:', investmentsResult.reason || investmentsResult.value?.error);
-        setError('Access denied. Please verify your beta key is valid and active.');
-        return;
-      }
-
-      // Handle sold items result (non-critical)
-      if (soldItemsResult.status === 'fulfilled' && !soldItemsResult.value.error) {
-        const soldItemsArray = Array.isArray(soldItemsResult.value.data)
-          ? soldItemsResult.value.data
-          : (soldItemsResult.value.data || []);
-        setSoldItems(soldItemsArray);
-      } else {
-        console.warn('Could not fetch sold items, continuing with investments only');
-        setSoldItems([]);
-      }
-
-      // Fetch chart data only if we have investments and it's the initial load
-      if (investmentsArray.length > 0 && !initialLoadComplete.current) {
-        await debouncedFetchChartData(selectedTimePeriod);
-      }
-
-      // Update tracking variables
-      lastDataFetchRef.current = Date.now();
-      initialLoadComplete.current = true;
-
-    } catch (err) {
-      console.error('Unexpected error:', err);
-      setError('An unexpected error occurred. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [userSession?.id]);
-
-  // Debounced refresh function for user-initiated actions
-  const { debouncedFunction: debouncedRefresh } = useAdvancedDebounce(
-    useCallback(async () => {
-      // Rate limiting: only refresh if enough time has passed since last fetch
-      const timeSinceLastFetch = Date.now() - lastDataFetchRef.current;
-      if (timeSinceLastFetch < 1000) return; // Minimum 1 second between refreshes
-      
-      await fetchCriticalData();
-    }, [fetchCriticalData]),
-    800, // 800ms delay for user actions
-    { 
-      leading: false, // Don't execute immediately
-      trailing: true, // Execute after delay
-      maxWait: 2000 // Ensure execution within 2 seconds max
-    }
-  );
-
   // Handles completion of a sale transaction
   const handleSaleComplete = useCallback((investmentId, quantitySold, salePrice, remainingQuantity) => {
     // Immediately update local state for responsive UI feedback
@@ -285,108 +64,8 @@ const InvestmentDashboard = ({ userSession }) => {
         ? { ...inv, quantity: remainingQuantity }
         : inv
     ));
-    
-    // Debounce the full data refresh to get updated totals and metrics
-    debouncedRefresh();
-  }, [debouncedRefresh]);
-
-  // Validates user session object for security and data integrity
-  const validateUserSession = (session) => {
-    // Check if session exists
-    if (!session) return false;
-
-    // Check if session has ID
-    if (!session.id) return false;
-
-    // Check if ID is a string
-    if (typeof session.id !== 'string') return false;
-    
-    // Validate UUID format using regex
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(session.id)) return false;
-    
-    return true;
-  };
-
-  // Debounced chart data fetching function (time-period changes)
-  const { debouncedFunction: debouncedFetchChartData } = useAdvancedDebounce(
-    useCallback(async (timePeriod) => {
-      try {
-        setChartLoading(true);
-        
-        // Fetch chart data for the specified time period
-        const { data, error } = await supabase.rpc('get_chart_data', {
-          context_user_id: userSession.id,
-          time_period: timePeriod
-        });
-
-        if (error) {
-          console.error('Chart data fetch failed:', error);
-          return;
-        }
-
-        // Parse response data (handle both string and object responses)
-        const chartResult = typeof data === 'string' ? JSON.parse(data) : data;
-        
-        // Pre-calculate current date info for optimization
-        const currentDate = new Date();
-        const currentDateString = currentDate.toDateString();
-        const currentMonth = currentDate.getMonth();
-        
-        // Transform API data for chart component with optimized date handling
-        const transformedData = chartResult.data.map(point => {
-          const { formattedDate, date, isToday } = formatChartDate(point, chartResult.granularity, timePeriod);
-          const currentMonth = new Date().getMonth();
-          
-          return {
-            date: formattedDate,
-            rawDate: date,
-            totalValue: parseFloat(point.value),
-            invested: parseFloat(point.invested),
-            profitLoss: parseFloat(point.profit_loss),
-            returnPercentage: parseFloat(point.return_percentage),
-            // Mark current data points for highlighting
-            isCurrentValue: isToday && chartResult.granularity === 'hourly' || 
-                          (chartResult.granularity === 'daily' && isToday) ||
-                          (chartResult.granularity === 'monthly' && date.getMonth() === currentMonth)
-          };
-        });
-
-        // Sort data chronologically for proper chart display
-        transformedData.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
-        setChartData(transformedData);
-        
-      } catch (err) {
-        console.error('Error fetching chart data:', err);
-      } finally {
-        setChartLoading(false);
-      }
-    }, [userSession?.id]),
-    300, // 300ms delay for chart data updates
-    { leading: false,
-      trailing: true,
-      maxWait: 1500 // Maximum wait of 1.5 seconds
-    }
-  );
-
-  // Initial data fetch - no debouncing for first load
-  useEffect(() => {
-    if (!userSession) return;
-
-    if (validateUserSession(userSession)) {
-      fetchCriticalData(); // No debouncing for initial load
-    } else {
-      setLoading(false);
-      setError('Invalid user session. Please validate your beta key.');
-    }
-  }, [userSession, fetchCriticalData]);
-
-  // Chart data fetch for time period changes - debounced
-  useEffect(() => {
-    if (investments.length > 0 && initialLoadComplete.current) {
-      debouncedFetchChartData(selectedTimePeriod);
-    }
-  }, [selectedTimePeriod, debouncedFetchChartData, investments.length]);
+    refetch();
+  }, [setInvestments, refetch]);
 
   if (loading) {
     return (
@@ -550,7 +229,7 @@ const InvestmentDashboard = ({ userSession }) => {
         {/* Recent Activity Widget */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
         <RecentActivity 
-          recentActivity={recentActivityMemo} 
+          recentActivity={recentActivity} 
           formatPrice={formatPrice} 
         />
 
@@ -561,7 +240,7 @@ const InvestmentDashboard = ({ userSession }) => {
             onAdd={(newItem) => {
               console.log('New item added:', newItem);
               setShowQuickAdd(false);
-              debouncedRefresh(true);
+              refetch();  // Use the refetch from usePortfolioData hook
             }}
             userSession={userSession}
           />
