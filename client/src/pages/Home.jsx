@@ -4,7 +4,7 @@ import { PortfolioPerformanceChart, PortfolioHealthPieChart } from '@/components
 import { RecentPriceChanges, RecentActivity } from '@/components/item-display';
 import { QuickAddItemForm, QuickSellModal } from '@/components/forms';
 import { supabase } from '@/supabaseClient';
-import { useScrollLock, useAdvancedDebounce } from '@/hooks/util';
+import { useScrollLock, useAdvancedDebounce, formatPrice, formatChartDate } from '@/hooks/util';
 import { useCalculatePortfolioHealth } from '@/hooks/portfolio';
 
 // Array of quick actions
@@ -151,15 +151,6 @@ const getRecentActivity = (investments, soldItems) => {
     .slice(0, 8); // Show last 8 activities
 
   return combinedActivity;
-};
-
-// Formats numeric price values as USD currency
-const formatPrice = (price) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2
-    }).format(price);
 };
 
 // Main InvestmentDashboard component
@@ -361,53 +352,20 @@ const InvestmentDashboard = ({ userSession }) => {
         
         // Transform API data for chart component with optimized date handling
         const transformedData = chartResult.data.map(point => {
-          const date = new Date(point.date);
-          const isToday = date.toDateString() === currentDateString;
-          
-          // Format date based on chart granularity
-          let formattedDate;
-          if (chartResult.granularity === 'hourly') {
-            if (isToday) {
-              // Today's hours: show time only
-              formattedDate = date.toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-              });
-            } else {
-              // Other days: show date and hour
-              formattedDate = date.toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                hour12: true
-              });
-            }
-          } else if (chartResult.granularity === 'daily') {
-            // Daily view: show month and day
-            formattedDate = date.toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric'
-            });
-          } else {
-            // Monthly/yearly view: show month and year
-            formattedDate = date.toLocaleDateString('en-US', {
-              month: 'short',
-              year: 'numeric'
-            });
-          }
+          const { formattedDate, date, isToday } = formatChartDate(point, chartResult.granularity, timePeriod);
+          const currentMonth = new Date().getMonth();
           
           return {
             date: formattedDate,
             rawDate: date,
-            totalValue: parseFloat(point.value), // Keep raw date for sorting
+            totalValue: parseFloat(point.value),
             invested: parseFloat(point.invested),
             profitLoss: parseFloat(point.profit_loss),
             returnPercentage: parseFloat(point.return_percentage),
             // Mark current data points for highlighting
             isCurrentValue: isToday && chartResult.granularity === 'hourly' || 
-                           (chartResult.granularity === 'daily' && isToday) ||
-                           (chartResult.granularity === 'monthly' && date.getMonth() === currentMonth)
+                          (chartResult.granularity === 'daily' && isToday) ||
+                          (chartResult.granularity === 'monthly' && date.getMonth() === currentMonth)
           };
         });
 
@@ -421,7 +379,7 @@ const InvestmentDashboard = ({ userSession }) => {
         setChartLoading(false);
       }
     }, [userSession?.id]),
-    500, // 500ms delay for chart data updates
+    300, // 300ms delay for chart data updates
     { leading: false,
       trailing: true,
       maxWait: 1500 // Maximum wait of 1.5 seconds
@@ -534,7 +492,12 @@ const InvestmentDashboard = ({ userSession }) => {
         </div>
 
         {/* Portfolio Performance Chart */}
-        <PortfolioPerformanceChart userSession={userSession} />
+        <PortfolioPerformanceChart 
+          chartData={chartData}
+          chartLoading={chartLoading}
+          selectedTimePeriod={selectedTimePeriod}
+          onTimePeriodChange={setSelectedTimePeriod}
+        />
 
         {/* Recent Price Changes */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

@@ -1,126 +1,22 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
-import { supabase } from '@/supabaseClient';
+import { formatPrice, timePeriods } from '@/hooks/util';
 
-// Displays an interactive line chart showing portfolio performance over various time periods.
-const PortfolioPerformanceChart = ({ userSession }) => {
-  const [chartData, setChartData] = useState([]);
-  const [chartLoading, setChartLoading] = useState(false);
-  const [selectedTimePeriod, setSelectedTimePeriod] = useState('MAX');
-
-  // Available time periods for chart display
-  const timePeriods = useMemo(() => [
-    { label: '1D', value: '1D' },
-    { label: '5D', value: '5D' },
-    { label: '1M', value: '1M' },
-    { label: '6M', value: '6M' },
-    { label: 'YTD', value: 'YTD' },
-    { label: '1Y', value: '1Y' },
-    { label: '5Y', value: '5Y' },
-    { label: 'MAX', value: 'MAX' }
-  ], []);
-
-  // Formats numeric values as currency
-  const formatPrice = useCallback((price) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2
-    }).format(price);
-  }, []);
-
+// Pure presentation component for displaying portfolio performance chart
+const PortfolioPerformanceChart = ({ 
+  chartData, 
+  chartLoading, 
+  selectedTimePeriod, 
+  onTimePeriodChange 
+}) => {
   // Formats Y-axis tick values with dollar sign
   const formatTickPrice = useCallback((value) => `$${value.toFixed(2)}`, []);
 
-  // Fetches chart data from Supabase RPC function
-  const fetchChartData = useCallback(async (timePeriod) => {
-    if (!userSession?.id) return;
-    
-    try {
-      setChartLoading(true);
-      
-      // Call Supabase RPC function to get portfolio data
-      const { data, error } = await supabase.rpc('get_chart_data', {
-        context_user_id: userSession.id,
-        time_period: timePeriod
-      });
-
-      if (error) {
-        console.error('Chart data fetch failed:', error);
-        return;
-      }
-
-      // Parse response (handle both string and object responses)
-      const chartResult = typeof data === 'string' ? JSON.parse(data) : data;
-      
-      // Transform raw data for chart consumption
-      const transformedData = chartResult.data.map(point => {
-        const date = new Date(point.date);
-        const isToday = date.toDateString() === new Date().toDateString();
-        
-        // Format dates based on data granularity
-        let formattedDate;
-        if (chartResult.granularity === 'hourly') {
-          if (isToday) {
-            formattedDate = date.toLocaleTimeString('en-US', {
-              hour: 'numeric',
-              minute: '2-digit',
-              hour12: true
-            });
-          } else {
-            formattedDate = date.toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              hour: 'numeric',
-              hour12: true
-            });
-          }
-        } else if (chartResult.granularity === 'daily') {
-          // For daily data, show month and day
-          formattedDate = date.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric'
-          });
-        } else {
-          // For monthly data, show month and year
-          formattedDate = date.toLocaleDateString('en-US', {
-            month: 'short',
-            year: 'numeric'
-          });
-        }
-        
-        return {
-          date: formattedDate,
-          rawDate: date, // Keep raw date for tooltip
-          totalValue: parseFloat(point.value),
-          invested: parseFloat(point.invested),
-          profitLoss: parseFloat(point.profit_loss),
-          returnPercentage: parseFloat(point.return_percentage),
-          // Flag for highlighting current/latest data points
-          isCurrentValue: isToday && chartResult.granularity === 'hourly' || 
-                         (chartResult.granularity === 'daily' && isToday) ||
-                         (chartResult.granularity === 'monthly' && date.getMonth() === new Date().getMonth())
-        };
-      });
-
-      // Sort by date to ensure chronological order
-      transformedData.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
-
-      setChartData(transformedData);
-      
-    } catch (err) {
-      console.error('Error fetching chart data:', err);
-    } finally {
-      setChartLoading(false);
-    }
-  }, [userSession?.id]);
-
   // Handles time period selection changes
   const handleTimePeriodChange = useCallback((period) => {
-    setSelectedTimePeriod(period);
-    fetchChartData(period);
-  }, [fetchChartData]);
+    onTimePeriodChange(period);
+  }, [onTimePeriodChange]);
 
   // Calculates performance change for selected time frame
   const timeFrameChange = useMemo(() => {
@@ -151,7 +47,6 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     }
     
     // Dynamic padding based on time period
-    // Shorter periods get less padding, longer periods get more
     let paddingPercent;
     switch (selectedTimePeriod) {
       case '1D':
@@ -184,7 +79,7 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     if (name === 'invested') return [formatPrice(value), 'Total Invested'];
     if (name === 'profitLoss') return [formatPrice(value), 'Profit/Loss'];
     return [value, name];
-  }, [formatPrice]);
+  }, []);
 
   // Formats tooltip labels (dates) based on selected time period
   const tooltipLabelFormatter = useCallback((label, payload) => {
@@ -239,11 +134,6 @@ const PortfolioPerformanceChart = ({ userSession }) => {
     ['1D', '5D'].includes(selectedTimePeriod) ? 8 : 6, 
     [selectedTimePeriod]
   );
-
-  // Load initial chart data when component mounts or time period change
-  useEffect(() => {
-    fetchChartData(selectedTimePeriod);
-  }, [fetchChartData, selectedTimePeriod]);
 
   // Main render
   return (
