@@ -6,6 +6,7 @@ export const useChartData = (userSession, selectedTimePeriod, hasInvestments) =>
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
 
+  // fetch chart data from db
   const fetchChartData = useCallback(async (timePeriod) => {
     if (!hasInvestments) return;
     
@@ -26,6 +27,7 @@ export const useChartData = (userSession, selectedTimePeriod, hasInvestments) =>
       const currentDate = new Date();
       const currentMonth = currentDate.getMonth();
       
+      // transform data to graph for time period
       const transformedData = chartResult.data.map(point => {
         const { formattedDate, date, isToday } = formatChartDate(point, chartResult.granularity, timePeriod);
         
@@ -52,6 +54,7 @@ export const useChartData = (userSession, selectedTimePeriod, hasInvestments) =>
     }
   }, [userSession?.id, hasInvestments]);
 
+  // debounce the chart data to prevent spamming time frames
   const { debouncedFunction: debouncedFetchChartData } = useAdvancedDebounce(
     fetchChartData,
     300,
