@@ -51,40 +51,6 @@ const createQuickActions = (setShowQuickAdd, setShowQuickSell) => [
   },
 ];
 
-// Calculate portfolio metrics from investments
-const calculatePortfolioMetrics = (investments) => {
-    // Calculate total amount invested (buy price * original quantity)
-    const totalBuyValue = investments.reduce((sum, inv) => 
-      sum + (parseFloat(inv.buy_price) * parseFloat(inv.original_quantity)), 0);
-    
-    // Calculate current portfolio value (current price * remaining quantity + sales value)
-    const totalCurrentValue = investments.reduce((sum, inv) => 
-      sum + (parseFloat(inv.current_price) * parseFloat(inv.quantity)) + parseFloat(inv.total_sale_value), 0);
-    
-    // Sum up all realized profits/losses from completed sales
-    const totalRealizedPL = investments.reduce((sum, inv) => 
-      sum + parseFloat(inv.realized_profit_loss), 0);
-    
-    // Sum up all unrealized profits/losses from current holdings
-    const totalUnrealizedPL = investments.reduce((sum, inv) => 
-      sum + parseFloat(inv.unrealized_profit_loss), 0);
-    
-    // Total profit/loss combines both realized and unrealized
-    const totalProfitLoss = totalRealizedPL + totalUnrealizedPL;
-
-    // Calculate overall growth percentage (avoid division by zero)
-    const overallGrowthPercent = totalBuyValue > 0 ? (totalProfitLoss / totalBuyValue) * 100 : 0;
-    
-    return {
-      totalBuyValue,
-      totalCurrentValue,
-      totalRealizedPL,
-      totalUnrealizedPL,
-      totalProfitLoss,
-      overallGrowthPercent
-    };
-};
-
 // Processes and combines recent investment purchases and sales into a unified activity feed
 const getRecentActivity = (investments, soldItems) => {
   // Process recent purchases from investments table
@@ -190,8 +156,7 @@ const InvestmentDashboard = ({ userSession }) => {
 
   // Memoized portfolio metrics calculation with deep comparison to prevent unnecessary recalculations
   const portfolioMetrics = useMemo(() => {
-    // Return zero values if no investments
-    if (investments.length === 0) {
+    if (!portfolioHealth || portfolioHealth.totalValue === 0) {
       return {
         totalBuyValue: 0,
         totalCurrentValue: 0,
@@ -201,8 +166,26 @@ const InvestmentDashboard = ({ userSession }) => {
         overallGrowthPercent: 0
       };
     }
-    return calculatePortfolioMetrics(investments);
-  }, [investments]); // Only recalculate when investments change
+
+    const {
+      totalValue: totalCurrentValue,
+      totalBuyValue,
+      totalRealizedPL,
+      totalUnrealizedPL
+    } = portfolioHealth;
+
+    const totalProfitLoss = totalRealizedPL + totalUnrealizedPL;
+    const overallGrowthPercent = totalBuyValue > 0 ? (totalProfitLoss / totalBuyValue) * 100 : 0;
+    
+    return {
+      totalBuyValue,
+      totalCurrentValue,
+      totalRealizedPL,
+      totalUnrealizedPL,
+      totalProfitLoss,
+      overallGrowthPercent
+    };
+  }, [portfolioHealth]);
 
   // Memoized recent activity calculation to prevent unnecessary processing
   const recentActivityMemo = useMemo(() => {

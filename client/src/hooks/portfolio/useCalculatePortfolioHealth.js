@@ -91,7 +91,22 @@ const aggregatePortfolioData = (investments) => {
     itemGroup.items.push(inv);
   }
 
-  return { typeGroups, itemGroups, totalValue, safeValue };
+    return { 
+    typeGroups, 
+    itemGroups, 
+    totalValue, 
+    safeValue,
+    // Add financial metrics here to avoid duplicate processing
+    totalBuyValue: investments.reduce((sum, inv) => {
+      const buyPrice = parseFloat(inv.buy_price) || 0;
+      const originalQty = parseFloat(inv.original_quantity || inv.quantity) || 0;
+      return sum + (buyPrice * originalQty);
+    }, 0),
+    totalRealizedPL: investments.reduce((sum, inv) => 
+      sum + (parseFloat(inv.realized_profit_loss) || 0), 0),
+    totalUnrealizedPL: investments.reduce((sum, inv) => 
+      sum + (parseFloat(inv.unrealized_profit_loss) || 0), 0)
+  };
 };
 
 // Calculates percentage breakdowns from aggregated data
@@ -369,36 +384,47 @@ export const useCalculatePortfolioHealth = (investments) => {
 
   // Final result memoization
   return useMemo(() => {
-    // Handle empty state
-    if (!investments?.length) {
-      return {
-        typeDiversityScore: 0,
-        itemDiversityScore: 0,
-        typeBreakdown: [],
-        weaponBreakdown: [],
-        typeFeedback: 'No active investments to analyze',
-        itemFeedback: 'No active investments to analyze',
-        totalTypes: 0,
-        totalWeaponTypes: 0,
-        safeAllocationPercentage: 0
-      };
-    }
-
-    const { typeBreakdown, weaponBreakdown } = breakdowns;
-    const { typeDiversityScore, itemDiversityScore, safeAllocation } = scores;
-    const { typeFeedback, itemFeedback } = feedback;
-
+  // Handle empty state
+  if (!investments?.length) {
     return {
-      typeDiversityScore,
-      itemDiversityScore,
-      typeBreakdown,
-      weaponBreakdown,
-      typeFeedback,
-      itemFeedback,
-      totalTypes: typeBreakdown.length,
-      totalWeaponTypes: weaponBreakdown.length,
-      safeAllocationPercentage: safeAllocation,
-      investments
+      typeDiversityScore: 0,
+      itemDiversityScore: 0,
+      typeBreakdown: [],
+      weaponBreakdown: [],
+      typeFeedback: 'No active investments to analyze',
+      itemFeedback: 'No active investments to analyze',
+      totalTypes: 0,
+      totalWeaponTypes: 0,
+      safeAllocationPercentage: 0,
+      // ADD THESE FINANCIAL METRICS:
+      totalValue: 0,
+      totalBuyValue: 0,
+      totalRealizedPL: 0,
+      totalUnrealizedPL: 0
     };
-  }, [investments, breakdowns, scores, feedback]);
+  }
+
+  const { typeBreakdown, weaponBreakdown } = breakdowns;
+  const { typeDiversityScore, itemDiversityScore, safeAllocation } = scores;
+  const { typeFeedback, itemFeedback } = feedback;
+  const { totalValue, totalBuyValue, totalRealizedPL, totalUnrealizedPL } = aggregatedData;
+
+  return {
+    typeDiversityScore,
+    itemDiversityScore,
+    typeBreakdown,
+    weaponBreakdown,
+    typeFeedback,
+    itemFeedback,
+    totalTypes: typeBreakdown.length,
+    totalWeaponTypes: weaponBreakdown.length,
+    safeAllocationPercentage: safeAllocation,
+    // ADD THESE FINANCIAL METRICS:
+    totalValue,
+    totalBuyValue,
+    totalRealizedPL,
+    totalUnrealizedPL,
+    investments
+  };
+}, [investments, breakdowns, scores, feedback, aggregatedData]);
 };
