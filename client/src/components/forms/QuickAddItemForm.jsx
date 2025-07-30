@@ -19,6 +19,7 @@ import {
   CraftNameInput,
   BuyPriceInput
 } from '@/components/forms/FormSections';
+import { useScrollLock } from '@/hooks/util';
 
 // Available item categories with their metadata
 const CATEGORIES = [
@@ -50,6 +51,9 @@ const detectItemType = (searchType) => {
 
 // Main Modal form for quickly adding items to inventory
 const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) => {
+  // Apply scroll lock when modal is rendered (always open when this component exists)
+  useScrollLock(true);
+
   const [selectedCategory, setSelectedCategory] = useState(''); // Category selection state
   const [searchValue, setSearchValue] = useState(''); // Search input state for item selection
   const [showForm, setShowForm] = useState(false); // Controls whether to show the form or category selection

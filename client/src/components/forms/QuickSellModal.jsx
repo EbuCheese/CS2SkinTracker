@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, X, TrendingUp, TrendingDown, Loader2, Save, DollarSign } from 'lucide-react';
+import { useScrollLock } from '@/hooks/util';
 
 // A reusable image component that handles loading states, errors, and fallbacks.
 const ImageWithLoading = ({ src, alt, className, fallbackClassName }) => {
@@ -65,6 +66,9 @@ const QuickSellModal = ({
   onSaleComplete,
   supabase
 }) => {
+  // Apply scroll lock when modal is open
+  useScrollLock(isOpen);
+
   // Search and selection state
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
