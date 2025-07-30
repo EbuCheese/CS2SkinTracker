@@ -1,61 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, X, TrendingUp, TrendingDown, Loader2, Save, DollarSign } from 'lucide-react';
 import { useScrollLock } from '@/hooks/util';
-
-// A reusable image component that handles loading states, errors, and fallbacks.
-const ImageWithLoading = ({ src, alt, className, fallbackClassName }) => {
-  // Track image loading and error states
-  const [imageLoading, setImageLoading] = useState(true);
-  const [imageError, setImageError] = useState(false);
-
-  // Handle successful image load
-  const handleImageLoad = () => {
-    setImageLoading(false);
-    setImageError(false);
-  };
-
-  // Handle image load errors with fallback mechanism
-  const handleImageError = (e) => {
-    setImageLoading(false);
-    setImageError(true);
-
-    // Only set fallback SVG if we haven't already tried it (prevents infinite loop)
-    if (!e.target.dataset.fallback) {
-      e.target.dataset.fallback = 'true';
-      // Base64 encoded SVG placeholder - gray background with circle and exclamation
-      e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjMzc0MTUxIi8+CjxwYXRoIGQ9Ik0yNCAzNkMzMC42Mjc0IDM2IDM2IDMwLjYyNzQgMzYgMjRDMzYgMTcuMzcyNiAzMC42Mjc0IDEyIDI0IDEyQzE3LjM3MjYgMTIgMTIgMTcuMzcyNiAxMiAyNEMxMiAzMC42Mjc0IDE3LjM3MjYgMzYgMjQgMzZaIiBzdHJva2U9IiM2QjczODAiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMjQgMjBWMjgiIHN0cm9rZT0iIzZCNzM4MCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4K';
-    }
-  };
-
-  return (
-    <div className={`relative ${className}`}>
-      {/* Loading spinner - shown while image is loading and no error occurred */}
-      {imageLoading && !imageError && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      )}
-
-      {/* Main image or text fallback */}
-      {src ? (
-        <img 
-          src={src} 
-          alt={alt}
-          className={`w-full h-full object-contain transition-opacity duration-200 ${
-            imageLoading ? 'opacity-0' : 'opacity-100'
-          }`}
-          onLoad={handleImageLoad}
-          onError={handleImageError}
-        />
-      ) : (
-        // Text fallback when no src is provided - shows first 2 characters of alt text
-        <div className={fallbackClassName}>
-          {alt.substring(0, 2).toUpperCase()}
-        </div>
-      )}
-    </div>
-  );
-};
+import { ImageWithLoading } from '@/components/ui';
 
 // Main Component - A modal that allows users to quickly sell their investment items.
 const QuickSellModal = ({ 
@@ -320,12 +266,13 @@ const QuickSellModal = ({
                       className="flex items-center space-x-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-orange-500/50 hover:bg-gray-800 cursor-pointer transition-all duration-200"
                     >
                       {/* Item Image */}
-                      <ImageWithLoading
-                        src={item.image_url}
-                        alt={item.name}
-                        className="w-14 h-14 bg-gray-700 rounded-lg flex-shrink-0 overflow-hidden"
-                        fallbackClassName="w-full h-full flex items-center justify-center text-white text-xs font-medium"
-                      />
+                      <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                        <ImageWithLoading
+                          src={item.image_url}
+                          alt={item.name}
+                          fallbackClassName="w-full h-full flex items-center justify-center text-white text-xs font-medium"
+                        />
+                      </div>
 
                       {/* Item Information */}
                       <div className="flex-1 min-w-0">
@@ -377,12 +324,13 @@ const QuickSellModal = ({
               {/* Selected Item Display */}
               <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
                 <div className="flex items-center space-x-4">
-                  <ImageWithLoading
-                    src={selectedItem.image_url}
-                    alt={selectedItem.name}
-                    className="w-16 h-16 bg-gray-700 rounded-lg overflow-hidden flex-shrink-0"
-                    fallbackClassName="w-full h-full flex items-center justify-center text-white text-sm font-medium"
-                  />
+                  <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                    <ImageWithLoading
+                      src={selectedItem.image_url}
+                      alt={selectedItem.name}
+                      fallbackClassName="w-full h-full flex items-center justify-center text-white text-sm font-medium"
+                    />
+                  </div>
                   <div className="flex-1">
                     <h3 className="font-medium text-white">{selectedItem.name}</h3>
                     {selectedItem.skin_name && (

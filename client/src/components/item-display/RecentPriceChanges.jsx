@@ -1,53 +1,27 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { TrendingUp, TrendingDown, ListFilterPlus, ListFilter} from 'lucide-react';
+import { ImageWithLoading } from '@/components/ui';
 
 // Memoized sub-component for individual investment items
 const InvestmentItem = React.memo(({ 
   investment, 
   formatPrice, 
-  handleImageLoad, 
-  handleImageError, 
-  getImageState 
 }) => {
-  // Get current image loading/error state for this specific investment
-  const imageState = getImageState(investment.id);
-  
   return (
     <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-colors duration-200">
       {/* Left side: Image and item details */}
       <div className="flex items-center space-x-4">
         {/* Image container with loading states */}
         <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 relative">
-          {/* Loading spinner - shown while image is loading and no error occurred */}
-          {imageState.loading && !imageState.error && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          )}
-          
-          {/* Actual image element with lazy loading */}
-          {investment.image_url && (
-            <img 
-              src={investment.image_url} 
-              alt={`${investment.name} | ${investment.skin_name}`}
-              className={`w-full h-full object-contain transition-opacity duration-200 ${
-                imageState.loading ? 'opacity-0' : 'opacity-100'
-              }`}
-              onLoad={() => handleImageLoad(investment.id)}
-              onError={() => handleImageError(investment.id)}
-              loading="lazy" // Native lazy loading for performance
-            />
-          )}
-          
-          {/* Fallback display when no image URL or image failed to load */}
-          {(!investment.image_url || imageState.error) && !imageState.loading && (
-            <div className="w-full h-full flex items-center justify-center">
-              {/* Show first 2 letters of item name as fallback */}
+          <ImageWithLoading
+            src={investment.image_url}
+            alt={`${investment.name} | ${investment.skin_name}`}
+            customFallback={
               <span className="text-xs font-medium text-white">
                 {investment.name.substring(0, 2).toUpperCase()}
               </span>
-            </div>
-          )}
+            }
+          />
         </div>
 
         {/* Item information */}
@@ -175,7 +149,6 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
   const [currentPage, setCurrentPage] = useState(0); // pagination state
   const [showAll, setShowAll] = useState(false); // toggle state for top 10 vs all items
   const [sortOrder, setSortOrder] = useState('most'); // state for sorting by 'most' or 'least'
-  const [imageStates, setImageStates] = useState({}); // image loading states
   
   // Configuration constants
   const itemsPerPage = 5;
@@ -193,27 +166,6 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
   const formatPrice = useCallback((price) => {
     return priceFormatter.format(price);
   }, [priceFormatter]);
-
-  // Called when an image successfully loads
-  const handleImageLoad = useCallback((investmentId) => {
-    setImageStates(prev => ({
-      ...prev,
-      [investmentId]: { loading: false, error: false }
-    }));
-  }, []);
-
-  // Called when an image fails to load
-  const handleImageError = useCallback((investmentId) => {
-    setImageStates(prev => ({
-      ...prev,
-      [investmentId]: { loading: false, error: true }
-    }));
-  }, []);
-
-  // Gets the current loading/error state for a specific investment image
-  const getImageState = useCallback((investmentId) => {
-    return imageStates[investmentId] || { loading: true, error: false };
-  }, [imageStates]);
 
   // Get recent price changes with sorting - optimized for early exit on filtering
   const priceChanges = useMemo(() => {
@@ -360,9 +312,6 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
               key={investment.id}
               investment={investment}
               formatPrice={formatPrice}
-              handleImageLoad={handleImageLoad}
-              handleImageError={handleImageError}
-              getImageState={getImageState}
             />
           ))}
           

@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Search } from 'lucide-react';
 import { useCSData } from '@/contexts/CSDataContext';
 import { useAdvancedDebounce } from '@/hooks/util';
+import { ImageWithLoading } from '@/components/ui';
 
 // CSItemSearch Component - Advanced search interface for CS2 items
 const CSItemSearch = ({ 
@@ -22,9 +23,6 @@ const CSItemSearch = ({
   const [results, setResults] = useState([]); // Current search results
   const [isOpen, setIsOpen] = useState(false); // Dropdown visibility
   const [selectedVariant, setSelectedVariant] = useState({}); // Variant selection per item
-
-  // Intersection observer for lazy image loading
-  const intersectionObserver = useRef(null);
 
   // Process and filter data for the current item type
   const typeData = useMemo(() => {
@@ -63,34 +61,6 @@ const CSItemSearch = ({
       searchIndex: newSearchIndex
     };
   }, [type, searchIndices, getSearchIndexForType, excludeSpecialItems]);
-
-  // Setup intersection observer for smart image loading
-  useEffect(() => {
-    intersectionObserver.current = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const img = entry.target;
-            // Load image if it has a data-src attribute
-            if (img.dataset.src && !img.src) {
-              img.src = img.dataset.src;
-              img.removeAttribute('data-src');
-              intersectionObserver.current?.unobserve(img);
-            }
-          }
-        });
-      },
-      {
-        rootMargin: '50px',
-        threshold: 0.1
-      }
-    );
-
-    // Cleanup observer on unmount
-    return () => {
-      intersectionObserver.current?.disconnect();
-    };
-  }, []);
 
   // Enhanced search function using preprocessed inverted index
   const performSearch = useCallback((query) => {
@@ -286,7 +256,7 @@ const CSItemSearch = ({
               onVariantChange={(variant) => handleVariantChange(item.id, variant)}
               onClick={(variant) => handleItemSelect(item, variant)}
               showLargeView={showLargeView}
-              intersectionObserver={intersectionObserver.current}
+              
             />
           ))}
         </div>
@@ -310,34 +280,13 @@ const OptimizedSearchResultItem = React.memo(({
   onVariantChange, 
   onClick, 
   showLargeView = false, 
-  intersectionObserver 
 }) => {
-  // Image loading states
-  const [imageLoading, setImageLoading] = useState(true);
-  const [imageError, setImageError] = useState(false);
-  const imgRef = useRef(null);
-
   const currentVariant = selectedVariant || 'normal';
   
   // Get the current variant item from the Map
   const currentVariantItem = item.variants.get(currentVariant) || 
                            item.variants.get('normal') || 
                            Array.from(item.variants.values())[0];
-
-  // Setup intersection observer for this image
-  useEffect(() => {
-    const imgElement = imgRef.current;
-    if (imgElement && intersectionObserver && currentVariantItem?.image) {
-      imgElement.dataset.src = currentVariantItem.image;
-      intersectionObserver.observe(imgElement);
-
-      return () => {
-        if (imgElement) {
-          intersectionObserver.unobserve(imgElement);
-        }
-      };
-    }
-  }, [currentVariantItem?.image, intersectionObserver]);
 
   // Get rarity color with fallback
   const getRarityColor = (rarity, rarityColor) => {
@@ -348,23 +297,6 @@ const OptimizedSearchResultItem = React.memo(({
   const metadata = item.metadata || [];
   const imageSize = showLargeView ? 'w-16 h-16' : 'w-12 h-12';
   const paddingSize = showLargeView ? 'p-4' : 'p-3';
-
-  // Image event handlers
-  const handleImageLoad = () => {
-    setImageLoading(false);
-    setImageError(false);
-  };
-
-  const handleImageError = (e) => {
-    setImageLoading(false);
-    setImageError(true);
-    // Set fallback image if not already set
-    if (!e.target.dataset.fallback) {
-      e.target.dataset.fallback = 'true';
-      // Base64 encoded placeholder SVG
-      e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjMzc0MTUxIi8+CjxwYXRoIGQ9Ik0yNCAzNkMzMC42Mjc0IDM2IDM2IDMwLjYyNzQgMzYgMjRDMzYgMTcuMzcyNiAzMC42Mjc0IDEyIDI0IDEyQzE3LjM3MjYgMTIgMTIgMTcuMzcyNiAxMiAyNEMxMiAzMC42Mjc0IDE3LjM3MjYgMzYgMjQgMzZaIiBzdHJva2U9IiM2QjczODAiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMjQgMjBWMjgiIHN0cm9rZT0iIzZCNzM4MCIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz4K';
-    }
-  };
 
   // Get available variants from the Map
   const availableVariants = Array.from(item.variants.keys());
@@ -390,22 +322,15 @@ const OptimizedSearchResultItem = React.memo(({
       <div className="flex items-center" onClick={handleItemClick}>
         {/* Item Image */}
         <div className={`relative ${imageSize} ${showLargeView ? 'mr-4' : 'mr-3'} flex-shrink-0 bg-gray-700 rounded overflow-hidden`}>
-          {/* Loading spinner */}
-          {imageLoading && !imageError && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          )}
-
-          {/* Actual image */}
-          <img 
-            ref={imgRef}
+          <ImageWithLoading
+            src={currentVariantItem?.image}
             alt={item.baseName}
-            className={`w-full h-full object-contain transition-opacity duration-200 ${
-              imageLoading ? 'opacity-0' : 'opacity-100'
-            }`}
-            onLoad={handleImageLoad}
-            onError={handleImageError}
+            lazy={true}
+            customFallback={
+              <span className="text-xs font-medium text-white">
+                {item.baseName?.substring(0, 2)?.toUpperCase() || '??'}
+              </span>
+            }
           />
         </div>
 

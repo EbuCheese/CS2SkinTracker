@@ -1,76 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Activity, Plus, DollarSign } from 'lucide-react';
+import { ImageWithLoading } from '@/components/ui';
 
 const RecentActivity = ({ recentActivity, formatPrice }) => {
   const [visibleItems, setVisibleItems] = useState(3);
   const [cardHeight, setCardHeight] = useState('auto');
-  const [imageStates, setImageStates] = useState({}); // Track loading/error states for each activity image
   const containerRef = useRef(null);
   const headerRef = useRef(null);
   const resizeObserverRef = useRef(null);
   const timeoutRef = useRef(null);
-  const imageStateInitialized = useRef(new Set()); // Prevent re-initializing image states for existing activities
-
-  // Use functional updates to prevent stale closure issues with async image loading
-  const handleImageLoad = useCallback((activityId) => {
-    setImageStates(prev => {
-      if (prev[activityId]?.loading === false) return prev; // Avoid unnecessary updates
-      return {
-        ...prev,
-        [activityId]: { loading: false, error: false }
-      };
-    });
-  }, []);
-
-  const handleImageError = useCallback((activityId) => {
-    setImageStates(prev => {
-      if (prev[activityId]?.error === true) return prev; // Avoid unnecessary updates
-      return {
-        ...prev,
-        [activityId]: { loading: false, error: true }
-      };
-    });
-  }, []);
-
-  const getImageState = useCallback((activityId) => {
-    return imageStates[activityId] || { loading: true, error: false };
-  }, [imageStates]);
-
-  // Only initialize image states for new activities to prevent unnecessary re-renders
-  useEffect(() => {
-    let hasNewStates = false;
-    const newImageStates = {};
-    
-    recentActivity.forEach(activity => {
-      const activityId = activity.id || activity.title;
-      if (activity.image_url && !imageStateInitialized.current.has(activityId)) {
-        newImageStates[activityId] = { loading: true, error: false };
-        imageStateInitialized.current.add(activityId);
-        hasNewStates = true;
-      }
-    });
-    
-    if (hasNewStates) {
-      setImageStates(prev => ({ ...prev, ...newImageStates }));
-    }
-  }, [recentActivity]);
-
-  // Clean up image states for activities that no longer exist to prevent memory leaks
-  useEffect(() => {
-    const activeIds = new Set(recentActivity.map(activity => activity.id || activity.title));
-    const currentIds = Array.from(imageStateInitialized.current);
-    
-    // Remove states for activities that no longer exist
-    const idsToRemove = currentIds.filter(id => !activeIds.has(id));
-    if (idsToRemove.length > 0) {
-      setImageStates(prev => {
-        const newStates = { ...prev };
-        idsToRemove.forEach(id => delete newStates[id]);
-        return newStates;
-      });
-      idsToRemove.forEach(id => imageStateInitialized.current.delete(id));
-    }
-  }, [recentActivity]);
 
   // Calculate how many items can fit based on available container height
   // Balances between showing more items vs maintaining readable card sizes
@@ -189,9 +127,7 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
           <>
             <div className="flex-1 flex flex-col" style={{ gap: '12px' }}>
               {visibleActivities.map((activity, index) => {
-                const activityId = activity.id || activity.title;
-                const imageState = getImageState(activityId);
-                
+              
                 // Calculate date format inline to avoid hook order issues in map
                 const formattedDate = (() => {
                   if (!activity.date || isNaN(activity.date.getTime())) {
@@ -220,37 +156,17 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
                       style={{ minHeight: `${cardHeight}px` }}
                     >
                       <div className="flex items-center space-x-4 flex-1 min-w-0">
-                        {/* Three-state image container: loading spinner, actual image, or fallback */}
-                        <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 relative">
-                          {/* Loading Spinner - only show if loading and not error */}
-                          {imageState.loading && !imageState.error && activity.image_url && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-gray-700">
-                              <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-                            </div>
-                          )}
-                          
-                          {/* Image */}
-                          {activity.image_url && (
-                            <img
-                              src={activity.image_url}
-                              alt={activity.title}
-                              className={`w-full h-full object-contain transition-opacity duration-200 ${
-                                imageState.loading ? 'opacity-0' : 'opacity-100'
-                              }`}
-                              onLoad={() => handleImageLoad(activityId)}
-                              onError={() => handleImageError(activityId)}
-                              loading="lazy"
-                            />
-                          )}
-                          
-                          {/* Fallback for no image or error */}
-                          {(!activity.image_url || imageState.error) && !imageState.loading && (
-                            <div className="w-full h-full flex items-center justify-center">
+                        {/* ImageWithLoading and custom fallback */}
+                        <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                          <ImageWithLoading
+                            src={activity.image_url}
+                            alt={activity.title}
+                            customFallback={
                               <span className="text-sm font-medium text-white">
                                 {activity.title.substring(0, 2).toUpperCase()}
                               </span>
-                            </div>
-                          )}
+                            }
+                          />
                         </div>
                         
                         {/* Activity Icon */}
