@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { useCalculatePortfolioHealth } from '@/hooks/portfolio';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip} from 'recharts';
 
 // Memoized component for rendering individual distribution items in the list
 const DistributionItem = React.memo(({ 
