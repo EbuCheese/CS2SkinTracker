@@ -1,4 +1,4 @@
-import { useReducer, useCallback, useMemo, useState } from 'react';
+import { useReducer, useCallback, useMemo, useRef } from 'react';
 
 // Initial form state for item creation/editing
 const INITIAL_FORM_DATA = {
@@ -18,112 +18,191 @@ const INITIAL_FORM_DATA = {
   isItemSelected: false,        
   isSkinSelected: false,        
   selectedItemId: null,         
-  selectedSkinId: null
+  selectedSkinId: null,
+  
+  // Variant flags
+  stattrak: false,
+  souvenir: false,
+  selectedVariant: 'normal',
+  hasStatTrak: false,
+  hasSouvenir: false
 };
 
-// Reducer for managing form state with complex selection logic
+// Action types for better type safety and debugging
+const ACTION_TYPES = {
+  UPDATE_FIELD: 'UPDATE_FIELD',
+  RESET: 'RESET',
+  SET_ITEM_SELECTED: 'SET_ITEM_SELECTED',
+  SET_SKIN_SELECTED: 'SET_SKIN_SELECTED',
+  RESET_SELECTION: 'RESET_SELECTION',
+  BULK_UPDATE: 'BULK_UPDATE'
+};
+
+// Helper function to reset selection state
+const resetSelectionState = (resetItem = true, resetSkin = true) => {
+  const updates = {};
+  
+  if (resetItem) {
+    updates.isItemSelected = false;
+    updates.selectedItemId = null;
+  }
+  
+  if (resetSkin) {
+    updates.isSkinSelected = false;
+    updates.selectedSkinId = null;
+  }
+  
+  // Always reset variant state when resetting selections
+  return {
+    ...updates,
+    image_url: '',
+    hasStatTrak: false,
+    hasSouvenir: false,
+    stattrak: false,
+    souvenir: false,
+    selectedVariant: 'normal',
+    variant: 'normal'
+  };
+};
+
+// Enhanced reducer with better separation of concerns
 const formDataReducer = (state, action) => {
   switch (action.type) {
-    case 'UPDATE_FIELD':
-      const newState = { ...state, [action.field]: action.value };
+    case ACTION_TYPES.UPDATE_FIELD: {
+      const { field, value, currentCategory } = action;
+      const newState = { ...state, [field]: value };
       
       // Reset item selection state when user manually types in name field
-      // This ensures selection state stays in sync with manual input
-      if (action.field === 'name' && action.currentCategory !== 'Crafts') {
-        return {
-          ...newState,
-          isItemSelected: false,
-          selectedItemId: null,
-          image_url: '',
-          hasStatTrak: false,
-          hasSouvenir: false
-        };
+      if (field === 'name' && currentCategory !== 'Crafts') {
+        return { ...newState, ...resetSelectionState(true, false) };
       }
       
       // Reset skin selection state when user manually types in skin name
-      if (action.field === 'skin_name') {
-        return {
-          ...newState,
-          isSkinSelected: false,
-          selectedSkinId: null,
-          image_url: '',
-          hasStatTrak: false,
-          hasSouvenir: false
-        };
+      if (field === 'skin_name') {
+        return { ...newState, ...resetSelectionState(false, true) };
       }
       
       return newState;
-    case 'RESET':
-      return INITIAL_FORM_DATA;
-    case 'SET_ITEM_SELECTED':
-      // Merge the payload with current state for item/skin selection
+    }
+    
+    case ACTION_TYPES.RESET:
+      return { ...INITIAL_FORM_DATA };
+    
+    case ACTION_TYPES.SET_ITEM_SELECTED:
       return { ...state, ...action.payload };
+    
+    case ACTION_TYPES.SET_SKIN_SELECTED:
+      return { ...state, ...action.payload };
+    
+    case ACTION_TYPES.RESET_SELECTION: {
+      const { resetItem = true, resetSkin = true } = action.payload || {};
+      return { ...state, ...resetSelectionState(resetItem, resetSkin) };
+    }
+    
+    case ACTION_TYPES.BULK_UPDATE:
+      return { ...state, ...action.payload };
+    
     default:
+      console.warn(`Unknown action type: ${action.type}`);
       return state;
   }
 };
 
-// Validates form data based on category-specific requirements
+// Enhanced validation with better error messaging
 const validateForm = (formData, currentCategory) => {
-  // Base validation: price and quantity must be valid
-  const baseValidation = formData.buy_price &&
-    !isNaN(parseFloat(formData.buy_price)) &&
-    parseFloat(formData.buy_price) > 0 &&
-    formData.quantity >= 1;
-
+  const errors = [];
+  
+  // Base validation: price and quantity
+  const price = parseFloat(formData.buy_price);
+  if (!formData.buy_price || isNaN(price) || price <= 0) {
+    errors.push('Valid price is required');
+  }
+  
+  if (formData.quantity < 1) {
+    errors.push('Quantity must be at least 1');
+  }
+  
   // Category-specific validation
   if (currentCategory === 'Crafts') {
-    // Crafts require skin selection and condition
-    return baseValidation &&
-           formData.skin_name?.trim() &&
-           formData.isSkinSelected &&
-           formData.condition &&
-           formData.name.trim();
+    if (!formData.skin_name?.trim()) {
+      errors.push('Base skin selection is required');
+    }
+    if (!formData.isSkinSelected) {
+      errors.push('Please select a skin from the dropdown');
+    }
+    if (!formData.condition) {
+      errors.push('Condition is required for crafts');
+    }
+    if (!formData.name.trim()) {
+      errors.push('Craft name is required');
+    }
   } else {
-    // Other categories require item selection
-    // Some categories (like Liquids) also require condition
-    return baseValidation &&
-           formData.name.trim() &&
-           formData.isItemSelected &&
-           (!['Liquids'].includes(currentCategory) || formData.condition);
+    if (!formData.name.trim()) {
+      errors.push('Item name is required');
+    }
+    if (!formData.isItemSelected) {
+      errors.push('Please select an item from the dropdown');
+    }
+    if (['Liquids'].includes(currentCategory) && !formData.condition) {
+      errors.push('Condition is required for this item type');
+    }
   }
+  
+  return {
+    isValid: errors.length === 0,
+    errors
+  };
 };
 
 // Custom hook for managing item form state and operations
 export const useItemForm = (currentCategory, selectedCategory) => {
   const [formData, dispatch] = useReducer(formDataReducer, INITIAL_FORM_DATA);
   
-  // Memoized form validation to prevent unnecessary recalculations
-  const isFormValid = useMemo(() => 
-    validateForm(formData, currentCategory, selectedCategory), 
-    [formData, currentCategory, selectedCategory]
+  // Use ref to track if form has been touched for better UX
+  const touchedRef = useRef(false);
+  
+  // Enhanced form validation with error details
+  const validation = useMemo(() => 
+    validateForm(formData, currentCategory), 
+    [formData, currentCategory]
   );
+  
+  const isFormValid = validation.isValid;
+  const validationErrors = validation.errors;
 
-  // Generic form field update handler
+  // Generic form field update handler with touch tracking
   const handleFormDataChange = useCallback((field, value) => {
-    dispatch({ type: 'UPDATE_FIELD', field, value, currentCategory });
+    touchedRef.current = true;
+    dispatch({ 
+      type: ACTION_TYPES.UPDATE_FIELD, 
+      field, 
+      value, 
+      currentCategory 
+    });
   }, [currentCategory]);
 
-  // Handles item selection from dropdown/search results
+  // Enhanced item selection with better state management
   const handleItemSelect = useCallback((item, categoryMap) => {
+    touchedRef.current = true;
+    
     dispatch({
-      type: 'SET_ITEM_SELECTED',
+      type: ACTION_TYPES.SET_ITEM_SELECTED,
       payload: {
         name: item.name,
         image_url: item.image || '',
         type: currentCategory?.toLowerCase(),
         detectedCategory: currentCategory,
-
+        
         // Reset variant state to defaults
         stattrak: false,
         souvenir: false,
         selectedVariant: 'normal',
         variant: 'normal',
-
+        
         // Set capability flags from item data
-        hasStatTrak: item.hasStatTrak || false,
-        hasSouvenir: item.hasSouvenir || false,
-
+        hasStatTrak: Boolean(item.hasStatTrak),
+        hasSouvenir: Boolean(item.hasSouvenir),
+        
         // Set selection state
         isItemSelected: true,
         selectedItemId: item.id || item.name
@@ -131,24 +210,26 @@ export const useItemForm = (currentCategory, selectedCategory) => {
     });
   }, [currentCategory]);
 
-  // Handles skin selection for craft items
+  // Enhanced skin selection with separate action type
   const handleSkinSelect = useCallback((item) => {
+    touchedRef.current = true;
+    
     dispatch({
-      type: 'SET_ITEM_SELECTED',
+      type: ACTION_TYPES.SET_SKIN_SELECTED,
       payload: {
         skin_name: item.name,
         image_url: formData.custom_image_url || item.image || '',
-
+        
         // Reset variant state
         stattrak: false,
         souvenir: false,
         selectedVariant: 'normal',
         variant: 'normal',
-
+        
         // Set capability flags
-        hasStatTrak: item.hasStatTrak || false,
-        hasSouvenir: item.hasSouvenir || false,
-
+        hasStatTrak: Boolean(item.hasStatTrak),
+        hasSouvenir: Boolean(item.hasSouvenir),
+        
         // Set selection state
         isSkinSelected: true,
         selectedSkinId: item.id || item.name,
@@ -157,10 +238,17 @@ export const useItemForm = (currentCategory, selectedCategory) => {
     });
   }, [formData.custom_image_url]);
 
-  // Updates item variant (normal, stattrak, souvenir)
+  // Enhanced variant change with validation
   const handleVariantChange = useCallback((variant) => {
+    if (!['normal', 'stattrak', 'souvenir'].includes(variant)) {
+      console.warn(`Invalid variant: ${variant}`);
+      return;
+    }
+    
+    touchedRef.current = true;
+    
     dispatch({
-      type: 'SET_ITEM_SELECTED',
+      type: ACTION_TYPES.BULK_UPDATE,
       payload: {
         stattrak: variant === 'stattrak',
         souvenir: variant === 'souvenir',
@@ -170,35 +258,106 @@ export const useItemForm = (currentCategory, selectedCategory) => {
     });
   }, []);
 
-  // Updates item condition (Factory New, Minimal Wear, etc.)
+  // Enhanced condition change with validation
   const handleConditionChange = useCallback((condition) => {
-    dispatch({ type: 'UPDATE_FIELD', field: 'condition', value: condition });
+    touchedRef.current = true;
+    dispatch({ 
+      type: ACTION_TYPES.UPDATE_FIELD, 
+      field: 'condition', 
+      value: condition,
+      currentCategory 
+    });
+  }, [currentCategory]);
+
+  // Enhanced quantity change with better bounds and validation
+  const handleQuantityChange = useCallback((delta) => {
+    const newQuantity = Math.max(1, Math.min(9999, formData.quantity + delta));
+    
+    if (newQuantity !== formData.quantity) {
+      touchedRef.current = true;
+      dispatch({
+        type: ACTION_TYPES.UPDATE_FIELD,
+        field: 'quantity',
+        value: newQuantity,
+        currentCategory
+      });
+    }
+  }, [formData.quantity, currentCategory]);
+
+  // Enhanced reset with optional callback
+  const resetForm = useCallback((callback) => {
+    touchedRef.current = false;
+    dispatch({ type: ACTION_TYPES.RESET });
+    callback?.();
   }, []);
 
-  // Handles quantity increment/decrement with bounds checking
-  const handleQuantityChange = useCallback((delta) => {
-    dispatch({
-      type: 'UPDATE_FIELD',
-      field: 'quantity',
-      value: Math.max(1, Math.min(9999, formData.quantity + delta))
-    });
-  }, [formData.quantity]);
+  // Utility method to check if specific fields are valid
+  const isFieldValid = useCallback((fieldName) => {
+    // Simple field-specific validation
+    switch (fieldName) {
+      case 'buy_price':
+        const price = parseFloat(formData.buy_price);
+        return formData.buy_price && !isNaN(price) && price > 0;
+      case 'quantity':
+        return formData.quantity >= 1;
+      case 'name':
+        return formData.name.trim().length > 0;
+      case 'condition':
+        return Boolean(formData.condition);
+      default:
+        return true;
+    }
+  }, [formData]);
 
-  // Resets form to initial state
-  const resetForm = useCallback(() => {
-    dispatch({ type: 'RESET' });
+  // Method to get field-specific error message
+  const getFieldError = useCallback((fieldName) => {
+    if (!touchedRef.current) return null;
+    
+    switch (fieldName) {
+      case 'buy_price':
+        if (!isFieldValid('buy_price')) return 'Please enter a valid price';
+        break;
+      case 'name':
+        if (!isFieldValid('name')) return 'Item name is required';
+        break;
+      case 'condition':
+        if (['Liquids', 'Crafts'].includes(currentCategory) && !isFieldValid('condition')) {
+          return 'Condition is required';
+        }
+        break;
+    }
+    return null;
+  }, [isFieldValid, currentCategory]);
+
+  // Batch update method for multiple fields
+  const updateMultipleFields = useCallback((updates) => {
+    touchedRef.current = true;
+    dispatch({
+      type: ACTION_TYPES.BULK_UPDATE,
+      payload: updates
+    });
   }, []);
 
   return {
+    // State
     formData,
-    dispatch,
     isFormValid,
+    validationErrors,
+    isTouched: touchedRef.current,
+    
+    // Actions
+    dispatch,
     handleFormDataChange,
     handleItemSelect,
     handleSkinSelect,
     handleVariantChange,
     handleConditionChange,
     handleQuantityChange,
-    resetForm
+    resetForm,
+    updateMultipleFields,
+    
+    // Utilities
+    isFieldValid,
+    getFieldError
   };
 };
