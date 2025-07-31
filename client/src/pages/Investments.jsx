@@ -4,6 +4,7 @@ import { supabase } from '@/supabaseClient';
 import { ItemCard } from '@/components/item-display';
 import { AddItemForm } from '@/components/forms'
 import { useScrollLock } from '@/hooks/util';
+import { usePortfolioData } from '@/hooks/portfolio';
 
 const InvestmentsPage = ({ userSession }) => {
   // UI States
@@ -11,11 +12,8 @@ const InvestmentsPage = ({ userSession }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
 
-  // Data States
-  const [investments, setInvestments] = useState([]);
-  const [soldItems, setSoldItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // Investment data from hook
+  const { investments, soldItems, loading, error, refetch, setInvestments } = usePortfolioData(userSession);
 
   // Item Management States
   const [itemToDelete, setItemToDelete] = useState(null);
@@ -202,14 +200,14 @@ const InvestmentsPage = ({ userSession }) => {
       inv.id === itemId ? { ...inv, ...updates } : inv
     ));
     // Refresh data from database to ensure consistency
-    fetchData();
-  }, []);
+    refetch();
+  }, [setInvestments, refetch]);
 
   // handle the removal of item form ui, selling or deleting
   const handleItemRemove = useCallback((itemId) => {
     setInvestments(prev => prev.filter(inv => inv.id !== itemId));
-    fetchData(); // Refresh to ensure data consistency
-  }, []);
+    refetch(); // Refresh to ensure data consistency
+  }, [setInvestments, refetch]);
 
   // set the item to delete
   const handleItemDelete = useCallback((itemToDelete) => {
@@ -218,8 +216,8 @@ const InvestmentsPage = ({ userSession }) => {
 
   // trigger manual refresh of db investment data
   const handleRefreshData = useCallback(() => {
-    fetchData();
-  }, []);
+    refetch();
+  }, [refetch]);
 
   // handle addition of new investment items
   const handleAddItem = useCallback((newItem) => {
@@ -255,80 +253,6 @@ const InvestmentsPage = ({ userSession }) => {
   const handleCancelDelete = useCallback(() => {
     setItemToDelete(null);
   }, []);
-
-  // Fetch investments and sold items from Supabase
-  useEffect(() => {
-    if (!userSession) return;
-
-    if (validateUserSession(userSession)) {
-      fetchData();
-    } else {
-      setLoading(false);
-      setError('Invalid user session. Please validate your beta key.');
-    }
-  }, [userSession]);
-
-  // Fetches investment and sold item data from db (main data loading function)
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Validate user session before making database calls
-      if (!userSession?.id || typeof userSession.id !== 'string') {
-        setError('Invalid user session. Please re-validate your beta key.');
-        return;
-      }
-
-      console.log('Fetching data for user:', userSession.id);
-
-      // Make parallel database calls for better performance
-      const [investmentsResult, soldItemsResult] = await Promise.all([
-        // Fetch investment summary view
-        supabase.rpc('fetch_user_investment_summary', {
-          context_user_id: userSession.id
-        }),
-        // Fetch user historical sales data
-        supabase.rpc('fetch_user_investment_sales', {
-          context_user_id: userSession.id
-        })
-      ]);
-
-      // Handle investments query errors (critical failure)
-      if (investmentsResult.error) {
-        console.error('Investments query failed:', investmentsResult.error);
-        setError('Access denied. Please verify your beta key is valid and active.');
-        return;
-      }
-
-      // Handle sold items query errors (non-critical, continue with investments only)
-      if (soldItemsResult.error) {
-        console.error('Sold items query failed:', soldItemsResult.error);
-        console.warn('Could not fetch sold items, continuing with investments only');
-      }
-
-      // Parse investments data (handle both array and JSON string responses)
-      const investmentsArray = Array.isArray(investmentsResult.data) 
-        ? investmentsResult.data 
-        : JSON.parse(investmentsResult.data || '[]');
-      
-      // Sold items should always be an array, fallback to empty array if null
-      let soldItemsArray = soldItemsResult.data || [];
-
-      console.log(`Successfully loaded ${investmentsArray.length} investments and ${soldItemsArray.length} sold items`);
-      
-      // Update component state with fetched data
-      setInvestments(investmentsArray);
-      setSoldItems(soldItemsArray);
-
-    } catch (err) {
-      console.error('Unexpected error:', err);
-      setError('An unexpected error occurred. Please try again.');
-    } finally {
-      // Always clear loading state, regardless of success or failure
-      setLoading(false);
-    }
-  };
 
   const handleDeleteItem = async () => {
     // Safety check - should not be called without an item selected  
@@ -367,26 +291,9 @@ const InvestmentsPage = ({ userSession }) => {
     }
   };
 
-  const validateUserSession = (session) => {
-    // Check if session object exists
-    if (!session) return false;
-
-    // Check if session has an ID field
-    if (!session.id) return false;
-
-    // Ensure ID is a string (UUIDs should be strings)
-    if (typeof session.id !== 'string') return false;
-    
-    // Validate UUID format using regex
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(session.id)) return false;
-    
-    return true;
-  };
-
   const retry = () => {
     if (userSession?.id) {
-      fetchData();
+      refetch();
     } else {
       setError('No user session found. Please validate your beta key first.');
     }
