@@ -4,195 +4,35 @@ import { supabase } from '@/supabaseClient';
 import { ItemCard } from '@/components/item-display';
 import { AddItemForm } from '@/components/forms'
 import { useScrollLock } from '@/hooks/util';
-import { usePortfolioData } from '@/hooks/portfolio';
+import { usePortfolioData, usePortfolioFiltering, usePortfolioSummary, usePortfolioTabs  } from '@/hooks/portfolio';
 
 const InvestmentsPage = ({ userSession }) => {
   // UI States
-  const [activeTab, setActiveTab] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [activeTab, setActiveTab] = useState('All');          // Current category filter
+  const [searchQuery, setSearchQuery] = useState('');        // User's search input
+  const [showAddForm, setShowAddForm] = useState(false);     // Add item modal visibility
+  const [itemToDelete, setItemToDelete] = useState(null);    // Item selected for deletion
+  const [newItemIds, setNewItemIds] = useState(new Set());   // Recently added items (for animations)
 
   // Investment data from hook
   const { investments, soldItems, loading, error, refetch, setInvestments } = usePortfolioData(userSession);
 
-  // Item Management States
-  const [itemToDelete, setItemToDelete] = useState(null);
-  const [newItemIds, setNewItemIds] = useState(new Set());
+  // Data filtering and search logic
+  const { activeInvestments, groupedSoldItems, currentItems } = usePortfolioFiltering(
+    investments, soldItems, activeTab, searchQuery
+  );
+  
+  // Financial summary calculations for current view
+  const portfolioSummary = usePortfolioSummary(
+    activeTab, investments, soldItems, currentItems, groupedSoldItems
+  );
+  
+  // Tab configuration and UI helpers
+  const { mainTabs, soldTab, searchPlaceholder, getAddButtonText } = usePortfolioTabs(activeTab);
 
   // lock scroll on add form or delete message  
   useScrollLock(showAddForm || !!itemToDelete);
-
-  // Tab config array
-  const mainTabs = ['All', 'Liquids', 'Crafts', 'Cases', 'Stickers', 'Agents', 'Keychains', 'Graffiti', 'Patches'];
-  const soldTab = 'Sold';
-
-  // HELPER FUNCTION: Group sold items (moved before usage)
-  const groupSoldItems = useCallback((soldItems) => {
-    const groups = {};
-   
-    soldItems.forEach(item => {
-      // Extract date without the time to group items sold on same day
-      const dateOnly = item.sale_date.split('T')[0];
-      const itemSkinName = item.item_skin_name || '';
-      const itemCondition = item.item_condition || '';
-      
-      // unique key combining all item characteristics and sale date to ensure only identical items are grouped on same day
-      const groupKey = `${item.item_name}-${itemSkinName}-${itemCondition}-${item.buy_price_per_unit}-${item.price_per_unit}-${dateOnly}`;
-      
-      if (groups[groupKey]) {
-        // Accumulate quantities and values for existing group
-        groups[groupKey].quantity_sold += item.quantity_sold;
-        groups[groupKey].total_sale_value += item.total_sale_value;
-        groups[groupKey].sale_ids.push(item.id);
-        
-        // Keep the earliest sale time as the representative time for the group
-        const existingDate = new Date(groups[groupKey].sale_date);
-        const currentDate = new Date(item.sale_date);
-        if (currentDate < existingDate) {
-          groups[groupKey].sale_date = item.sale_date;
-        }
-      } else {
-        // Create new group with first occurrence of this item combination
-        groups[groupKey] = {
-          ...item,
-          sale_ids: [item.id],
-        };
-      }
-    });
-
-    // Convert groups object back to array for rendering
-    return Object.values(groups);
-  }, []);
-
   
-  // MEMOIZED: Filter active investments (quantity > 0)
-  const activeInvestments = useMemo(() => {
-    return investments.filter(item => item.quantity > 0);
-  }, [investments]);
-
-  // MEMOIZED: Group sold items (consolidate duplicate entries )
-  const groupedSoldItems = useMemo(() => {
-    return groupSoldItems(soldItems);
-  }, [soldItems, groupSoldItems]);
-
-  // MEMOIZED: Get current items based on active tab and search
-  const currentItems = useMemo(() => {
-    let filteredItems;
-    
-    // Determine base dataset based on active tab
-    if (activeTab === 'Sold') {
-      filteredItems = groupedSoldItems;
-    } else {
-      filteredItems = activeInvestments;
-      
-      // Apply category filter for specific tabs (skip 'All' tab)
-      if (activeTab !== 'All') {
-        let typeFilter;
-
-        // Handle special naming cases where tab name doesn't match database type
-        if (activeTab === 'Graffiti') {
-          typeFilter = 'graffiti';
-        } else if (activeTab === 'Patches') {
-          typeFilter = 'patch';
-        } else {
-          // Convert plural tab names to singular for database matching (e.g., "Cases" -> "case")
-          typeFilter = activeTab.toLowerCase().slice(0, -1);
-        }
-        filteredItems = filteredItems.filter(item => item.type === typeFilter);
-      }
-    }
-
-    // Apply search filter if user has entered search terms
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filteredItems = filteredItems.filter(item => {
-        if (activeTab === 'Sold') {
-          // Search fields for sold items (different field names from active items)
-          const itemName = item.item_name || '';
-          const skinName = item.item_skin_name || '';
-          const condition = item.item_condition || '';
-          const variant = item.item_variant || '';
-          
-          return itemName.toLowerCase().includes(query) ||
-                skinName.toLowerCase().includes(query) ||
-                condition.toLowerCase().includes(query) ||
-                variant.toLowerCase().includes(query);
-        } else {
-          // Search fields for active investments (handles potential field name variations)
-          const itemName = item.item_name || item.name || '';
-          const skinName = item.skin_name || '';
-          const condition = item.condition || '';
-          const variant = item.variant || '';
-          
-          return itemName.toLowerCase().includes(query) ||
-                skinName.toLowerCase().includes(query) ||
-                condition.toLowerCase().includes(query) ||
-                variant.toLowerCase().includes(query);
-        }
-      });
-    }
-    
-    return filteredItems;
-  }, [activeTab, groupedSoldItems, activeInvestments, searchQuery]);
-
-  // MEMOIZED: Portfolio summary calculation
-  const portfolioSummary = useMemo(() => {
-    if (activeTab === 'Sold') {
-      // For sold items, calculate realized profit/loss from all investments
-      const totalRealizedPL = investments.reduce((sum, inv) => 
-        sum + parseFloat(inv.realized_profit_loss), 0);
-      
-      // Total revenue from all sales
-      const totalSaleValue = investments.reduce((sum, inv) => 
-        sum + parseFloat(inv.total_sale_value), 0);
-      
-      // Calculate original investment cost for sold quantities only
-      const totalBuyValue = investments.reduce((sum, inv) => {
-        const soldQuantity = parseFloat(inv.total_sold_quantity);
-        return sum + (parseFloat(inv.buy_price) * soldQuantity);
-      }, 0);
-      
-      // Calculate percentage return on sold investments
-      const profitPercentage = totalBuyValue > 0 ? ((totalRealizedPL / totalBuyValue) * 100) : 0;
-
-      return {
-        totalBuyValue,
-        totalCurrentValue: totalSaleValue,
-        totalProfit: totalRealizedPL,
-        profitPercentage,
-        itemCount: groupedSoldItems.length
-      };
-    } else {
-      // For active investments, calculate current market performance
-      const totalBuyValue = currentItems.reduce((sum, item) => sum + (item.buy_price * item.quantity), 0);
-      const totalCurrentValue = currentItems.reduce((sum, item) => {
-        return sum + (item.current_price * item.quantity);
-      }, 0);
-      // Unrealized profit (difference between current value and purchase cost)
-      const totalProfit = totalCurrentValue - totalBuyValue;
-      const profitPercentage = totalBuyValue > 0 ? ((totalProfit / totalBuyValue) * 100) : 0;
-
-      return {
-        totalBuyValue,
-        totalCurrentValue,
-        totalProfit,
-        profitPercentage,
-        itemCount: currentItems.length
-      };
-    }
-  }, [activeTab, investments, currentItems, groupedSoldItems]);
-
-  // MEMOIZED: Search placeholder text
-  const searchPlaceholder = useMemo(() => {
-    if (activeTab === 'All') {
-      return 'Search all investments...';
-    } else if (activeTab === 'Sold') {
-      return 'Search sold items...';
-    } else {
-      return `Search ${activeTab.toLowerCase()}...`;
-    }
-  }, [activeTab]);
-
   // STABLE CALLBACKS: Prevent unnecessary re-renders
   const handleItemUpdate = useCallback((itemId, updates) => {
     // update local state for immediate UI feedback
@@ -445,11 +285,7 @@ const InvestmentsPage = ({ userSession }) => {
               className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-6 py-3 rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium flex items-center space-x-2 shadow-lg"
             >
               <Plus className="w-5 h-5" />
-              <span>Add {
-                activeTab === 'Graffiti' ? 'Graffiti' : 
-                activeTab === 'Patches' ? 'Patch' : 
-                activeTab.slice(0, -1)
-              }</span>
+              <span>{getAddButtonText(activeTab)}</span>
             </button>
           </div>
         )}
