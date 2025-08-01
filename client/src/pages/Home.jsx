@@ -9,7 +9,7 @@ import { useCalculatePortfolioHealth, useChartData, usePortfolioData, useQuickAc
 
 // Main InvestmentDashboard component
 const InvestmentDashboard = ({ userSession }) => {
-  const { investments, soldItems, loading, error, refetch, setInvestments } = usePortfolioData(userSession);
+  const { investments, soldItems, portfolioSummary, loading, error, refetch, setInvestments } = usePortfolioData(userSession);
   
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('MAX');
   const { chartData, chartLoading } = useChartData(userSession, selectedTimePeriod, investments.length > 0);

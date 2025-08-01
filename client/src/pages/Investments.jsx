@@ -15,7 +15,7 @@ const InvestmentsPage = ({ userSession }) => {
   const [newItemIds, setNewItemIds] = useState(new Set());   // Recently added items (for animations)
 
   // Investment data from hook
-  const { investments, soldItems, loading, error, refetch, setInvestments } = usePortfolioData(userSession);
+  const { investments, soldItems, portfolioSummary, loading, error, refetch, setInvestments } = usePortfolioData(userSession);
 
   // Data filtering and search logic
   const { activeInvestments, groupedSoldItems, currentItems } = usePortfolioFiltering(
@@ -23,8 +23,8 @@ const InvestmentsPage = ({ userSession }) => {
   );
   
   // Financial summary calculations for current view
-  const portfolioSummary = usePortfolioSummary(
-    activeTab, investments, soldItems, currentItems, groupedSoldItems
+  const summary = usePortfolioSummary(
+    activeTab, investments, soldItems, currentItems, groupedSoldItems, portfolioSummary
   );
   
   // Tab configuration and UI helpers
@@ -190,7 +190,7 @@ const InvestmentsPage = ({ userSession }) => {
                 {activeTab === 'Sold' ? 'Total Sold' : 'Current Invested'}
               </div>
               <div className="text-white text-xl font-semibold">
-                ${activeTab === 'Sold' ? portfolioSummary.totalCurrentValue.toFixed(2) : portfolioSummary.totalBuyValue.toFixed(2)}
+                ${activeTab === 'Sold' ? summary.totalCurrentValue.toFixed(2) : summary.totalBuyValue.toFixed(2)}
               </div>
             </div>
 
@@ -200,7 +200,7 @@ const InvestmentsPage = ({ userSession }) => {
                 {activeTab === 'Sold' ? 'Total Invested' : 'Current Value'}
               </div>
               <div className="text-white text-xl font-semibold">
-                ${activeTab === 'Sold' ? portfolioSummary.totalBuyValue.toFixed(2) : portfolioSummary.totalCurrentValue.toFixed(2)}
+                ${activeTab === 'Sold' ? summary.totalBuyValue.toFixed(2) : summary.totalCurrentValue.toFixed(2)}
               </div>
             </div>
 
@@ -210,10 +210,10 @@ const InvestmentsPage = ({ userSession }) => {
                 {activeTab === 'Sold' ? 'Realized P&L' : 'Unrealized P&L'}
               </div>
               <div className={`text-xl font-semibold flex items-center space-x-1 ${
-                portfolioSummary.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'
+                summary.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'
               }`}>
-                {portfolioSummary.totalProfit >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                <span>${Math.abs(portfolioSummary.totalProfit).toFixed(2)} ({portfolioSummary.profitPercentage.toFixed(2)}%)</span>
+                {summary.totalProfit >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                <span>${Math.abs(summary.totalProfit).toFixed(2)} ({summary.profitPercentage.toFixed(2)}%)</span>
               </div>
             </div>
 
@@ -222,7 +222,7 @@ const InvestmentsPage = ({ userSession }) => {
               <div className="text-gray-400 text-sm">
                 {activeTab === 'Sold' ? 'Sales' : 'Items'}
               </div>
-              <div className="text-white text-xl font-semibold">{portfolioSummary.itemCount}</div>
+              <div className="text-white text-xl font-semibold">{summary.itemCount}</div>
             </div>
           </div>
         )}

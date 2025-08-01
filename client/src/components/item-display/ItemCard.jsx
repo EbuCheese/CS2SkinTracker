@@ -94,64 +94,77 @@ const handleAsyncOperation = useCallback(async (operation, operationFn, ...args)
 
   // Memoized calculation of all item metrics and profit/loss data
   const itemMetrics = useMemo(() => {
-    // Initialize variables for profit/loss calculations
-    let soldItems, availableQuantity, originalQuantity, isFullySold;
-    let realizedProfitLoss, unrealizedProfitLoss, totalProfitLoss;
-    let totalInvestment, buyPrice, currentPrice, quantity;
-
-    if (isSoldItem) {
-      // For sold items from investment_sales table - all items are sold
-      buyPrice = item.buy_price_per_unit || 0;
-      currentPrice = item.price_per_unit || 0;
-      quantity = item.quantity_sold || 0;
-      availableQuantity = 0;
-      originalQuantity = quantity;
-      isFullySold = true;
-      soldItems = 0;
-
-      // Calculate profit/loss for completed sale
-      totalProfitLoss = (item.price_per_unit - item.buy_price_per_unit) * item.quantity_sold;
-      realizedProfitLoss = totalProfitLoss;
-      unrealizedProfitLoss = 0;
-      totalInvestment = item.buy_price_per_unit * item.quantity_sold;
-    } else {
-      // For active investments from investment_summary view
-      buyPrice = item.buy_price || 0;
-      currentPrice = item.current_price || 0;
-      quantity = item.quantity || 0;
-      soldItems = item.total_sold_quantity || 0;
-      availableQuantity = item.quantity;
-      originalQuantity = item.original_quantity || item.quantity;
-      isFullySold = availableQuantity === 0;
-      
-      if (item.realized_profit_loss !== undefined && item.unrealized_profit_loss !== undefined) {
-        // Existing item with summary data from database view
-        realizedProfitLoss = item.realized_profit_loss || 0;
-        unrealizedProfitLoss = item.unrealized_profit_loss || 0;
-      } else {
-        // Newly added item - calculate P&L manually since view data isn't available yet
-        realizedProfitLoss = 0; // No sales yet
-        unrealizedProfitLoss = (currentPrice - buyPrice) * quantity;
-      }
-      
-      totalProfitLoss = realizedProfitLoss + unrealizedProfitLoss;
-      totalInvestment = buyPrice * originalQuantity;
-    }
-      
-      // Calculate profit percentage based on total investment
-      const profitPercentage = totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00';
-
-      // Additional sales metrics from database view
-      const totalSaleValue = item.total_sale_value || 0;
-      const averageSalePrice = item.average_sale_price || 0;
-
-      return {
-        soldItems, availableQuantity, originalQuantity, isFullySold,
-        realizedProfitLoss, unrealizedProfitLoss, totalProfitLoss,
-        totalInvestment, buyPrice, currentPrice, quantity, profitPercentage,
-        totalSaleValue, averageSalePrice
+  if (isSoldItem) {
+    // Sold items path - simplified calculation
+    const buyPrice = item.buy_price_per_unit || 0;
+    const sellPrice = item.price_per_unit || 0;
+    const quantity = item.quantity_sold || 0;
+    const totalInvestment = buyPrice * quantity;
+    const totalProfitLoss = (sellPrice - buyPrice) * quantity;
+    
+    return {
+      buyPrice,
+      currentPrice: sellPrice,
+      quantity,
+      availableQuantity: 0,
+      originalQuantity: quantity,
+      isFullySold: true,
+      soldItems: 0,
+      totalInvestment,
+      realizedProfitLoss: totalProfitLoss,
+      unrealizedProfitLoss: 0,
+      totalProfitLoss,
+      profitPercentage: totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00',
+      totalSaleValue: sellPrice * quantity,
+      averageSalePrice: sellPrice
     };
-}, [item, isSoldItem]);
+  }
+
+  // Active investments - leverage Supabase view calculations
+  const buyPrice = item.buy_price || 0;
+  const currentPrice = item.current_price || 0;
+  const quantity = item.quantity || 0;
+  const soldItems = item.total_sold_quantity || 0;
+  const originalQuantity = item.original_quantity || quantity;
+  
+  // Use pre-calculated values from investment_summary view
+  const realizedProfitLoss = item.realized_profit_loss || 0;
+  const unrealizedProfitLoss = item.unrealized_profit_loss || 0;
+  const totalProfitLoss = realizedProfitLoss + unrealizedProfitLoss;
+  const totalInvestment = buyPrice * originalQuantity;
+  
+  return {
+    buyPrice,
+    currentPrice,
+    quantity,
+    availableQuantity: quantity,
+    originalQuantity,
+    isFullySold: quantity === 0,
+    soldItems,
+    totalInvestment,
+    realizedProfitLoss,
+    unrealizedProfitLoss,
+    totalProfitLoss,
+    profitPercentage: totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00',
+    totalSaleValue: item.total_sale_value || 0,
+    averageSalePrice: item.average_sale_price || 0
+  };
+}, [
+  // Optimized dependencies for Supabase
+  isSoldItem,
+  item.buy_price,
+  item.buy_price_per_unit,
+  item.current_price,
+  item.price_per_unit,
+  item.quantity,
+  item.quantity_sold,
+  item.total_sold_quantity,
+  item.original_quantity,
+  item.realized_profit_loss,
+  item.unrealized_profit_loss,
+  item.total_sale_value,
+  item.average_sale_price
+]);
   
   // Destructure calculated metrics for easier access
   const {
