@@ -130,7 +130,10 @@ const aggregatePortfolioData = (investments) => {
       typeGroups: new Map(),
       itemGroups: new Map(),
       totalValue: 0,
-      safeValue: 0
+      safeValue: 0,
+      totalBuyValue: 0,
+      totalRealizedPL: 0,
+      totalUnrealizedPL: 0
     };
   }
 
@@ -138,17 +141,29 @@ const aggregatePortfolioData = (investments) => {
   const itemGroups = new Map();
   let totalValue = 0;
   let safeValue = 0;
+  let totalBuyValue = 0;
+  let totalRealizedPL = 0;
+  let totalUnrealizedPL = 0;
   
   // Process each investment
   for (const inv of investments) {
-    const quantity = parseFloat(inv.quantity);
-    const currentPrice = parseFloat(inv.current_price);
+    const quantity = parseFloat(inv.quantity || 0);
+    const currentPrice = parseFloat(inv.current_price || 0);
+    const buyPrice = parseFloat(inv.buy_price || 0);
     
     // Skip invalid entries
     if (isNaN(quantity) || quantity <= 0 || isNaN(currentPrice)) continue;
     
     const value = currentPrice * quantity;
     totalValue += value;
+    
+    // Use original_quantity from the view for accurate buy value calculation
+    const originalQuantity = parseFloat(inv.original_quantity || quantity);
+    totalBuyValue += buyPrice * originalQuantity;
+    
+    // Use pre-calculated profit/loss values from investment_summary view
+    totalRealizedPL += parseFloat(inv.realized_profit_loss || 0);
+    totalUnrealizedPL += parseFloat(inv.unrealized_profit_loss || 0);
     
     // Calculate safe allocation (cases and keys are considered "safe")
     const itemType = inv.type?.toLowerCase() || 'unknown';
@@ -178,21 +193,14 @@ const aggregatePortfolioData = (investments) => {
     itemGroup.items.push(inv);
   }
 
-    return { 
+  return { 
     typeGroups, 
     itemGroups, 
     totalValue, 
     safeValue,
-    // Add financial metrics here to avoid duplicate processing
-    totalBuyValue: investments.reduce((sum, inv) => {
-      const buyPrice = parseFloat(inv.buy_price) || 0;
-      const originalQty = parseFloat(inv.original_quantity || inv.quantity) || 0;
-      return sum + (buyPrice * originalQty);
-    }, 0),
-    totalRealizedPL: investments.reduce((sum, inv) => 
-      sum + (parseFloat(inv.realized_profit_loss) || 0), 0),
-    totalUnrealizedPL: investments.reduce((sum, inv) => 
-      sum + (parseFloat(inv.unrealized_profit_loss) || 0), 0)
+    totalBuyValue,
+    totalRealizedPL,
+    totalUnrealizedPL
   };
 };
 
@@ -428,7 +436,7 @@ const generateItemFeedback = (score, numItems, maxConcentration, weaponBreakdown
 
 // Main hook for calculating portfolio health metrics
 export const useCalculatePortfolioHealth = (investments) => {
-  // Level 1: Memoize raw data aggregation
+  // Level 1: Memoize raw data aggregation (now more efficient with pre-calculated fields)
   const aggregatedData = useMemo(() => {
     return aggregatePortfolioData(investments);
   }, [investments]);
@@ -471,47 +479,45 @@ export const useCalculatePortfolioHealth = (investments) => {
 
   // Final result memoization
   return useMemo(() => {
-  // Handle empty state
-  if (!investments?.length) {
+    // Handle empty state
+    if (!investments?.length) {
+      return {
+        typeDiversityScore: 0,
+        itemDiversityScore: 0,
+        typeBreakdown: [],
+        weaponBreakdown: [],
+        typeFeedback: 'No active investments to analyze',
+        itemFeedback: 'No active investments to analyze',
+        totalTypes: 0,
+        totalWeaponTypes: 0,
+        safeAllocationPercentage: 0,
+        totalValue: 0,
+        totalBuyValue: 0,
+        totalRealizedPL: 0,
+        totalUnrealizedPL: 0
+      };
+    }
+
+    const { typeBreakdown, weaponBreakdown } = breakdowns;
+    const { typeDiversityScore, itemDiversityScore, safeAllocation } = scores;
+    const { typeFeedback, itemFeedback } = feedback;
+    const { totalValue, totalBuyValue, totalRealizedPL, totalUnrealizedPL } = aggregatedData;
+
     return {
-      typeDiversityScore: 0,
-      itemDiversityScore: 0,
-      typeBreakdown: [],
-      weaponBreakdown: [],
-      typeFeedback: 'No active investments to analyze',
-      itemFeedback: 'No active investments to analyze',
-      totalTypes: 0,
-      totalWeaponTypes: 0,
-      safeAllocationPercentage: 0,
-      // ADD THESE FINANCIAL METRICS:
-      totalValue: 0,
-      totalBuyValue: 0,
-      totalRealizedPL: 0,
-      totalUnrealizedPL: 0
+      typeDiversityScore,
+      itemDiversityScore,
+      typeBreakdown,
+      weaponBreakdown,
+      typeFeedback,
+      itemFeedback,
+      totalTypes: typeBreakdown.length,
+      totalWeaponTypes: weaponBreakdown.length,
+      safeAllocationPercentage: safeAllocation,
+      totalValue,
+      totalBuyValue,
+      totalRealizedPL,
+      totalUnrealizedPL,
+      investments
     };
-  }
-
-  const { typeBreakdown, weaponBreakdown } = breakdowns;
-  const { typeDiversityScore, itemDiversityScore, safeAllocation } = scores;
-  const { typeFeedback, itemFeedback } = feedback;
-  const { totalValue, totalBuyValue, totalRealizedPL, totalUnrealizedPL } = aggregatedData;
-
-  return {
-    typeDiversityScore,
-    itemDiversityScore,
-    typeBreakdown,
-    weaponBreakdown,
-    typeFeedback,
-    itemFeedback,
-    totalTypes: typeBreakdown.length,
-    totalWeaponTypes: weaponBreakdown.length,
-    safeAllocationPercentage: safeAllocation,
-    // ADD THESE FINANCIAL METRICS:
-    totalValue,
-    totalBuyValue,
-    totalRealizedPL,
-    totalUnrealizedPL,
-    investments
-  };
-}, [investments, breakdowns, scores, feedback, aggregatedData]);
+  }, [investments, breakdowns, scores, feedback, aggregatedData]);
 };
