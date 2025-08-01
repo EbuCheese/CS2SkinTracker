@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Search, X, TrendingUp, TrendingDown, Loader2, Save, DollarSign } from 'lucide-react';
+import { Search, X, TrendingUp, TrendingDown, Loader2, Save, DollarSign, History } from 'lucide-react';
 import { useScrollLock } from '@/hooks/util';
 import { ImageWithLoading } from '@/components/ui';
 
-// Main Component - A modal that allows users to quickly sell their investment items.
 const QuickSellModal = ({ 
   isOpen, 
   onClose,
@@ -12,7 +11,6 @@ const QuickSellModal = ({
   onSaleComplete,
   supabase
 }) => {
-  // Apply scroll lock when modal is open
   useScrollLock(isOpen);
 
   // Search and selection state
@@ -27,23 +25,39 @@ const QuickSellModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Process investments data to add profit calculations
+  // Process investments - now leveraging the investment_summary view data
   const availableItemsWithProfits = useMemo(() => {
     return investments
-      .filter(item => item.quantity > 0) // Only show items that can be sold
+      .filter(item => item.quantity > 0)
       .map(item => {
-        // Calculate total profit/loss for all quantity of this item
-        const profitLoss = (item.current_price - item.buy_price) * item.quantity;
-
-        // Calculate profit percentage based on original investment
-        const profitPercentage = item.buy_price > 0 ? 
-          ((profitLoss / (item.buy_price * item.quantity)) * 100) : 0;
+        // Use the pre-calculated unrealized_profit_loss from the view
+        const unrealizedPL = item.unrealized_profit_loss || 0;
+        
+        // Calculate percentage based on current holdings investment
+        const currentInvestment = item.buy_price * item.quantity;
+        const unrealizedPercentage = currentInvestment > 0 ? 
+          ((unrealizedPL / currentInvestment) * 100) : 0;
+        
+        // Calculate total profit/loss including realized gains
+        const totalPL = unrealizedPL + (item.realized_profit_loss || 0);
+        const totalInvestment = item.buy_price * (item.original_quantity || item.quantity);
+        const totalPercentage = totalInvestment > 0 ? 
+          ((totalPL / totalInvestment) * 100) : 0;
         
         return {
           ...item,
-          profitLoss,
-          profitPercentage: Number(profitPercentage.toFixed(1))
+          unrealizedPL,
+          unrealizedPercentage: Number(unrealizedPercentage.toFixed(1)),
+          totalPL,
+          totalPercentage: Number(totalPercentage.toFixed(1)),
+          // Add sales history indicator
+          hasSalesHistory: (item.total_sold_quantity || 0) > 0,
+          averageSalePrice: item.average_sale_price || 0
         };
+      })
+      .sort((a, b) => {
+        // Sort by total P&L percentage (best performers first)
+        return b.totalPercentage - a.totalPercentage;
       });
   }, [investments]);
 
@@ -53,31 +67,29 @@ const QuickSellModal = ({
     
     const query = searchQuery.toLowerCase();
     return availableItemsWithProfits.filter(item => {
-      // Create searchable text from multiple fields
       const searchableText = [
         item.name || '',
         item.skin_name || '',
-        item.condition || ''
+        item.condition || '',
+        item.type || ''
       ].join(' ').toLowerCase();
       
       return searchableText.includes(query);
     });
   }, [availableItemsWithProfits, searchQuery]);
 
-  // Memoize escape key handler
+  // Event handlers (keeping your existing logic)
   const handleEscapeKey = useCallback((event) => {
     if (event.key === 'Escape' && onClose) {
       onClose();
     }
   }, [onClose]);
 
-  // Escape key handler
   useEffect(() => {
     document.addEventListener('keydown', handleEscapeKey);
     return () => document.removeEventListener('keydown', handleEscapeKey);
   }, [handleEscapeKey]);
 
-  // Reset form when modal opens/closes
   useEffect(() => {
     if (isOpen) {
       setSearchQuery('');
@@ -88,15 +100,14 @@ const QuickSellModal = ({
     }
   }, [isOpen]);
 
-  // Update quantity and price when item changes
   useEffect(() => {
     if (selectedItem) {
       setSoldQuantity(Math.min(1, selectedItem.quantity));
+      // Always use current price as default, not historical average
       setSoldPrice(selectedItem.current_price.toFixed(2));
     }
   }, [selectedItem]);
 
-  // Handle item selection from search results
   const handleItemSelect = useCallback((item) => {
     setSelectedItem(item);
     setSoldQuantity(Math.min(1, item.quantity));
@@ -104,12 +115,10 @@ const QuickSellModal = ({
     setError('');
   }, []);
 
-  // Handle search input changes
   const handleSearchChange = useCallback((e) => {
     setSearchQuery(e.target.value);
   }, []);
 
-  // Handle returning to search view from sale form
   const handleBackToSearch = useCallback(() => {
     setSelectedItem(null);
     setSoldPrice('');
@@ -117,25 +126,22 @@ const QuickSellModal = ({
     setError('');
   }, []);
 
-  // Handle quantity input changes with validation
   const handleQuantityChange = useCallback((e) => {
     const value = Math.min(parseInt(e.target.value) || 1, selectedItem?.quantity || 1);
     setSoldQuantity(value);
   }, [selectedItem?.quantity]);
 
-  // Handle price input changes
   const handlePriceChange = useCallback((e) => {
     setSoldPrice(e.target.value);
   }, []);
 
-  // Handle backdrop clicks to close modal
   const handleBackdropClick = useCallback((e) => {
     if (e.target === e.currentTarget) {
       onClose();
     }
   }, [onClose]);
 
-  // Process the sale confirmation
+  // Enhanced sale processing with better error handling
   const handleSellConfirm = async () => {
     if (!selectedItem || !soldPrice || !soldQuantity) {
       setError('Please fill in all fields');
@@ -171,7 +177,6 @@ const QuickSellModal = ({
       
       onSaleComplete(selectedItem.id, quantity, pricePerUnit, saleResult.remaining_quantity);
       
-      // Reset and close
       setSelectedItem(null);
       setSoldPrice('');
       setSoldQuantity(1);
@@ -185,7 +190,7 @@ const QuickSellModal = ({
     }
   };
 
-  // Calculate sale preview values
+  // Enhanced sale preview with more comprehensive data
   const salePreview = useMemo(() => {
     if (!selectedItem || !soldPrice || !soldQuantity) return null;
     
@@ -199,25 +204,29 @@ const QuickSellModal = ({
     const totalInvestment = selectedItem.buy_price * quantity;
     const profitPercentage = totalInvestment > 0 ? ((profitLoss / totalInvestment) * 100) : 0;
     
+    // Compare with historical performance
+    const vsHistoricalAvg = selectedItem.hasSalesHistory 
+      ? pricePerUnit - selectedItem.averageSalePrice 
+      : null;
+    
     return { 
       totalSaleValue, 
       profitLoss, 
-      profitPercentage: Number(profitPercentage.toFixed(1)) 
+      profitPercentage: Number(profitPercentage.toFixed(1)),
+      vsHistoricalAvg
     };
   }, [selectedItem, soldPrice, soldQuantity]);
 
-  // Don't render anything if modal is closed
   if (!isOpen) return null;
 
   return (
     <div className="flex min-h-full items-center justify-center p-4">
-      {/* Modal backdrop with blur effect */}
       <div
         className="fixed inset-0 bg-black/60 backdrop-blur-md transition-opacity duration-200"
         onClick={handleBackdropClick}
       />
       <div className="relative w-full max-w-2xl transform overflow-hidden rounded-xl bg-gradient-to-br from-gray-900 to-slate-900 border border-orange-500/20 shadow-2xl transition-all duration-200 scale-100 opacity-100 max-h-[90vh]">
-        {/* Modal container */}
+        
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <h3 className="text-xl font-semibold text-white flex items-center">
             <DollarSign className="w-5 h-5 mr-2 mt-1" />
@@ -231,12 +240,9 @@ const QuickSellModal = ({
           </button>
         </div>
 
-        {/* Modal Content - switches between search view and sale form */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
           {!selectedItem ? (
-            // Search and item selection view
             <>
-              {/* Search Input */}
               <div className="relative mb-6">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
@@ -248,24 +254,20 @@ const QuickSellModal = ({
                 />
               </div>
 
-              {/* Items List */}
               <div className="space-y-3">
                 {filteredItems.length === 0 ? (
-                  // Empty state - shown when no items match search or no items available
                   <div className="text-center py-12 text-gray-400">
                     <div className="bg-gray-800/50 rounded-lg p-8 border border-gray-700">
                       {searchQuery ? 'No items found matching your search' : 'No items available to sell'}
                     </div>
                   </div>
                 ) : (
-                  // Render filtered items as clickable cards
                   filteredItems.map((item) => (
                     <div
                       key={item.id}
                       onClick={() => handleItemSelect(item)}
                       className="flex items-center space-x-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-orange-500/50 hover:bg-gray-800 cursor-pointer transition-all duration-200"
                     >
-                      {/* Item Image */}
                       <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
                         <ImageWithLoading
                           src={item.image_url}
@@ -274,36 +276,46 @@ const QuickSellModal = ({
                         />
                       </div>
 
-                      {/* Item Information */}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-white truncate">{item.name}</h3>
                         {item.skin_name && (
                           <p className="text-sm text-gray-400 truncate">{item.skin_name}</p>
                         )}
                         <div className="flex items-center space-x-2 mt-1">
-                          {/* Only show condition if it's not 'unknown' */}
                           {item.condition && item.condition.toLowerCase() !== 'unknown' && (
                             <span className="text-xs text-gray-400">{item.condition}</span>
                           )}
                           <span className="text-xs text-gray-400">Qty: {item.quantity}</span>
+                          {/* Sales history indicator */}
+                          {item.hasSalesHistory && (
+                            <div className="flex items-center space-x-1 text-xs text-blue-400">
+                              <History className="w-3 h-3" />
+                              <span>Sold {item.total_sold_quantity}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      {/* Price and Profit Indicator */}
                       <div className="text-right flex-shrink-0">
                         <div className="flex items-center space-x-2 mb-1">
                           <div className="text-white font-medium">${item.current_price.toFixed(2)}</div>
-                          {/* Profit/Loss badge with color coding and trending icon */}
+                          {/* Enhanced profit display showing total performance */}
                           <div className={`text-xs flex items-center space-x-1 px-2 py-1 mt-1 rounded-full font-medium ${
-                            item.profitLoss >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                            item.totalPL >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
                           }`}>
-                            {item.profitLoss >= 0 ? 
+                            {item.totalPL >= 0 ? 
                               <TrendingUp className="w-3 h-3" /> : 
                               <TrendingDown className="w-3 h-3" />
                             }
-                            <span>{Math.abs(item.profitPercentage)}%</span>
+                            <span>{Math.abs(item.totalPercentage)}%</span>
                           </div>
                         </div>
+                        {/* Show average sale price if available */}
+                        {item.hasSalesHistory && (
+                          <div className="text-xs text-gray-500">
+                            Avg sale: ${item.averageSalePrice.toFixed(2)}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))
@@ -311,9 +323,7 @@ const QuickSellModal = ({
               </div>
             </>
           ) : (
-            // Sale form view
             <div className="space-y-6">
-              {/* Back to Search Button */}
               <button
                 onClick={handleBackToSearch}
                 className="text-orange-400 hover:text-orange-300 text-sm flex items-center space-x-1 transition-colors duration-200"
@@ -321,7 +331,7 @@ const QuickSellModal = ({
                 <span>← Back to search</span>
               </button>
 
-              {/* Selected Item Display */}
+              {/* Enhanced item display with sales history */}
               <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
                 <div className="flex items-center space-x-4">
                   <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
@@ -336,11 +346,16 @@ const QuickSellModal = ({
                     {selectedItem.skin_name && (
                       <p className="text-sm text-gray-400">{selectedItem.skin_name}</p>
                     )}
-                    <div className="flex items-center space-x-2 mt-1 text-sm text-gray-400">
+                    <div className="flex items-center space-x-3 mt-1 text-sm text-gray-400">
                       {selectedItem.condition && selectedItem.condition.toLowerCase() !== 'unknown' && (
                         <span>{selectedItem.condition}</span>
                       )}
                       <span>Available: {selectedItem.quantity}</span>
+                      {selectedItem.hasSalesHistory && (
+                        <span className="text-blue-400">
+                          Previously sold {selectedItem.total_sold_quantity} @ avg ${selectedItem.averageSalePrice.toFixed(2)}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">
@@ -349,14 +364,20 @@ const QuickSellModal = ({
                         <div className="text-xs text-gray-500">Current Price</div>
                         <div className="text-white font-medium">${selectedItem.current_price.toFixed(2)}</div>
                       </div>
+                      <div>
+                        <div className="text-xs text-gray-500">Unreal P&L</div>
+                        <div className={`font-medium text-sm ${
+                          selectedItem.totalPL >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {selectedItem.totalPL >= 0 ? '+' : ''}${selectedItem.totalPL.toFixed(2)}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Sale Form Inputs */}
               <div className="grid grid-cols-2 gap-4">
-                {/* Quantity Input */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Quantity to sell
@@ -371,10 +392,14 @@ const QuickSellModal = ({
                   />
                 </div>
 
-                {/* Price Input */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Sale price per item ($)
+                    {selectedItem.hasSalesHistory && (
+                      <span className="text-xs text-blue-400 ml-1">
+                        (historical avg: ${selectedItem.averageSalePrice.toFixed(2)})
+                      </span>
+                    )}
                   </label>
                   <input
                     type="number"
@@ -387,10 +412,9 @@ const QuickSellModal = ({
                 </div>
               </div>
 
-              {/* Sale Preview Section */}
+              {/* Enhanced sale preview */}
               {salePreview && (
                 <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
-                  {/* Per-item comparison */}
                   <div className="grid grid-cols-3 gap-4 text-sm">
                     <div>
                       <span className="text-gray-400 block">Buy Price (each)</span>
@@ -410,7 +434,6 @@ const QuickSellModal = ({
                     </div>
                   </div>
 
-                  {/* Total sale summary */}
                   <div className="border-t border-gray-600 mt-3 pt-3">
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-gray-400">Total sale value:</span>
@@ -418,7 +441,7 @@ const QuickSellModal = ({
                         ${salePreview.totalSaleValue.toFixed(2)}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-center mb-2">
                       <span className="text-gray-400">Total Profit/Loss:</span>
                       <span className={`font-medium ${
                         salePreview.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'
@@ -426,20 +449,28 @@ const QuickSellModal = ({
                         {salePreview.profitLoss >= 0 ? '+' : '-'}${Math.abs(salePreview.profitLoss).toFixed(2)} ({salePreview.profitPercentage}%)
                       </span>
                     </div>
+                    {/* Show comparison with historical average */}
+                    {salePreview.vsHistoricalAvg !== null && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-500">vs. Historical avg:</span>
+                        <span className={`${
+                          salePreview.vsHistoricalAvg >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {salePreview.vsHistoricalAvg >= 0 ? '+' : ''}${salePreview.vsHistoricalAvg.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Error Message Display */}
               {error && (
                 <div className="bg-red-500/20 border border-red-500/30 text-red-400 p-4 rounded-lg">
                   {error}
                 </div>
               )}
 
-              {/* Action Buttons */}
               <div className="flex items-center space-x-3">
-                {/* Confirm Sale Button */}
                 <button
                   onClick={handleSellConfirm}
                   disabled={isLoading || !soldPrice || !soldQuantity}
@@ -458,7 +489,6 @@ const QuickSellModal = ({
                   )}
                 </button>
 
-                {/* Cancel Button */}
                 <button
                   onClick={handleBackToSearch}
                   className="px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200 font-medium"

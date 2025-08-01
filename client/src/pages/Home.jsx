@@ -255,7 +255,7 @@ const InvestmentDashboard = ({ userSession }) => {
               investments={investments}
               userSession={userSession}
               onSaleComplete={handleSaleComplete}
-              supabase={supabase} // Make sure to pass your supabase instance
+              supabase={supabase}
             />
           </div>
         )}
