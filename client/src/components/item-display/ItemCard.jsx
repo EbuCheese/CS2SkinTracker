@@ -122,14 +122,24 @@ const itemMetrics = useMemo(() => {
       isFullySold: true,
       totalProfitLoss,
       totalInvestment,
-      profitPercentage: totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00'
+      profitPercentage: totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00',
+      soldItems: 0,
+      originalQuantity: quantity,
+      realizedProfitLoss: 0,
+      unrealizedProfitLoss: 0,
+      totalSaleValue: 0,
+      averageSalePrice: 0 
     };
   }
 
   // Active investments - USE PRE-CALCULATED VALUES FROM DATABASE
   const totalProfitLoss = (item.realized_profit_loss || 0) + (item.unrealized_profit_loss || 0);
   const totalInvestment = (item.buy_price || 0) * (item.original_quantity || item.quantity || 0);
-  
+  const soldItems = (item.total_sold_quantity || 0);
+  const originalQuantity = item.original_quantity || item.quantity || 0;
+  const totalSaleValue = item.total_sale_value || 0;
+  const averageSalePrice = soldItems > 0 ? totalSaleValue / soldItems : 0;
+
   return {
     buyPrice: item.buy_price || 0,
     currentPrice: item.current_price || 0,
@@ -140,7 +150,13 @@ const itemMetrics = useMemo(() => {
     totalProfitLoss,
     totalInvestment,
     // Calculate percentage from pre-calculated profit/loss values
-    profitPercentage: totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00'
+    profitPercentage: totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00',
+    soldItems,
+    originalQuantity,
+    realizedProfitLoss: item.realized_profit_loss || 0,
+    unrealizedProfitLoss: item.unrealized_profit_loss || 0,
+    totalSaleValue,
+    averageSalePrice
   };
 }, [
   isSoldItem,
@@ -152,7 +168,9 @@ const itemMetrics = useMemo(() => {
   item.quantity,
   item.realized_profit_loss,
   item.unrealized_profit_loss,
-  item.original_quantity
+  item.original_quantity,
+  item.total_sold_quantity,
+  item.total_sale_value
 ]);
 
   // Destructure calculated metrics for easier access
@@ -314,32 +332,38 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
     
     const remainingQuantity = saleResult.remaining_quantity;
     
-    // Optimistic update based on sale result
-    if (remainingQuantity === 0) {
-      onRemove?.(item.id); // Item fully sold
-    } else {
-      // Partial sale - update with new values
-      onUpdate(item.id, {
-        ...item,
-        quantity: remainingQuantity,
-        total_sold_quantity: (item.total_sold_quantity || 0) + quantity,
-        total_sale_value: (item.total_sale_value || 0) + totalSaleValue,
-        // Let DB recalculate unrealized P&L on next refresh
-      });
-    }
-    
+    // Show success popup BEFORE doing any state updates
     showPopup({
       type: 'success',
       title: 'Success',
-      message: `Successfully sold ${quantity} units for $${totalSaleValue.toFixed(2)}`
+      message: `Successfully sold ${quantity} units for $${totalSaleValue.toFixed(2)}`,
+      onConfirm: () => {
+        // Only do the state updates and refresh AFTER user acknowledges success
+        closePopup();
+        
+        // Optimistic update based on sale result
+        if (remainingQuantity === 0) {
+          onRemove?.(item.id); // Item fully sold
+        } else {
+          // Partial sale - update with new values
+          onUpdate(item.id, {
+            ...item,
+            quantity: remainingQuantity,
+            total_sold_quantity: (item.total_sold_quantity || 0) + quantity,
+            total_sale_value: (item.total_sale_value || 0) + totalSaleValue,
+            // Let DB recalculate unrealized P&L on next refresh
+          });
+        }
+        
+        // Reset form state
+        setMode(ITEM_MODES.VIEW);
+        setSoldPrice('');
+        setSoldQuantity(1);
+        
+        // Now trigger refresh after user has acknowledged the success
+        onRefresh?.();
+      }
     });
-    
-    // Reset form state
-    setMode(ITEM_MODES.VIEW);
-    setSoldPrice('');
-    setSoldQuantity(1);
-    
-    // REMOVED: Immediate onRefresh() call - trust debounced refresh
     
   } catch (err) {
     console.error('Error processing sale:', err);
