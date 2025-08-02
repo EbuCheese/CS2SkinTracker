@@ -21,18 +21,20 @@ import { useScrollLock } from '@/hooks/util';
     { value: 'souvenir', label: 'Souvenir' }
   ];
 
+  // mode of item card
+  const ITEM_MODES = {
+    VIEW: 'view',
+    SELLING: 'selling', 
+    EDITING: 'editing'
+  };
+
 // Main ItemCard Component - Displays individual investment items with interactive features
-const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, isNew = false, isSoldItem = false }) => {
+const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, onRefresh, isNew = false, isSoldItem = false }) => {
   // UI state management
-  const [isEditing, setIsEditing] = useState(false);
-  const [isEditingItem, setIsEditingItem] = useState(false);
+  const [mode, setMode] = useState(ITEM_MODES.VIEW); // 'view', 'selling', 'editing'
   const [soldPrice, setSoldPrice] = useState('');
   const [soldQuantity, setSoldQuantity] = useState(1);
   const [animationClass, setAnimationClass] = useState('');
-
-  // Reference to dropdown options (could be moved outside component for better performance)
-  const conditionOptions = CONDITION_OPTIONS;
-  const variantOptions = VARIANT_OPTIONS;
 
   // Consolidated popup state management - handles all modal dialogs
   const [popup, setPopup] = useState({
@@ -75,6 +77,17 @@ const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, 
   error: null
 });
 
+// error handler
+const getErrorMessage = useCallback((error) => {
+  if (error.message.includes('Invalid user context')) {
+    return 'Authentication error: Please refresh the page and re-enter your beta key.';
+  }
+  if (error.message.includes('not found or access denied')) {
+    return 'Access denied: You can only update your own investments.';
+  }
+  return `Operation failed: ${error.message}`;
+}, []);
+
 // Prevent body scroll when popup is open
 useScrollLock(popup.isOpen);
 
@@ -92,10 +105,9 @@ const handleAsyncOperation = useCallback(async (operation, operationFn, ...args)
   }
 }, []);
 
-  // Memoized calculation of all item metrics and profit/loss data
-  const itemMetrics = useMemo(() => {
+// Memoized calculation of all item metrics and profit/loss data
+const itemMetrics = useMemo(() => {
   if (isSoldItem) {
-    // Sold items path - simplified calculation
     const buyPrice = item.buy_price_per_unit || 0;
     const sellPrice = item.price_per_unit || 0;
     const quantity = item.quantity_sold || 0;
@@ -107,65 +119,42 @@ const handleAsyncOperation = useCallback(async (operation, operationFn, ...args)
       currentPrice: sellPrice,
       quantity,
       availableQuantity: 0,
-      originalQuantity: quantity,
       isFullySold: true,
-      soldItems: 0,
-      totalInvestment,
-      realizedProfitLoss: totalProfitLoss,
-      unrealizedProfitLoss: 0,
       totalProfitLoss,
-      profitPercentage: totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00',
-      totalSaleValue: sellPrice * quantity,
-      averageSalePrice: sellPrice
+      totalInvestment,
+      profitPercentage: totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00'
     };
   }
 
-  // Active investments - leverage Supabase view calculations
-  const buyPrice = item.buy_price || 0;
-  const currentPrice = item.current_price || 0;
-  const quantity = item.quantity || 0;
-  const soldItems = item.total_sold_quantity || 0;
-  const originalQuantity = item.original_quantity || quantity;
-  
-  // Use pre-calculated values from investment_summary view
-  const realizedProfitLoss = item.realized_profit_loss || 0;
-  const unrealizedProfitLoss = item.unrealized_profit_loss || 0;
-  const totalProfitLoss = realizedProfitLoss + unrealizedProfitLoss;
-  const totalInvestment = buyPrice * originalQuantity;
+  // Active investments - USE PRE-CALCULATED VALUES FROM DATABASE
+  const totalProfitLoss = (item.realized_profit_loss || 0) + (item.unrealized_profit_loss || 0);
+  const totalInvestment = (item.buy_price || 0) * (item.original_quantity || item.quantity || 0);
   
   return {
-    buyPrice,
-    currentPrice,
-    quantity,
-    availableQuantity: quantity,
-    originalQuantity,
-    isFullySold: quantity === 0,
-    soldItems,
-    totalInvestment,
-    realizedProfitLoss,
-    unrealizedProfitLoss,
+    buyPrice: item.buy_price || 0,
+    currentPrice: item.current_price || 0,
+    quantity: item.quantity || 0,
+    availableQuantity: item.quantity || 0,
+    isFullySold: (item.quantity || 0) === 0,
+    // Use pre-calculated values instead of recalculating
     totalProfitLoss,
-    profitPercentage: totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00',
-    totalSaleValue: item.total_sale_value || 0,
-    averageSalePrice: item.average_sale_price || 0
+    totalInvestment,
+    // Calculate percentage from pre-calculated profit/loss values
+    profitPercentage: totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00'
   };
 }, [
-  // Optimized dependencies for Supabase
   isSoldItem,
-  item.buy_price,
   item.buy_price_per_unit,
-  item.current_price,
   item.price_per_unit,
-  item.quantity,
   item.quantity_sold,
-  item.total_sold_quantity,
-  item.original_quantity,
+  item.buy_price,
+  item.current_price,
+  item.quantity,
   item.realized_profit_loss,
   item.unrealized_profit_loss,
-  item.total_sale_value,
-  item.average_sale_price
+  item.original_quantity
 ]);
-  
+
   // Destructure calculated metrics for easier access
   const {
     soldItems, availableQuantity, originalQuantity, isFullySold,
@@ -174,29 +163,79 @@ const handleAsyncOperation = useCallback(async (operation, operationFn, ...args)
     totalSaleValue, averageSalePrice
   } = itemMetrics;
 
+const salePreview = useMemo(() => {
+  if (!soldPrice || !soldQuantity || mode !== 'selling') return null;
+  
+  const pricePerUnit = parseFloat(soldPrice);
+  const quantity = parseInt(soldQuantity);
+  
+  if (isNaN(pricePerUnit) || isNaN(quantity)) return null;
+  
+  const totalSaleValue = pricePerUnit * quantity;
+  const profitLoss = (pricePerUnit - itemMetrics.buyPrice) * quantity;
+  const investment = itemMetrics.buyPrice * quantity;
+  const percentage = investment > 0 ? ((profitLoss / investment) * 100).toFixed(2) : '0.00';
+  
+  return { totalSaleValue, profitLoss, percentage };
+}, [soldPrice, soldQuantity, mode, itemMetrics.buyPrice]);
+
+const displayValues = useMemo(() => ({
+  name: isSoldItem ? item.item_name : item.name,
+  skinName: isSoldItem ? item.item_skin_name : item.skin_name,
+  condition: isSoldItem ? item.item_condition : item.condition,
+  variant: isSoldItem ? item.item_variant : item.variant
+}), [
+  isSoldItem,
+  item.item_name,
+  item.name,
+  item.item_skin_name,
+  item.skin_name,
+  item.item_condition,
+  item.condition,
+  item.item_variant,
+  item.variant
+]);
+
+// destructured
+const { name, skinName, condition, variant } = displayValues;
+
+const validateSaleInput = useCallback((price, quantity) => {
+  const priceNum = parseFloat(price);
+  const quantityNum = parseInt(quantity);
+  
+  if (!price || isNaN(priceNum) || priceNum <= 0) {
+    return { isValid: false, error: 'Please enter a valid price per unit greater than 0' };
+  }
+  
+  if (!quantity || quantityNum < 1 || quantityNum > itemMetrics.availableQuantity) {
+    return { isValid: false, error: `Please enter a valid quantity between 1 and ${itemMetrics.availableQuantity}` };
+  }
+  
+  return { isValid: true, error: null };
+}, [itemMetrics.availableQuantity]);
+
 // Handles different field names between sold items and active investments
-const editFormDefaults = useMemo(() => ({
-  condition: isSoldItem ? (item.item_condition || '') : (item.condition || ''),
-  variant: item.variant || 'normal',
+const getEditFormDefaults = useCallback(() => ({
+  condition: displayValues.condition || '',
+  variant: displayValues.variant || 'normal',
   quantity: isSoldItem ? item.quantity_sold : (item.quantity || 1),
   buy_price: isSoldItem ? item.buy_price_per_unit : (item.buy_price || 0),
   notes: item.notes || ''
-}), [item, isSoldItem]);
+}), [displayValues.condition, displayValues.variant, isSoldItem, 
+    item.quantity_sold, item.quantity, item.buy_price_per_unit, item.buy_price, item.notes]);
 
 // Edit form state management
-const [editForm, setEditForm] = useState(editFormDefaults);
+const [editForm, setEditForm] = useState(null);
 
 // Initialize edit form and open edit mode
 const handleStartEdit = useCallback(() => {
-  setEditForm(editFormDefaults);
-  setIsEditingItem(true);
-  setIsEditing(false); // Close sell form
-}, [editFormDefaults]);
+  setEditForm(getEditFormDefaults());
+  setMode(ITEM_MODES.EDITING);
+}, [getEditFormDefaults]);
 
 // Initialize sell form and open sell mode
 const handleStartSell = useCallback(() => {
-  setIsEditing(true);
-  setIsEditingItem(false); // Close edit form if open
+  setMode(ITEM_MODES.SELLING);
   setSoldQuantity(Math.min(1, availableQuantity));
   setSoldPrice('');
 }, [availableQuantity]);
@@ -214,44 +253,32 @@ const handleStartSell = useCallback(() => {
 
   // Reset sold quantity when starting to edit sales
   useEffect(() => {
-  if (isEditing) {
+  if (mode === ITEM_MODES.SELLING) {
     setSoldQuantity(Math.min(1, availableQuantity));
     setSoldPrice('');
   }
-}, [isEditing, availableQuantity]); // Update dependency
+}, [mode, itemMetrics.availableQuantity]); // Update dependency
 
 // Handle partial sale submission with validation and confirmation
 const handlePartialSale = useCallback(async () => {
+  const validation = validateSaleInput(soldPrice, soldQuantity);
+  
+  if (!validation.isValid) {
+    showPopup({
+      type: 'error',
+      title: 'Error',
+      message: validation.error
+    });
+    return;
+  }
+  
   const pricePerUnit = parseFloat(soldPrice);
   const quantity = parseInt(soldQuantity);
- 
-  // Validate price input
-  if (!soldPrice || isNaN(pricePerUnit) || pricePerUnit <= 0) {
-    showPopup({
-      type: 'error',
-      title: 'Error',
-      message: 'Please enter a valid price per unit greater than 0'
-    });
-    return;
-  }
- 
-  // Validate quantity input
-  if (!quantity || quantity < 1 || quantity > itemMetrics.availableQuantity) {
-    showPopup({
-      type: 'error',
-      title: 'Error',
-      message: `Please enter a valid quantity between 1 and ${itemMetrics.availableQuantity}`
-    });
-    return;
-  }
- 
-  // Calculate sale summary for confirmation
-  const totalSaleValue = parseFloat(soldPrice) * soldQuantity;
-  const profitLoss = (parseFloat(soldPrice) - item.buy_price) * soldQuantity;
-  const investment = item.buy_price * soldQuantity;
+  const totalSaleValue = pricePerUnit * quantity;
+  const profitLoss = (pricePerUnit - itemMetrics.buyPrice) * quantity;
+  const investment = itemMetrics.buyPrice * quantity;
   const percentage = investment > 0 ? ((profitLoss / investment) * 100).toFixed(2) : '0.00';
 
-  // Show confirmation popup with sale details
   showPopup({
     type: 'confirm',
     title: 'Confirm Sale',
@@ -265,78 +292,74 @@ const handlePartialSale = useCallback(async () => {
     confirmText: 'Confirm Sale',
     cancelText: 'Cancel'
   });
-}, [soldPrice, soldQuantity, itemMetrics.availableQuantity, item.buy_price, handleAsyncOperation]);
+}, [soldPrice, soldQuantity, validateSaleInput, itemMetrics.buyPrice, handleAsyncOperation, showPopup]);
 
-  // Process confirmed sale through database RPC function
-  const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profitLoss) => {
-    try {
-      closePopup();
-      
-      // Call database RPC function to process the sale
-      const { data: saleResult, error: saleError } = await supabase.rpc('process_investment_sale', {
-        p_investment_id: item.id,
-        p_price_per_unit: pricePerUnit,
-        p_quantity_to_sell: quantity,
-        p_sale_notes: null,
-        p_user_id: userSession.id,
-        p_item_variant: item.variant || 'normal'
-      });
-      
-      if (saleError) throw new Error(`Sale failed: ${saleError.message}`);
-      
-      const remainingQuantity = saleResult.remaining_quantity;
-      
-      // Item fully sold - remove from active investments
-      if (remainingQuantity === 0) {
-        if (onRemove) {
-          onRemove(item.id);
-        }
-      } else {
-        // Partial sale - update item with new quantities and values
-        const updatedItem = {
-          ...item,
-          quantity: remainingQuantity,
-          total_sold_quantity: (item.total_sold_quantity || 0) + quantity,
-          total_sale_value: (item.total_sale_value || 0) + totalSaleValue,
-          unrealized_profit_loss: (item.current_price - item.buy_price) * remainingQuantity,    
-        };
-        onUpdate(item.id, updatedItem);
-      }
-      
-      // Show success confirmation
-      showPopup({
-        type: 'success',
-        title: 'Success',
-        message: `Successfully sold ${quantity} units for $${totalSaleValue.toFixed(2)}\nProfit/Loss: ${profitLoss >= 0 ? '+' : ''}$${profitLoss.toFixed(2)}\nRemaining quantity: ${remainingQuantity}`
-      });
-      
-      // Refresh data if callback provided
-      if (onRefresh) {
-        onRefresh();
-      }
+// Process confirmed sale through database RPC function
+const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profitLoss) => {
+  try {
+    closePopup();
+    setAsyncState({ isLoading: true, operation: 'PARTIAL_SALE', error: null });
     
-      // Reset form state
-      setIsEditing(false);
-      setSoldPrice('');
-      setSoldQuantity(1);
-      
-    } catch (err) {
-      console.error('Error processing sale:', err);
-      showPopup({
-        type: 'error',
-        title: 'Error',
-        message: 'Failed to process sale: ' + err.message
+    // Single RPC call handles everything
+    const { data: saleResult, error: saleError } = await supabase.rpc('process_investment_sale', {
+      p_investment_id: item.id,
+      p_price_per_unit: pricePerUnit,
+      p_quantity_to_sell: quantity,
+      p_sale_notes: null,
+      p_user_id: userSession.id,
+      p_item_variant: item.variant || 'normal'
+    });
+    
+    if (saleError) throw new Error(`Sale failed: ${saleError.message}`);
+    
+    const remainingQuantity = saleResult.remaining_quantity;
+    
+    // Optimistic update based on sale result
+    if (remainingQuantity === 0) {
+      onRemove?.(item.id); // Item fully sold
+    } else {
+      // Partial sale - update with new values
+      onUpdate(item.id, {
+        ...item,
+        quantity: remainingQuantity,
+        total_sold_quantity: (item.total_sold_quantity || 0) + quantity,
+        total_sale_value: (item.total_sale_value || 0) + totalSaleValue,
+        // Let DB recalculate unrealized P&L on next refresh
       });
     }
-  };
+    
+    showPopup({
+      type: 'success',
+      title: 'Success',
+      message: `Successfully sold ${quantity} units for $${totalSaleValue.toFixed(2)}`
+    });
+    
+    // Reset form state
+    setMode(ITEM_MODES.VIEW);
+    setSoldPrice('');
+    setSoldQuantity(1);
+    
+    // REMOVED: Immediate onRefresh() call - trust debounced refresh
+    
+  } catch (err) {
+    console.error('Error processing sale:', err);
+    showPopup({
+      type: 'error',
+      title: 'Error',
+      message: getErrorMessage(err)
+    });
+  } finally {
+    setAsyncState({ isLoading: false, operation: null, error: null });
+  }
+};
 
 // Handle quantity adjustment for liquid items (cases, etc.) with rpc func  
 const handleQuantityUpdate = useCallback(async (newQuantity) => {
-  // Basic validation
-  if (newQuantity < 1 || newQuantity > 9999) return;
+  if (newQuantity < 1 || newQuantity > 9999 || newQuantity === itemMetrics.availableQuantity) return;
   
-  await handleAsyncOperation('QUANTITY_UPDATE', async () => {
-    // Update through database RPC with user context
+  try {
+    setAsyncState({ isLoading: true, operation: 'QUANTITY_UPDATE', error: null });
+    
     const { error } = await supabase.rpc('update_investment_with_context', {
       investment_id: item.id,
       investment_data: { quantity: newQuantity },
@@ -345,32 +368,27 @@ const handleQuantityUpdate = useCallback(async (newQuantity) => {
 
     if (error) throw error;
     
-    // Update local state immediately for responsive UI
+    // Optimistic update - immediate UI feedback
     const updatedItem = {
       ...item,
       quantity: newQuantity,
-      unrealized_profit_loss: (item.current_price - item.buy_price) * newQuantity,
+      unrealized_profit_loss: (itemMetrics.currentPrice - itemMetrics.buyPrice) * newQuantity,
     };
 
     onUpdate(item.id, updatedItem);
-  }).catch(err => {
+
+  } catch (err) {
     console.error('Error updating quantity:', err);
-    
-    // Provide user-friendly error messages
-    let errorMessage = 'Failed to update quantity: ' + err.message;
-    if (err.message.includes('Invalid user context')) {
-      errorMessage = 'Authentication error: Please refresh the page and re-enter your beta key.';
-    } else if (err.message.includes('not found or access denied')) {
-      errorMessage = 'Access denied: You can only update your own investments.';
-    }
-    
     showPopup({
       type: 'error',
       title: 'Error',
-      message: errorMessage
+      message: getErrorMessage(err)
     });
-  });
-}, [handleAsyncOperation, item, userSession.id, onUpdate]);
+  } finally {
+    setAsyncState({ isLoading: false, operation: null, error: null });
+  }
+}, [item.id, itemMetrics.availableQuantity, itemMetrics.currentPrice, itemMetrics.buyPrice, 
+    userSession.id, onUpdate]);
 
 // Handle edit form submission with validation with rpc func
 const handleEditFormSubmit = useCallback(async () => {
@@ -411,31 +429,22 @@ const handleEditFormSubmit = useCallback(async () => {
     };
 
     onUpdate(item.id, updatedItem);
-    setIsEditingItem(false);
+    setMode(ITEM_MODES.VIEW);
   }).catch(err => {
-    console.error('Error updating item:', err);
-    
-    // Provide user-friendly error messages
-    let errorMessage = 'Failed to update item: ' + err.message;
-    if (err.message.includes('Invalid user context')) {
-      errorMessage = 'Authentication error: Please refresh the page and re-enter your beta key.';
-    } else if (err.message.includes('not found or access denied')) {
-      errorMessage = 'Access denied: You can only update your own investments.';
-    }
-    
+  console.error('Error updating item:', err);
     showPopup({
       type: 'error',
       title: 'Error',
-      message: errorMessage
+      message: getErrorMessage(err) // ← Use the unified handler here
     });
   });
 }, [handleAsyncOperation, editForm, item, userSession.id, onUpdate]);
 
   // Cancel edit form and reset to defaults
-  const handleEditFormCancel = useCallback(() => {
-  setEditForm(editFormDefaults);
-  setIsEditingItem(false);
-}, [editFormDefaults]);
+const handleEditFormCancel = useCallback(() => {
+  setEditForm(null);
+  setMode(ITEM_MODES.VIEW);
+}, []);
 
 // Handle edit form field changes
 const handleEditFormChange = useCallback((field, value) => {
@@ -453,7 +462,7 @@ const handleEditFormChange = useCallback((field, value) => {
           {item.image_url ? (
             <img 
               src={item.image_url} 
-              alt={isSoldItem ? item.item_name : item.name} 
+              alt={name} 
               className="max-w-full max-h-full object-contain"
             />
           ) : (
@@ -461,14 +470,14 @@ const handleEditFormChange = useCallback((field, value) => {
           )}
           
           {/* Variant badges overlay (StatTrak/Souvenir indicators) */}
-          {((isSoldItem ? item.item_variant : item.variant) && (isSoldItem ? item.item_variant : item.variant) !== 'normal') && (
+          {(variant && variant !== 'normal') && (
             <div className="absolute top-0 right-0 flex flex-col gap-0.5">
-              {(isSoldItem ? item.item_variant : item.variant) === 'stattrak' && (
+              {variant === 'stattrak' && (
                 <span className="text-[10px] px-1 py-0.5 rounded-sm bg-orange-500 text-white font-medium shadow-sm">
                   ST
                 </span>
               )}
-              {(isSoldItem ? item.item_variant : item.variant) === 'souvenir' && (
+              {variant === 'souvenir' && (
                 <span className="text-[10px] px-1 py-0.5 rounded-sm bg-yellow-500 text-white font-medium shadow-sm">
                   SV
                 </span>
@@ -488,13 +497,13 @@ const handleEditFormChange = useCallback((field, value) => {
         <div className="flex-1 min-w-0">
           {/* Item name - handles different field names for sold vs active items */}
           <h3 className="font-medium text-white truncate">
-            {isSoldItem ? item.item_name : item.name}
+            {name}
           </h3>
 
           {/* Skin name if available */}
-          {(isSoldItem ? item.item_skin_name : item.skin_name) && (
+          {(skinName) && (
             <p className="text-sm text-gray-400 truncate">
-              {isSoldItem ? item.item_skin_name : item.skin_name}
+              {skinName}
             </p>
           )}
 
@@ -504,19 +513,19 @@ const handleEditFormChange = useCallback((field, value) => {
             <>
               {/* Condition and Variant Display for Sold Items */}
               <div className="flex items-center space-x-2 mt-1">
-                {(isSoldItem ? item.item_condition : item.condition) && (
-                  <p className="text-xs text-gray-500 truncate">{isSoldItem ? item.item_condition : item.condition}</p>
+                {(condition) && (
+                  <p className="text-xs text-gray-500 truncate">{condition}</p>
                 )}
                 
                 {/* Variant badges for sold items */}
-                {((isSoldItem ? item.item_variant : item.variant) && (isSoldItem ? item.item_variant : item.variant) !== 'normal') && (
+                {(variant && variant !== 'normal') && (
                   <div className="flex items-center space-x-1">
-                    {(isSoldItem ? item.item_variant : item.variant) === 'stattrak' && (
+                    {(variant) === 'stattrak' && (
                       <span className="text-xs px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">
                         StatTrak™
                       </span>
                     )}
-                    {(isSoldItem ? item.item_variant : item.variant) === 'souvenir' && (
+                    {(variant) === 'souvenir' && (
                       <span className="text-xs px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
                         Souvenir
                       </span>
@@ -575,19 +584,19 @@ const handleEditFormChange = useCallback((field, value) => {
             <>
               {/* Condition and Variant Display for Active Items */}
               <div className="flex items-center space-x-2 mt-1">
-                {(isSoldItem ? item.item_condition : item.condition) && (
-                  <p className="text-xs text-gray-500 truncate">{isSoldItem ? item.item_condition : item.condition}</p>
+                {(condition) && (
+                  <p className="text-xs text-gray-500 truncate">{condition}</p>
                 )}
                 
                 {/* Variant badges for active items */}
-                {((isSoldItem ? item.item_variant : item.variant) && (isSoldItem ? item.item_variant : item.variant) !== 'normal') && (
+                {(variant && variant !== 'normal') && (
                   <div className="flex items-center space-x-1">
-                    {(isSoldItem ? item.item_variant : item.variant) === 'stattrak' && (
+                    {variant === 'stattrak' && (
                       <span className="text-xs px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">
                         StatTrak™
                       </span>
                     )}
-                    {(isSoldItem ? item.item_variant : item.variant) === 'souvenir' && (
+                    {variant === 'souvenir' && (
                       <span className="text-xs px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
                         Souvenir
                       </span>
@@ -667,7 +676,7 @@ const handleEditFormChange = useCallback((field, value) => {
               )}
               
               {/* Quantity adjustment controls - only available for liquid/case items that support bulk quantities */}
-              {!isFullySold && (item.type === 'liquid' || item.type === 'case') && !isEditingItem && (
+              {!isFullySold && (item.type === 'liquid' || item.type === 'case') && mode !== 'editing' && (
                 <div className="mt-2 flex items-center space-x-2">
                   <span className="text-gray-400 text-sm">Adjust:</span>
                   <button
@@ -746,7 +755,7 @@ const handleEditFormChange = useCallback((field, value) => {
       </div>
       
       {/* Edit form modal - comprehensive item details editing */}
-      {isEditingItem && !isSoldItem && (
+      {mode === ITEM_MODES.EDITING && !isSoldItem && (
         <div className="mt-4 pt-4 border-t border-gray-600">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-medium text-white">Edit Item Details</h4>
@@ -769,7 +778,7 @@ const handleEditFormChange = useCallback((field, value) => {
                 onChange={(e) => handleEditFormChange('condition', e.target.value)}
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
               >
-                {conditionOptions.map(option => (
+                {CONDITION_OPTIONS.map(option => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -786,7 +795,7 @@ const handleEditFormChange = useCallback((field, value) => {
                 onChange={(e) => handleEditFormChange('variant', e.target.value)}
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
               >
-                {variantOptions.map(option => (
+                {VARIANT_OPTIONS.map(option => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -859,7 +868,7 @@ const handleEditFormChange = useCallback((field, value) => {
       )}
       
       {/* Partial sale form - handles selling portions of investment positions */}
-      {isEditing && !isFullySold && !isSoldItem && (
+      {mode === ITEM_MODES.SELLING && !isFullySold && !isSoldItem && (
         <div className="mt-3 pt-3 border-t border-gray-700">
           <h5 className="text-sm font-medium text-white mb-2">
             Sell Items ({availableQuantity} available)
@@ -896,19 +905,14 @@ const handleEditFormChange = useCallback((field, value) => {
             </div>
 
             {/* Preview */}
-            {soldPrice && soldQuantity && (
-              <div className="text-xs text-gray-400 bg-gray-700/50 p-2 rounded">
-                <div>Total sale value: ${(parseFloat(soldPrice) * soldQuantity).toFixed(2)}</div>
-                <div className={((parseFloat(soldPrice) - item.buy_price) * soldQuantity) >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  {(() => {
-                    const profitLoss = (parseFloat(soldPrice) - item.buy_price) * soldQuantity;
-                    const investment = item.buy_price * soldQuantity;
-                    const percentage = investment > 0 ? ((profitLoss / investment) * 100).toFixed(2) : '0.00';
-                    return `Profit/Loss: ${profitLoss >= 0 ? '+' : '-'}$${Math.abs(profitLoss).toFixed(2)} (${percentage}%)`;
-                  })()}
+              {salePreview && (
+                <div className="text-xs text-gray-400 bg-gray-700/50 p-2 rounded">
+                  <div>Total sale value: ${salePreview.totalSaleValue.toFixed(2)}</div>
+                  <div className={salePreview.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
+                    Profit/Loss: {salePreview.profitLoss >= 0 ? '+' : '-'}${Math.abs(salePreview.profitLoss).toFixed(2)} ({salePreview.percentage}%)
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
             
             <div className="flex items-center space-x-2">
               <button
@@ -921,7 +925,7 @@ const handleEditFormChange = useCallback((field, value) => {
               </button>
               <button
                 onClick={() => {
-                  setIsEditing(false);
+                  setMode(ITEM_MODES.VIEW);
                   setSoldPrice('');
                   setSoldQuantity(1);
                 }}
