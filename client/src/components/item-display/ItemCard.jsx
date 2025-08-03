@@ -379,41 +379,6 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
   }
 };
 
-// Handle quantity adjustment for liquid items (cases, etc.) with rpc func  
-const handleQuantityUpdate = useCallback(async (newQuantity) => {
-  if (newQuantity < 1 || newQuantity > 9999 || newQuantity === profitMetrics.availableQuantity) return;
-  
-  try {
-    setAsyncState({ isLoading: true, operation: 'QUANTITY_UPDATE', error: null });
-    
-    const { error } = await supabase.rpc('update_investment_with_context', {
-      investment_id: item.id,
-      investment_data: { quantity: newQuantity },
-      context_user_id: userSession.id
-    });
-
-    if (error) throw error;
-    
-    const updatedItem = {
-      ...item,
-      quantity: newQuantity,
-      unrealized_profit_loss: (baseMetrics.currentPrice - baseMetrics.buyPrice) * newQuantity,
-    };
-
-    onUpdate(item.id, updatedItem);
-
-  } catch (err) {
-    console.error('Error updating quantity:', err);
-    showPopup({
-      type: 'error',
-      title: 'Error',
-      message: getErrorMessage(err)
-    });
-  } finally {
-    setAsyncState({ isLoading: false, operation: null, error: null });
-  }
-}, [item.id, profitMetrics.availableQuantity, baseMetrics.currentPrice, baseMetrics.buyPrice, userSession.id, onUpdate, getErrorMessage, showPopup]);
-
 // Handle edit form submission with validation with rpc func
 const handleEditFormSubmit = useCallback(async () => {
   await handleAsyncOperation('EDIT_SUBMIT', async () => {
@@ -477,12 +442,6 @@ const handleEditFormChange = useCallback((field, value) => {
     [field]: value
   }));
 }, []);
-
-// Performance optimization - avoid recalculating these in render
-const showQuantityControls = !isSoldItem && 
-  !profitMetrics.isFullySold && 
-  (item.type === 'liquid' || item.type === 'case') && 
-  mode !== ITEM_MODES.EDITING;
 
 const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
 
@@ -703,27 +662,6 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                       </div>
                   </div>
                   </div>
-                </div>
-              )}
-              
-              {/* Quantity adjustment controls - only available for liquid/case items that support bulk quantities */}
-              {showQuantityControls && (
-                <div className="mt-2 flex items-center space-x-2">
-                  <span className="text-gray-400 text-sm">Adjust:</span>
-                  <button
-                    onClick={() => handleQuantityUpdate(profitMetrics.availableQuantity - 1)}
-                    disabled={profitMetrics.availableQuantity <= 1}
-                    className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Minus className="w-3 h-3" />
-                  </button>
-                  <button
-                    onClick={() => handleQuantityUpdate(profitMetrics.availableQuantity + 1)}
-                    disabled={profitMetrics.availableQuantity >= 9999}
-                    className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Plus className="w-3 h-3" />
-                  </button>
                 </div>
               )}
             </>
