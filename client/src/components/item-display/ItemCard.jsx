@@ -106,96 +106,98 @@ const handleAsyncOperation = useCallback(async (operation, operationFn, ...args)
 }, []);
 
 // Memoized calculation of all item metrics and profit/loss data
-const itemMetrics = useMemo(() => {
-  if (isSoldItem) {
-    const buyPrice = item.buy_price_per_unit || 0;
-    const sellPrice = item.price_per_unit || 0;
-    const quantity = item.quantity_sold || 0;
-    const totalInvestment = buyPrice * quantity;
-    const totalProfitLoss = (sellPrice - buyPrice) * quantity;
-    
-    return {
-      buyPrice,
-      currentPrice: sellPrice,
-      quantity,
-      availableQuantity: 0,
-      isFullySold: true,
-      totalProfitLoss,
-      totalInvestment,
-      profitPercentage: totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00',
-      soldItems: 0,
-      originalQuantity: quantity,
-      realizedProfitLoss: 0,
-      unrealizedProfitLoss: 0,
-      totalSaleValue: 0,
-      averageSalePrice: 0 
-    };
-  }
-
-  // Active investments - USE PRE-CALCULATED VALUES FROM DATABASE
-  const totalProfitLoss = (item.realized_profit_loss || 0) + (item.unrealized_profit_loss || 0);
-  const totalInvestment = (item.buy_price || 0) * (item.original_quantity || item.quantity || 0);
-  const soldItems = (item.total_sold_quantity || 0);
-  const originalQuantity = item.original_quantity || item.quantity || 0;
-  const totalSaleValue = item.total_sale_value || 0;
-  const averageSalePrice = soldItems > 0 ? totalSaleValue / soldItems : 0;
-
-  return {
-    buyPrice: item.buy_price || 0,
-    currentPrice: item.current_price || 0,
-    quantity: item.quantity || 0,
-    availableQuantity: item.quantity || 0,
-    isFullySold: (item.quantity || 0) === 0,
-    // Use pre-calculated values instead of recalculating
-    totalProfitLoss,
-    totalInvestment,
-    // Calculate percentage from pre-calculated profit/loss values
-    profitPercentage: totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00',
-    soldItems,
-    originalQuantity,
-    realizedProfitLoss: item.realized_profit_loss || 0,
-    unrealizedProfitLoss: item.unrealized_profit_loss || 0,
-    totalSaleValue,
-    averageSalePrice
-  };
+const baseMetrics = useMemo(() => {
+  const buyPrice = isSoldItem ? item.buy_price_per_unit || 0 : item.buy_price || 0;
+  const currentPrice = isSoldItem ? item.price_per_unit || 0 : item.current_price || 0;
+  const quantity = isSoldItem ? item.quantity_sold || 0 : item.quantity || 0;
+  
+  return { buyPrice, currentPrice, quantity };
 }, [
   isSoldItem,
   item.buy_price_per_unit,
-  item.price_per_unit,
+  item.price_per_unit, 
   item.quantity_sold,
   item.buy_price,
   item.current_price,
-  item.quantity,
+  item.quantity
+]);
+
+const profitMetrics = useMemo(() => {
+  if (isSoldItem) {
+    const totalInvestment = baseMetrics.buyPrice * baseMetrics.quantity;
+    const totalProfitLoss = (baseMetrics.currentPrice - baseMetrics.buyPrice) * baseMetrics.quantity;
+    
+    return {
+      totalProfitLoss,
+      totalInvestment,
+      profitPercentage: totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00',
+      isFullySold: true,
+      availableQuantity: 0
+    };
+  }
+
+  // Use pre-calculated values for active investments
+  const totalProfitLoss = (item.realized_profit_loss || 0) + (item.unrealized_profit_loss || 0);
+  const totalInvestment = baseMetrics.buyPrice * (item.original_quantity || baseMetrics.quantity);
+  const availableQuantity = baseMetrics.quantity;
+  const isFullySold = availableQuantity === 0;
+  
+  return {
+    totalProfitLoss,
+    totalInvestment,
+    profitPercentage: totalInvestment > 0 ? ((totalProfitLoss / totalInvestment) * 100).toFixed(2) : '0.00',
+    isFullySold,
+    availableQuantity
+  };
+}, [
+  isSoldItem,
+  baseMetrics,
+  item.realized_profit_loss,
+  item.unrealized_profit_loss,
+  item.original_quantity
+]);
+
+const salesSummary = useMemo(() => {
+  const soldItems = item.total_sold_quantity || 0;
+  const totalSaleValue = item.total_sale_value || 0;
+  const originalQuantity = item.original_quantity || baseMetrics.quantity;
+  
+  if (soldItems === 0) return { soldItems: 0, hasAnySales: false };
+  
+  return {
+    soldItems,
+    originalQuantity,
+    averageSalePrice: totalSaleValue / soldItems,
+    realizedProfitLoss: item.realized_profit_loss || 0,
+    unrealizedProfitLoss: item.unrealized_profit_loss || 0,
+    totalSaleValue,
+    hasAnySales: true
+  };
+}, [
+  item.total_sold_quantity,
+  item.total_sale_value, 
   item.realized_profit_loss,
   item.unrealized_profit_loss,
   item.original_quantity,
-  item.total_sold_quantity,
-  item.total_sale_value
+  baseMetrics.quantity
 ]);
 
-  // Destructure calculated metrics for easier access
-  const {
-    soldItems, availableQuantity, originalQuantity, isFullySold,
-    realizedProfitLoss, unrealizedProfitLoss, totalProfitLoss,
-    totalInvestment, buyPrice, currentPrice, quantity, profitPercentage,
-    totalSaleValue, averageSalePrice
-  } = itemMetrics;
-
 const salePreview = useMemo(() => {
-  if (!soldPrice || !soldQuantity || mode !== 'selling') return null;
+  // Early return if not in selling mode - prevents unnecessary calculations
+  if (mode !== ITEM_MODES.SELLING) return null;
   
   const pricePerUnit = parseFloat(soldPrice);
   const quantity = parseInt(soldQuantity);
   
-  if (isNaN(pricePerUnit) || isNaN(quantity)) return null;
+  if (!soldPrice || !soldQuantity || isNaN(pricePerUnit) || isNaN(quantity)) return null;
   
   const totalSaleValue = pricePerUnit * quantity;
-  const profitLoss = (pricePerUnit - itemMetrics.buyPrice) * quantity;
-  const investment = itemMetrics.buyPrice * quantity;
+  const profitLoss = (pricePerUnit - baseMetrics.buyPrice) * quantity;
+  const investment = baseMetrics.buyPrice * quantity;
   const percentage = investment > 0 ? ((profitLoss / investment) * 100).toFixed(2) : '0.00';
   
   return { totalSaleValue, profitLoss, percentage };
-}, [soldPrice, soldQuantity, mode, itemMetrics.buyPrice]);
+}, [mode, soldPrice, soldQuantity, baseMetrics.buyPrice]);
 
 const displayValues = useMemo(() => ({
   name: isSoldItem ? item.item_name : item.name,
@@ -225,12 +227,12 @@ const validateSaleInput = useCallback((price, quantity) => {
     return { isValid: false, error: 'Please enter a valid price per unit greater than 0' };
   }
   
-  if (!quantity || quantityNum < 1 || quantityNum > itemMetrics.availableQuantity) {
-    return { isValid: false, error: `Please enter a valid quantity between 1 and ${itemMetrics.availableQuantity}` };
+  if (!quantity || quantityNum < 1 || quantityNum > profitMetrics.availableQuantity) {
+    return { isValid: false, error: `Please enter a valid quantity between 1 and ${profitMetrics.availableQuantity}` };
   }
   
   return { isValid: true, error: null };
-}, [itemMetrics.availableQuantity]);
+}, [profitMetrics.availableQuantity]);
 
 // Handles different field names between sold items and active investments
 const getEditFormDefaults = useCallback(() => ({
@@ -254,9 +256,9 @@ const handleStartEdit = useCallback(() => {
 // Initialize sell form and open sell mode
 const handleStartSell = useCallback(() => {
   setMode(ITEM_MODES.SELLING);
-  setSoldQuantity(Math.min(1, availableQuantity));
+  setSoldQuantity(Math.min(1, profitMetrics.availableQuantity));
   setSoldPrice('');
-}, [availableQuantity]);
+}, [profitMetrics.availableQuantity]);
 
   // Handle slide-in animation for newly added items
   useEffect(() => {
@@ -272,10 +274,10 @@ const handleStartSell = useCallback(() => {
   // Reset sold quantity when starting to edit sales
   useEffect(() => {
   if (mode === ITEM_MODES.SELLING) {
-    setSoldQuantity(Math.min(1, availableQuantity));
+    setSoldQuantity(Math.min(1, profitMetrics.availableQuantity));
     setSoldPrice('');
   }
-}, [mode, itemMetrics.availableQuantity]); // Update dependency
+}, [mode, profitMetrics.availableQuantity]);
 
 // Handle partial sale submission with validation and confirmation
 const handlePartialSale = useCallback(async () => {
@@ -293,8 +295,8 @@ const handlePartialSale = useCallback(async () => {
   const pricePerUnit = parseFloat(soldPrice);
   const quantity = parseInt(soldQuantity);
   const totalSaleValue = pricePerUnit * quantity;
-  const profitLoss = (pricePerUnit - itemMetrics.buyPrice) * quantity;
-  const investment = itemMetrics.buyPrice * quantity;
+  const profitLoss = (pricePerUnit - baseMetrics.buyPrice) * quantity;
+  const investment = baseMetrics.buyPrice * quantity;
   const percentage = investment > 0 ? ((profitLoss / investment) * 100).toFixed(2) : '0.00';
 
   showPopup({
@@ -310,7 +312,7 @@ const handlePartialSale = useCallback(async () => {
     confirmText: 'Confirm Sale',
     cancelText: 'Cancel'
   });
-}, [soldPrice, soldQuantity, validateSaleInput, itemMetrics.buyPrice, handleAsyncOperation, showPopup]);
+}, [soldPrice, soldQuantity, validateSaleInput, baseMetrics.buyPrice, handleAsyncOperation, showPopup]);
 
 // Process confirmed sale through database RPC function
 const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profitLoss) => {
@@ -379,7 +381,7 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
 
 // Handle quantity adjustment for liquid items (cases, etc.) with rpc func  
 const handleQuantityUpdate = useCallback(async (newQuantity) => {
-  if (newQuantity < 1 || newQuantity > 9999 || newQuantity === itemMetrics.availableQuantity) return;
+  if (newQuantity < 1 || newQuantity > 9999 || newQuantity === profitMetrics.availableQuantity) return;
   
   try {
     setAsyncState({ isLoading: true, operation: 'QUANTITY_UPDATE', error: null });
@@ -392,11 +394,10 @@ const handleQuantityUpdate = useCallback(async (newQuantity) => {
 
     if (error) throw error;
     
-    // Optimistic update - immediate UI feedback
     const updatedItem = {
       ...item,
       quantity: newQuantity,
-      unrealized_profit_loss: (itemMetrics.currentPrice - itemMetrics.buyPrice) * newQuantity,
+      unrealized_profit_loss: (baseMetrics.currentPrice - baseMetrics.buyPrice) * newQuantity,
     };
 
     onUpdate(item.id, updatedItem);
@@ -411,8 +412,7 @@ const handleQuantityUpdate = useCallback(async (newQuantity) => {
   } finally {
     setAsyncState({ isLoading: false, operation: null, error: null });
   }
-}, [item.id, itemMetrics.availableQuantity, itemMetrics.currentPrice, itemMetrics.buyPrice, 
-    userSession.id, onUpdate]);
+}, [item.id, profitMetrics.availableQuantity, baseMetrics.currentPrice, baseMetrics.buyPrice, userSession.id, onUpdate, getErrorMessage, showPopup]);
 
 // Handle edit form submission with validation with rpc func
 const handleEditFormSubmit = useCallback(async () => {
@@ -478,8 +478,16 @@ const handleEditFormChange = useCallback((field, value) => {
   }));
 }, []);
 
+// Performance optimization - avoid recalculating these in render
+const showQuantityControls = !isSoldItem && 
+  !profitMetrics.isFullySold && 
+  (item.type === 'liquid' || item.type === 'case') && 
+  mode !== ITEM_MODES.EDITING;
+
+const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
+
   return (
-    <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/30 transition-all duration-200 ${animationClass} ${isFullySold ? 'opacity-75' : ''}`}>
+    <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/30 transition-all duration-200 ${animationClass} ${profitMetrics.isFullySold ? 'opacity-75' : ''}`}>
       <div className="flex items-start space-x-4">
         {/* Image Container with Variant Badges */}
         <div className="relative w-20 h-16 bg-gray-700 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
@@ -510,7 +518,7 @@ const handleEditFormChange = useCallback((field, value) => {
           )}
 
           {/* Sold indicator overlay for fully sold items */}
-          {isFullySold && (
+          {profitMetrics.isFullySold && (
             <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
               <span className="text-green-400 text-xs font-medium">SOLD</span>
             </div>
@@ -653,16 +661,15 @@ const handleEditFormChange = useCallback((field, value) => {
                   <div>
                     <div className="text-gray-400 mb-0.5">Buy:</div>
                     <div className="text-white">
-                      ${item.buy_price.toFixed(2)}
-                      {/* Show original quantity if different from current */}
-                      {originalQuantity > 1 && (
-                        <span className="text-gray-400"> x{originalQuantity}</span>
+                      ${baseMetrics.buyPrice.toFixed(2)}
+                      {salesSummary.originalQuantity > 1 && (
+                        <span className="text-gray-400"> x{salesSummary.originalQuantity}</span>
                       )}
                     </div>
                   </div>
                   <div>
                     <div className="text-gray-400 mb-0.5">Current:</div>
-                    <div className="text-white">${item.current_price.toFixed(2)}</div>
+                    <div className="text-white">${baseMetrics.currentPrice.toFixed(2)}</div>
                   </div>
                 </div>
               </div>
@@ -671,28 +678,28 @@ const handleEditFormChange = useCallback((field, value) => {
               <div className="mt-2 text-sm">
                 <div className="flex items-center space-x-2">
                   <span className="text-gray-400">Remaining:</span>
-                  <span className="text-white">{availableQuantity}</span>
+                  <span className="text-white">{profitMetrics.availableQuantity}</span>
                   {/* Show sold quantity if any items have been sold */}
-                  {soldItems > 0 && (
+                  {salesSummary.soldItems > 0 && (
                     <span className="text-green-400">
-                      ({soldItems} sold)
+                      ({salesSummary.soldItems} sold)
                     </span>
                   )}
                 </div>
               </div>
 
               {/* Sales summary section for partially sold items */}
-              {soldItems > 0 && (
+              {salesSummary.soldItems > 0 && (
                 <div className="mt-2 text-sm">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <div className="text-gray-400 mb-0.5">Avg Sale:</div>
-                      <div className="text-green-400">${averageSalePrice.toFixed(2)}</div>
+                      <div className="text-green-400">${salesSummary.averageSalePrice.toFixed(2)}</div>
                     </div>
                     <div>
                       <div className="text-gray-400 mb-0.5">Realized:</div>
-                      <div className={realizedProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
-                        {realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(realizedProfitLoss).toFixed(2)}
+                      <div className={salesSummary.realizedProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
+                        {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toFixed(2)}
                       </div>
                   </div>
                   </div>
@@ -700,19 +707,19 @@ const handleEditFormChange = useCallback((field, value) => {
               )}
               
               {/* Quantity adjustment controls - only available for liquid/case items that support bulk quantities */}
-              {!isFullySold && (item.type === 'liquid' || item.type === 'case') && mode !== 'editing' && (
+              {showQuantityControls && (
                 <div className="mt-2 flex items-center space-x-2">
                   <span className="text-gray-400 text-sm">Adjust:</span>
                   <button
-                    onClick={() => handleQuantityUpdate(availableQuantity - 1)}
-                    disabled={availableQuantity <= 1}
+                    onClick={() => handleQuantityUpdate(profitMetrics.availableQuantity - 1)}
+                    disabled={profitMetrics.availableQuantity <= 1}
                     className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Minus className="w-3 h-3" />
                   </button>
                   <button
-                    onClick={() => handleQuantityUpdate(availableQuantity + 1)}
-                    disabled={availableQuantity >= 9999}
+                    onClick={() => handleQuantityUpdate(profitMetrics.availableQuantity + 1)}
+                    disabled={profitMetrics.availableQuantity >= 9999}
                     className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Plus className="w-3 h-3" />
@@ -726,18 +733,18 @@ const handleEditFormChange = useCallback((field, value) => {
         {/* Right sidebar - P&L display and action buttons */}
         <div className="text-right flex-shrink-0 self-start">
           <div className={`flex items-center space-x-1 ${
-            totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'
+            profitMetrics.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'
           }`}>
-            {totalProfitLoss >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-            <span className="font-medium">${Math.abs(totalProfitLoss).toFixed(2)}</span>
-            <span className="text-xs">({profitPercentage}%)</span>
+            {profitMetrics.totalProfitLoss >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+            <span className="font-medium">${Math.abs(profitMetrics.totalProfitLoss).toFixed(2)}</span>
+            <span className="text-xs">({profitMetrics.profitPercentage}%)</span>
           </div>
           
           {/* P&L breakdown for items with mixed realized/unrealized gains - helps users understand split */}
-          {soldItems > 0 && availableQuantity > 0 && (
+          {showSalesBreakdown && (
             <div className="text-xs text-gray-400 mt-1">
-              <div>Realized: {realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(realizedProfitLoss).toFixed(2)}</div>
-              <div>Unrealized: {unrealizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(unrealizedProfitLoss).toFixed(2)}</div>
+              <div>Realized: {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toFixed(2)}</div>
+              <div>Unrealized: {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.unrealizedProfitLoss).toFixed(2)}</div>
             </div>
           )}
           
@@ -754,12 +761,12 @@ const handleEditFormChange = useCallback((field, value) => {
               </button>
               
               {/* Dynamic sell button - changes text based on sale history */}
-              {!isFullySold ? (
+              {!profitMetrics.isFullySold ? (
                 <button
                   onClick={handleStartSell}
                   className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded hover:bg-orange-500/30 transition-colors block w-full"
                 >
-                  {soldItems === 0 ? 'Mark Sold' : 'Sell More'}
+                  {salesSummary.soldItems === 0 ? 'Mark Sold' : 'Sell More'}
                 </button>
               ) : (
                 <div className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded border border-green-500/30 text-center">
@@ -892,10 +899,10 @@ const handleEditFormChange = useCallback((field, value) => {
       )}
       
       {/* Partial sale form - handles selling portions of investment positions */}
-      {mode === ITEM_MODES.SELLING && !isFullySold && !isSoldItem && (
+      {mode === ITEM_MODES.SELLING && !profitMetrics.isFullySold && !isSoldItem && (
         <div className="mt-3 pt-3 border-t border-gray-700">
           <h5 className="text-sm font-medium text-white mb-2">
-            Sell Items ({availableQuantity} available)
+            Sell Items ({profitMetrics.availableQuantity} available)
           </h5>
           <div className="space-y-3">
             <div>
@@ -905,9 +912,9 @@ const handleEditFormChange = useCallback((field, value) => {
               <input
                 type="number"
                 min="1"
-                max={availableQuantity}
+                max={profitMetrics.availableQuantity}
                 value={soldQuantity}
-                onChange={(e) => setSoldQuantity(Math.min(parseInt(e.target.value) || 1, availableQuantity))}
+                onChange={(e) => setSoldQuantity(Math.min(parseInt(e.target.value) || 1, profitMetrics.availableQuantity))}
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
               />
             </div>
