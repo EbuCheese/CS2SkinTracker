@@ -9,7 +9,7 @@ import { useCalculatePortfolioHealth, useChartData, usePortfolioData, useQuickAc
 
 // Main InvestmentDashboard component
 const InvestmentDashboard = ({ userSession }) => {
-  const { investments, soldItems, portfolioSummary, loading, error, refetch, setInvestments } = usePortfolioData(userSession);
+  const { investments, soldItems, portfolioSummary, loading, error, refetch, setInvestments, setSoldItems } = usePortfolioData(userSession);
   
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('MAX');
   const { chartData, chartLoading } = useChartData(userSession, selectedTimePeriod, investments.length > 0);
@@ -61,16 +61,80 @@ const InvestmentDashboard = ({ userSession }) => {
     };
   }, [portfolioSummary, investments]);
 
+
+  // Handles adding a new item
+  const handleAddItem = useCallback((newItem) => {
+  // Calculate initial metrics manually - same logic as InvestmentsPage
+  const itemWithMetrics = {
+    ...newItem,
+    unrealized_profit_loss: (newItem.current_price - newItem.buy_price) * newItem.quantity,
+    realized_profit_loss: 0,
+    original_quantity: newItem.quantity,
+    total_sold_quantity: 0,
+    total_sale_value: 0
+  };
+  
+  // Add to investments list optimistically
+  setInvestments(prev => [itemWithMetrics, ...prev]);
+  
+  // NO REFETCH NEEDED - all data is available client-side
+  console.log('New item added to dashboard:', itemWithMetrics);
+}, [setInvestments]);
+
   // Handles completion of a sale transaction
-  const handleSaleComplete = useCallback((investmentId, quantitySold, salePrice, remainingQuantity) => {
-    // Immediately update local state for responsive UI feedback
-    setInvestments(prev => prev.map(inv => 
-      inv.id === investmentId 
-        ? { ...inv, quantity: remainingQuantity }
-        : inv
-    ));
-    refetch();
-  }, [setInvestments, refetch]);
+    const handleSaleComplete = useCallback((investmentId, quantitySold, salePrice, remainingQuantity) => {
+    const soldItem = investments.find(inv => inv.id === investmentId);
+    if (!soldItem) return;
+
+    // Calculate profit/loss for this sale
+    const saleValue = salePrice * quantitySold;
+    const saleProfitLoss = (salePrice - soldItem.buy_price) * quantitySold;
+
+    // Create sold item data for recent activity and sold items tracking
+    const soldItemData = {
+      id: `temp_${Date.now()}`, // Temporary ID until DB sync
+      investment_id: investmentId,
+      user_id: userSession.id,
+      quantity_sold: quantitySold,
+      price_per_unit: salePrice,
+      total_sale_value: saleValue,
+      sale_date: new Date().toISOString(),
+      item_name: soldItem.name,
+      item_skin_name: soldItem.skin_name,
+      item_condition: soldItem.condition,
+      buy_price_per_unit: soldItem.buy_price,
+      image_url: soldItem.image_url || null,
+      notes: null,
+      item_variant: soldItem.variant || 'normal'
+    };
+
+    // Update investments list optimistically
+    setInvestments(prev => {
+      return prev.map(inv => {
+        if (inv.id !== investmentId) return inv;
+
+        if (remainingQuantity === 0) {
+          // Item fully sold - we'll filter it out
+          return null;
+        } else {
+          // Partial sale - update quantities and P&L
+          return {
+            ...inv,
+            quantity: remainingQuantity,
+            total_sold_quantity: (inv.total_sold_quantity || 0) + quantitySold,
+            total_sale_value: (inv.total_sale_value || 0) + saleValue,
+            realized_profit_loss: (inv.realized_profit_loss || 0) + saleProfitLoss,
+            unrealized_profit_loss: (inv.current_price - inv.buy_price) * remainingQuantity
+          };
+        }
+      }).filter(Boolean); // Remove null entries (fully sold items)
+    });
+
+    // Add to sold items for recent activity display
+    setSoldItems(prev => [soldItemData, ...prev]);
+
+    // NO REFETCH NEEDED - optimistic updates handle everything
+  }, [investments, userSession.id, setInvestments, setSoldItems]);
 
   if (loading) {
     return (
@@ -243,11 +307,7 @@ const InvestmentDashboard = ({ userSession }) => {
         {showQuickAdd && (
           <QuickAddItemForm
             onClose={() => setShowQuickAdd(false)}
-            onAdd={(newItem) => {
-              console.log('New item added:', newItem);
-              setShowQuickAdd(false);
-              refetch();  // Use the refetch from usePortfolioData hook
-            }}
+            onAdd={handleAddItem}
             userSession={userSession}
           />
         )}
