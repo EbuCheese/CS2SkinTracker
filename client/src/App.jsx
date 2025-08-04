@@ -2,6 +2,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useAuth } from '@/hooks/auth';
 import { CSDataProvider } from './contexts/CSDataContext';
+import { ToastProvider } from './contexts/ToastContext';
 import './index.css'
 import Home from './pages/Home'
 import InvestmentsPage from './pages/Investments';
@@ -35,25 +36,27 @@ function App() {
   // Main app - user has valid session
   if (hasValidBetaKey) {
     return (
-      <CSDataProvider>
-        <Router>
-          <Navbar userSession={userSession} onLogout={logout} />
-          <Routes>
-            <Route path="/" element={<Home userSession={userSession} />} />
-            <Route path="/investments" element={<InvestmentsPage userSession={userSession} />} />
-            <Route
-              path="/account"
-              element={
-                <AccountPage
-                  userSession={userSession}
-                  onLogout={logout}
-                  onRevoke={revokeBetaKey}
-                />
-              }
-            />
-          </Routes>
-        </Router>
-      </CSDataProvider>
+      <ToastProvider>
+        <CSDataProvider>
+          <Router>
+            <Navbar userSession={userSession} onLogout={logout} />
+            <Routes>
+              <Route path="/" element={<Home userSession={userSession} />} />
+              <Route path="/investments" element={<InvestmentsPage userSession={userSession} />} />
+              <Route
+                path="/account"
+                element={
+                  <AccountPage
+                    userSession={userSession}
+                    onLogout={logout}
+                    onRevoke={revokeBetaKey}
+                  />
+                }
+              />
+            </Routes>
+          </Router>
+        </CSDataProvider>
+      </ToastProvider>
     );
   }
 
