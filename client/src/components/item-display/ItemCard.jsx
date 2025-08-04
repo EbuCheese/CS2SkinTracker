@@ -219,6 +219,35 @@ const displayValues = useMemo(() => ({
 // destructured
 const { name, skinName, condition, variant } = displayValues;
 
+// With this comprehensive version that handles all item types:
+const buildItemDisplayName = () => {
+  let displayName = '';
+  
+  // Add variant prefix (Souvenir, StatTrak™)
+  if (variant === 'souvenir') {
+    displayName += 'Souvenir ';
+  } else if (variant === 'stattrak') {
+    displayName += 'StatTrak™ ';
+  }
+  
+  // Add base name and skin name
+  if (skinName) {
+    displayName += `${name ? 'Custom':''} ${skinName}`;
+  } else {
+    displayName += name;
+  }
+  
+  // Add condition in parentheses if present
+  if (condition) {
+    displayName += ` (${condition})`;
+  }
+  
+  return displayName;
+};
+
+const fullItemName = buildItemDisplayName();
+
+
 const validateSaleInput = useCallback((price, quantity) => {
   const priceNum = parseFloat(price);
   const quantityNum = parseInt(quantity);
@@ -302,7 +331,7 @@ const handlePartialSale = useCallback(async () => {
   showPopup({
     type: 'confirm',
     title: 'Confirm Sale',
-    message: `Sell ${quantity} units at $${pricePerUnit.toFixed(2)} each?`,
+    message: `Sell ${quantity} "${fullItemName}" at $${pricePerUnit.toFixed(2)} each?`,
     data: { quantity, pricePerUnit, totalSaleValue, profitLoss, percentage },
     onConfirm: () => handleAsyncOperation(
       'PARTIAL_SALE',
@@ -334,38 +363,45 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
     
     const remainingQuantity = saleResult.remaining_quantity;
     
-    // Show success popup BEFORE doing any state updates
-    showPopup({
-      type: 'success',
-      title: 'Success',
-      message: `Successfully sold ${quantity} units for $${totalSaleValue.toFixed(2)}`,
-      onConfirm: () => {
-        // Only do the state updates and refresh AFTER user acknowledges success
-        closePopup();
-        
-        // Optimistic update based on sale result
-        if (remainingQuantity === 0) {
-          onRemove?.(item.id); // Item fully sold
-        } else {
-          // Partial sale - update with new values
-          onUpdate(item.id, {
-            ...item,
-            quantity: remainingQuantity,
-            total_sold_quantity: (item.total_sold_quantity || 0) + quantity,
-            total_sale_value: (item.total_sale_value || 0) + totalSaleValue,
-            // Let DB recalculate unrealized P&L on next refresh
-          });
-        }
-        
-        // Reset form state
-        setMode(ITEM_MODES.VIEW);
-        setSoldPrice('');
-        setSoldQuantity(1);
-        
-        // Now trigger refresh after user has acknowledged the success
-        onRefresh?.();
-      }
-    });
+    // Create sold item data for the sold tab
+    const soldItemData = {
+      id: saleResult.sale_id, // Use the actual sale ID from the RPC response
+      investment_id: item.id,
+      user_id: userSession.id,
+      quantity_sold: quantity,
+      price_per_unit: pricePerUnit,
+      total_sale_value: totalSaleValue, // This is calculated in the database, but we have it here
+      sale_date: new Date().toISOString(),
+      item_name: item.name,
+      item_skin_name: item.skin_name,
+      item_condition: item.condition,
+      buy_price_per_unit: item.buy_price,
+      image_url: item.image_url || null,
+      notes: null, // You could add sale notes if needed
+      item_variant: item.variant || 'normal'
+    };
+    
+    if (remainingQuantity === 0) {
+      // FULL SALE - Item completely sold, remove from active investments
+      onRemove?.(item.id, false, soldItemData); // Pass sold item data
+    } else {
+      // PARTIAL SALE - Update item with new quantities and P/L
+      const updatedItem = {
+        ...item,
+        quantity: remainingQuantity,
+        total_sold_quantity: (item.total_sold_quantity || 0) + quantity,
+        total_sale_value: (item.total_sale_value || 0) + totalSaleValue,
+        realized_profit_loss: (item.realized_profit_loss || 0) + profitLoss,
+        unrealized_profit_loss: (item.current_price - item.buy_price) * remainingQuantity
+      };
+
+      onUpdate(item.id, updatedItem, false, soldItemData); // Pass sold item data
+    }
+    
+    // Reset form state - NO SUCCESS POPUP
+    setMode(ITEM_MODES.VIEW);
+    setSoldPrice('');
+    setSoldQuantity(1);
     
   } catch (err) {
     console.error('Error processing sale:', err);
@@ -409,7 +445,7 @@ const handleEditFormSubmit = useCallback(async () => {
 
     if (error) throw error;
     
-    // Update local state with new values and recalculated metrics
+    // Optimistic update with recalculated metric
     const updatedItem = {
       ...item,
       ...updateData,
@@ -417,19 +453,20 @@ const handleEditFormSubmit = useCallback(async () => {
       original_quantity: Math.max(item.original_quantity || item.quantity, updateData.quantity)
     };
 
-    onUpdate(item.id, updatedItem);
+    onUpdate(item.id, updatedItem, false);
     setMode(ITEM_MODES.VIEW);
+
   }).catch(err => {
   console.error('Error updating item:', err);
     showPopup({
       type: 'error',
       title: 'Error',
-      message: getErrorMessage(err) // ← Use the unified handler here
+      message: getErrorMessage(err)
     });
   });
 }, [handleAsyncOperation, editForm, item, userSession.id, onUpdate]);
 
-  // Cancel edit form and reset to defaults
+// Cancel edit form and reset to defaults
 const handleEditFormCancel = useCallback(() => {
   setEditForm(null);
   setMode(ITEM_MODES.VIEW);

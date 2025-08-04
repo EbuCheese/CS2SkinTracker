@@ -124,6 +124,7 @@ export const usePortfolioData = (userSession) => {
     loading,
     error,
     refetch: debouncedRefresh,
-    setInvestments // For optimistic updates
+    setInvestments, // For optimistic updates
+    setSoldItems
   };
 };

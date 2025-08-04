@@ -15,7 +15,7 @@ const InvestmentsPage = ({ userSession }) => {
   const [newItemIds, setNewItemIds] = useState(new Set());   // Recently added items (for animations)
 
   // Investment data from hook
-  const { investments, soldItems, portfolioSummary, loading, error, refetch, setInvestments } = usePortfolioData(userSession);
+  const { investments, soldItems, portfolioSummary, loading, error, refetch, setInvestments, setSoldItems } = usePortfolioData(userSession);
 
   // Data filtering and search logic
   const { activeInvestments, groupedSoldItems, currentItems } = usePortfolioFiltering(
@@ -34,20 +34,35 @@ const InvestmentsPage = ({ userSession }) => {
   useScrollLock(showAddForm || !!itemToDelete);
   
   // STABLE CALLBACKS: Prevent unnecessary re-renders
-  const handleItemUpdate = useCallback((itemId, updates) => {
+  const handleItemUpdate = useCallback((itemId, updates, shouldRefresh = false, soldItemData = null) => {
     // update local state for immediate UI feedback
     setInvestments(prev => prev.map(inv => 
       inv.id === itemId ? { ...inv, ...updates } : inv
     ));
-    // Refresh data from database to ensure consistency
-    refetch();
+
+    if (soldItemData) {
+      setSoldItems(prev => [soldItemData, ...prev]);
+    }
+
+    // Conditionally refresh when server calculations are needed
+    if (shouldRefresh) {
+      refetch();
+    }
   }, [setInvestments, refetch]);
 
   // handle the removal of item form ui, selling or deleting
-  const handleItemRemove = useCallback((itemId) => {
+  const handleItemRemove = useCallback((itemId, shouldRefresh = false, soldItemData = null) => {
     setInvestments(prev => prev.filter(inv => inv.id !== itemId));
-    refetch(); // Refresh to ensure data consistency
-  }, [setInvestments, refetch]);
+
+    if (soldItemData) {
+      setSoldItems(prev => [soldItemData, ...prev]);
+    }
+
+    // Conditionally refresh when item might have moved to sold items
+    if (shouldRefresh) {
+      refetch();
+    }
+  }, [setInvestments]);
 
   // set the item to delete
   const handleItemDelete = useCallback((itemToDelete) => {
@@ -60,18 +75,30 @@ const InvestmentsPage = ({ userSession }) => {
   }, [refetch]);
 
   // handle addition of new investment items
-  const handleAddItem = useCallback((newItem) => {
-    setInvestments(prev => [newItem, ...prev]);
-    setNewItemIds(prev => new Set([...prev, newItem.id]));
-    
-    setTimeout(() => {
-      setNewItemIds(prev => {
-        const updated = new Set(prev);
-        updated.delete(newItem.id);
-        return updated;
-      });
-    }, 700);
-  }, []);
+const handleAddItem = useCallback((newItem) => {
+  // Calculate initial metrics manually
+  const itemWithMetrics = {
+    ...newItem,
+    unrealized_profit_loss: (newItem.current_price - newItem.buy_price) * newItem.quantity,
+    realized_profit_loss: 0,
+    original_quantity: newItem.quantity,
+    total_sold_quantity: 0,
+    total_sale_value: 0
+  };
+  
+  setInvestments(prev => [itemWithMetrics, ...prev]);
+  setNewItemIds(prev => new Set([...prev, newItem.id]));
+  
+  // NO REFRESH NEEDED - all data is available client-side
+  
+  setTimeout(() => {
+    setNewItemIds(prev => {
+      const updated = new Set(prev);
+      updated.delete(newItem.id);
+      return updated;
+    });
+  }, 700);
+}, [setInvestments]);
 
   // STABLE CALLBACKS: Tab and form handlers
   const handleTabChange = useCallback((tab) => {
