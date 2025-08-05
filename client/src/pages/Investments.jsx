@@ -5,8 +5,12 @@ import { ItemCard } from '@/components/item-display';
 import { AddItemForm } from '@/components/forms'
 import { useScrollLock } from '@/hooks/util';
 import { usePortfolioData, usePortfolioFiltering, usePortfolioSummary, usePortfolioTabs  } from '@/hooks/portfolio';
+import { useToast } from '@/contexts/ToastContext';
 
 const InvestmentsPage = ({ userSession }) => {
+  // toast context
+  const toast = useToast()
+
   // UI States
   const [activeTab, setActiveTab] = useState('All');          // Current category filter
   const [searchQuery, setSearchQuery] = useState('');        // User's search input
@@ -89,7 +93,8 @@ const handleAddItem = useCallback((newItem) => {
   setInvestments(prev => [itemWithMetrics, ...prev]);
   setNewItemIds(prev => new Set([...prev, newItem.id]));
   
-  // NO REFRESH NEEDED - all data is available client-side
+  // show add toast
+  toast.itemAdded(newItem.name || 'New Item');
   
   setTimeout(() => {
     setNewItemIds(prev => {
@@ -98,7 +103,7 @@ const handleAddItem = useCallback((newItem) => {
       return updated;
     });
   }, 700);
-}, [setInvestments]);
+}, [setInvestments, toast]);
 
   // STABLE CALLBACKS: Tab and form handlers
   const handleTabChange = useCallback((tab) => {
@@ -137,23 +142,24 @@ const handleAddItem = useCallback((newItem) => {
         throw error;
       }
       
-      console.log('Investment deleted successfully');
-      
       // Remove item from local state for immediate UI update
       setInvestments(prev => prev.filter(inv => inv.id !== itemToDelete.id));
+
+      // show delete toast
+      toast.itemDeleted(itemToDelete.name || 'Item');
 
       // Close the confirmation modal
       setItemToDelete(null);
     } catch (err) {
       console.error('Error deleting investment:', err);
       
-      // Provide user-friendly error messages based on error type
+      // Provide user-friendly toast error messages based on error type
       if (err.message.includes('Invalid user context')) {
-        alert('Authentication error: Please refresh the page and re-enter your beta key.');
+        toast.error('Authentication error: Please refresh the page and re-enter your beta key.');
       } else if (err.message.includes('not found or access denied')) {
-        alert('Access denied: You can only delete your own investments.');
+        toast.error('Access denied: You can only delete your own investments.');
       } else {
-        alert('Failed to delete investment: ' + err.message);
+        toast.error('Failed to delete investment: ' + err.message);
       }
     }
   };

@@ -3,6 +3,7 @@ import { TrendingUp, TrendingDown, Minus, Plus, Loader2, Edit2, Save, X } from '
 import { supabase } from '@/supabaseClient';
 import { PopupManager } from '@/components/ui';
 import { useScrollLock } from '@/hooks/util';
+import { useToast } from '@/contexts/ToastContext';
 
   // Dropdown options for item conditions (CS2 skin wear levels)
   const CONDITION_OPTIONS = [
@@ -30,6 +31,9 @@ import { useScrollLock } from '@/hooks/util';
 
 // Main ItemCard Component - Displays individual investment items with interactive features
 const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, onRefresh, isNew = false, isSoldItem = false }) => {
+  // Add toast hook
+  const toast = useToast();
+
   // UI state management
   const [mode, setMode] = useState(ITEM_MODES.VIEW); // 'view', 'selling', 'editing'
   const [soldPrice, setSoldPrice] = useState('');
@@ -349,7 +353,6 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
     closePopup();
     setAsyncState({ isLoading: true, operation: 'PARTIAL_SALE', error: null });
     
-    // Single RPC call handles everything
     const { data: saleResult, error: saleError } = await supabase.rpc('process_investment_sale', {
       p_investment_id: item.id,
       p_price_per_unit: pricePerUnit,
@@ -362,30 +365,39 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
     if (saleError) throw new Error(`Sale failed: ${saleError.message}`);
     
     const remainingQuantity = saleResult.remaining_quantity;
+    const isFullSale = remainingQuantity === 0;
     
-    // Create sold item data for the sold tab
+    // Create sold item data
     const soldItemData = {
-      id: saleResult.sale_id, // Use the actual sale ID from the RPC response
+      id: saleResult.sale_id,
       investment_id: item.id,
       user_id: userSession.id,
       quantity_sold: quantity,
       price_per_unit: pricePerUnit,
-      total_sale_value: totalSaleValue, // This is calculated in the database, but we have it here
+      total_sale_value: totalSaleValue,
       sale_date: new Date().toISOString(),
       item_name: item.name,
       item_skin_name: item.skin_name,
       item_condition: item.condition,
       buy_price_per_unit: item.buy_price,
       image_url: item.image_url || null,
-      notes: null, // You could add sale notes if needed
+      notes: null,
       item_variant: item.variant || 'normal'
     };
     
-    if (remainingQuantity === 0) {
-      // FULL SALE - Item completely sold, remove from active investments
-      onRemove?.(item.id, false, soldItemData); // Pass sold item data
+    if (isFullSale) {
+      // FULL SALE
+      onRemove?.(item.id, false, soldItemData);
+      
+      // show full sale toast
+      toast.addToast({
+        type: 'sale',
+        title: 'Full Sale Recorded',
+        message: `Sold all ${quantity}x "${fullItemName}" for $${totalSaleValue.toFixed(2)} (${profitLoss >= 0 ? '+' : ''}${profitLoss.toFixed(2)})`,
+        duration: 5000 // Show longer for full sales
+      });
     } else {
-      // PARTIAL SALE - Update item with new quantities and P/L
+      // PARTIAL SALE
       const updatedItem = {
         ...item,
         quantity: remainingQuantity,
@@ -394,22 +406,25 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
         realized_profit_loss: (item.realized_profit_loss || 0) + profitLoss,
         unrealized_profit_loss: (item.current_price - item.buy_price) * remainingQuantity
       };
-
-      onUpdate(item.id, updatedItem, false, soldItemData); // Pass sold item data
+      onUpdate(item.id, updatedItem, false, soldItemData);
+      
+      // show partial sale toast
+      toast.addToast({
+        type: 'sale',
+        title: 'Partial Sale Recorded',
+        message: `Sold ${quantity}x "${fullItemName}" for $${totalSaleValue.toFixed(2)} (${remainingQuantity} remaining)`,
+        duration: 4000
+      });
     }
     
-    // Reset form state - NO SUCCESS POPUP
+    // Reset form state
     setMode(ITEM_MODES.VIEW);
     setSoldPrice('');
     setSoldQuantity(1);
     
   } catch (err) {
     console.error('Error processing sale:', err);
-    showPopup({
-      type: 'error',
-      title: 'Error',
-      message: getErrorMessage(err)
-    });
+    toast.error(getErrorMessage(err));
   } finally {
     setAsyncState({ isLoading: false, operation: null, error: null });
   }
@@ -456,15 +471,17 @@ const handleEditFormSubmit = useCallback(async () => {
     onUpdate(item.id, updatedItem, false);
     setMode(ITEM_MODES.VIEW);
 
+    // Show success toast
+      toast.success(
+        `"${fullItemName}" has been updated successfully`,
+        'Item Updated'
+      );
+
   }).catch(err => {
-  console.error('Error updating item:', err);
-    showPopup({
-      type: 'error',
-      title: 'Error',
-      message: getErrorMessage(err)
-    });
+    // toast update error
+    toast.error(getErrorMessage(err));
   });
-}, [handleAsyncOperation, editForm, item, userSession.id, onUpdate]);
+}, [handleAsyncOperation, editForm, item, userSession.id, onUpdate, toast, fullItemName, getErrorMessage]);
 
 // Cancel edit form and reset to defaults
 const handleEditFormCancel = useCallback(() => {

@@ -9,7 +9,7 @@ import InvestmentsPage from './pages/Investments';
 import AccountPage from './pages/Account';
 import BetaKeyEntry from './pages/BetaKeyEntry';
 import QuickLogin from './pages/QuickLogin';
-import {LoadingSpinner, Navbar} from './components'
+import { LoadingSpinner, Navbar, ToastContainer } from './components'
 
 function App() {
   const {
@@ -54,6 +54,7 @@ function App() {
                 }
               />
             </Routes>
+            <ToastContainer />
           </Router>
         </CSDataProvider>
       </ToastProvider>

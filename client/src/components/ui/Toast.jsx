@@ -1,13 +1,14 @@
-// components/Toast.js
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle, XCircle, AlertCircle, X, Plus, TrendingUp, Trash2 } from 'lucide-react';
-import { ToastContext, useToastProvider } from '../hooks/useToast';
+import { CheckCircle, XCircle, AlertCircle, X, Plus, TrendingUp, Trash2, Info, DollarSign } from 'lucide-react';
+
+import { useToast } from '@/contexts/ToastContext';
 
 // Individual Toast Component
 const Toast = ({ toast, onRemove }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [progress, setProgress] = useState(100);
 
   // Slide in animation on mount
   useEffect(() => {
@@ -15,13 +16,22 @@ const Toast = ({ toast, onRemove }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Auto-remove timer
+  // Progress bar animation and auto-remove timer
   useEffect(() => {
     if (toast.duration > 0) {
-      const timer = setTimeout(() => {
-        handleRemove();
-      }, toast.duration);
-      return () => clearTimeout(timer);
+      const startTime = Date.now();
+      const interval = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, (toast.duration - elapsed) / toast.duration * 100);
+        setProgress(remaining);
+        
+        if (remaining === 0) {
+          clearInterval(interval);
+          handleRemove();
+        }
+      }, 50);
+      
+      return () => clearInterval(interval);
     }
   }, [toast.duration]);
 
@@ -34,45 +44,83 @@ const Toast = ({ toast, onRemove }) => {
     switch (toast.type) {
       case 'success':
         return {
-          bg: 'bg-green-800/90 border-green-600',
+          bg: 'from-green-900/80 via-emerald-900/80 to-green-900/80',
+          border: 'border-green-500/30',
+          glow: 'shadow-green-500/25',
           icon: <CheckCircle className="w-5 h-5 text-green-400" />,
-          titleColor: 'text-green-100'
+          titleColor: 'text-green-100',
+          progressColor: 'bg-green-400',
+          iconBg: 'bg-green-500/20'
         };
       case 'error':
         return {
-          bg: 'bg-red-800/90 border-red-600',
+          bg: 'from-red-900/80 via-rose-900/80 to-red-900/80',
+          border: 'border-red-500/30',
+          glow: 'shadow-red-500/25',
           icon: <XCircle className="w-5 h-5 text-red-400" />,
-          titleColor: 'text-red-100'
+          titleColor: 'text-red-100',
+          progressColor: 'bg-red-400',
+          iconBg: 'bg-red-500/20'
         };
       case 'warning':
         return {
-          bg: 'bg-yellow-800/90 border-yellow-600',
+          bg: 'from-yellow-900/80 via-amber-900/80 to-yellow-900/80',
+          border: 'border-yellow-500/30',
+          glow: 'shadow-yellow-500/25',
           icon: <AlertCircle className="w-5 h-5 text-yellow-400" />,
-          titleColor: 'text-yellow-100'
+          titleColor: 'text-yellow-100',
+          progressColor: 'bg-yellow-400',
+          iconBg: 'bg-yellow-500/20'
         };
       case 'add':
         return {
-          bg: 'bg-blue-800/90 border-blue-600',
+          bg: 'from-blue-900/80 via-indigo-900/80 to-blue-900/80',
+          border: 'border-blue-500/30',
+          glow: 'shadow-blue-500/25',
           icon: <Plus className="w-5 h-5 text-blue-400" />,
-          titleColor: 'text-blue-100'
+          titleColor: 'text-blue-100',
+          progressColor: 'bg-blue-400',
+          iconBg: 'bg-blue-500/20'
         };
       case 'sale':
         return {
-          bg: 'bg-emerald-800/90 border-emerald-600',
-          icon: <TrendingUp className="w-5 h-5 text-emerald-400" />,
-          titleColor: 'text-emerald-100'
+          bg: 'from-emerald-900/80 via-teal-900/80 to-emerald-900/80',
+          border: 'border-emerald-500/30',
+          glow: 'shadow-emerald-500/25',
+          icon: <DollarSign className="w-5 h-5 text-emerald-400" />,
+          titleColor: 'text-emerald-100',
+          progressColor: 'bg-emerald-400',
+          iconBg: 'bg-emerald-500/20'
         };
       case 'delete':
         return {
-          bg: 'bg-gray-800/90 border-gray-600',
+          bg: 'from-gray-900/80 via-slate-900/80 to-gray-900/80',
+          border: 'border-gray-500/30',
+          glow: 'shadow-gray-500/25',
           icon: <Trash2 className="w-5 h-5 text-gray-400" />,
-          titleColor: 'text-gray-100'
+          titleColor: 'text-gray-100',
+          progressColor: 'bg-gray-400',
+          iconBg: 'bg-gray-500/20'
+        };
+      case 'info':
+        return {
+          bg: 'from-purple-900/80 via-violet-900/80 to-purple-900/80',
+          border: 'border-purple-500/30',
+          glow: 'shadow-purple-500/25',
+          icon: <Info className="w-5 h-5 text-purple-400" />,
+          titleColor: 'text-purple-100',
+          progressColor: 'bg-purple-400',
+          iconBg: 'bg-purple-500/20'
         };
       default:
         return {
-          bg: 'bg-gray-800/90 border-gray-600',
-          icon: <AlertCircle className="w-5 h-5 text-gray-400" />,
-          titleColor: 'text-gray-100'
+          bg: 'from-gray-900/80 via-slate-900/80 to-gray-900/80',
+          border: 'border-gray-500/30',
+          glow: 'shadow-gray-500/25',
+          icon: <Info className="w-5 h-5 text-gray-400" />,
+          titleColor: 'text-gray-100',
+          progressColor: 'bg-gray-400',
+          iconBg: 'bg-gray-500/20'
         };
     }
   };
@@ -82,31 +130,68 @@ const Toast = ({ toast, onRemove }) => {
   return (
     <div
       className={`
-        ${styles.bg} border rounded-lg p-3 mb-2 backdrop-blur-sm shadow-lg
+        bg-gradient-to-br ${styles.bg} ${styles.border} rounded-xl p-4 mb-3 
+        backdrop-blur-md shadow-2xl ${styles.glow} border
         transform transition-all duration-300 ease-out
-        ${isVisible && !isRemoving ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
-        max-w-sm w-full
+        ${isVisible && !isRemoving ? 'translate-x-0 opacity-100 scale-100' : 'translate-x-full opacity-0 scale-95'}
+        max-w-sm w-full relative overflow-hidden
+        hover:scale-105 hover:shadow-3xl transition-transform
       `}
     >
-      <div className="flex items-start space-x-3">
-        <div className="flex-shrink-0 mt-0.5">
+      {/* Progress bar */}
+      {toast.duration > 0 && (
+        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700/30">
+          <div 
+            className={`h-full ${styles.progressColor} transition-all duration-75 ease-linear`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+      
+      {/* Subtle animated background pattern */}
+      <div className="absolute inset-0 opacity-5">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent animate-pulse" />
+      </div>
+      
+      <div className="flex items-start space-x-3 relative z-10">
+        {/* Enhanced icon with background */}
+        <div className={`flex-shrink-0 w-10 h-10 rounded-lg ${styles.iconBg} flex items-center justify-center mt-0.5 shadow-lg`}>
           {styles.icon}
         </div>
+        
         <div className="flex-1 min-w-0">
           {toast.title && (
-            <div className={`font-medium ${styles.titleColor} text-sm mb-1`}>
+            <div className={`font-semibold ${styles.titleColor} text-sm mb-1 leading-tight`}>
               {toast.title}
             </div>
           )}
-          <div className="text-gray-200 text-sm">
+          <div className="text-gray-200 text-sm leading-relaxed">
             {toast.message}
           </div>
+          
+          {/* Additional metadata */}
+          {toast.metadata && (
+            <div className="mt-2 text-xs text-gray-400 flex items-center space-x-2">
+              {toast.metadata.amount && (
+                <span className="px-2 py-1 bg-gray-700/50 rounded-md">
+                  {toast.metadata.amount}
+                </span>
+              )}
+              {toast.metadata.item && (
+                <span className="px-2 py-1 bg-gray-700/50 rounded-md truncate max-w-32">
+                  {toast.metadata.item}
+                </span>
+              )}
+            </div>
+          )}
         </div>
+        
+        {/* Enhanced close button */}
         <button
           onClick={handleRemove}
-          className="flex-shrink-0 text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700/50"
+          className="flex-shrink-0 text-gray-400 hover:text-white transition-all duration-200 p-2 rounded-lg hover:bg-gray-700/50 group"
         >
-          <X className="w-4 h-4" />
+          <X className="w-4 h-4 group-hover:scale-110 transition-transform" />
         </button>
       </div>
     </div>
@@ -114,12 +199,14 @@ const Toast = ({ toast, onRemove }) => {
 };
 
 // Toast Container Component
-const ToastContainer = ({ toasts, removeToast }) => {
+const ToastContainer = () => {
+  const { toasts, removeToast } = useToast();
+  
   if (toasts.length === 0) return null;
 
   return createPortal(
     <div className="fixed top-4 right-4 z-[10000] pointer-events-none">
-      <div className="pointer-events-auto">
+      <div className="pointer-events-auto space-y-2">
         {toasts.map((toast) => (
           <Toast
             key={toast.id}
@@ -133,14 +220,4 @@ const ToastContainer = ({ toasts, removeToast }) => {
   );
 };
 
-// Toast Provider Component
-export const ToastProvider = ({ children }) => {
-  const toastApi = useToastProvider();
-
-  return (
-    <ToastContext.Provider value={toastApi}>
-      {children}
-      <ToastContainer toasts={toastApi.toasts} removeToast={toastApi.removeToast} />
-    </ToastContext.Provider>
-  );
-};
+export default ToastContainer;
