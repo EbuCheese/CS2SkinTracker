@@ -119,10 +119,6 @@ const handleAddItem = useCallback((newItem) => {
   setInvestments(prev => [itemWithMetrics, ...prev]);
   setNewItemIds(prev => new Set([...prev, newItem.id]));
     
-  // Enhanced toast method
-  const detailedName = buildDetailedItemName(newItem);
-  toast.itemAdded(detailedName, newItem.quantity, newItem.buy_price);
-  
   setTimeout(() => {
     setNewItemIds(prev => {
       const updated = new Set(prev);
@@ -130,7 +126,7 @@ const handleAddItem = useCallback((newItem) => {
       return updated;
     });
   }, 700);
-}, [setInvestments, toast]);
+}, [setInvestments]);
 
   // STABLE CALLBACKS: Tab and form handlers
   const handleTabChange = useCallback((tab) => {

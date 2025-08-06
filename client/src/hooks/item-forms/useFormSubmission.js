@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useToast } from '@/contexts/ToastContext';
 
 // Maps category names to database type identifiers
 const TYPE_MAP = {
@@ -19,9 +20,36 @@ const ERROR_MESSAGES = {
   'context': 'Authentication context error: Please try again or refresh the page.'
 };
 
+// Helper function to build detailed item names (same as in ItemCard)
+const buildDetailedItemName = (item) => {
+  let displayName = '';
+  
+  // Add variant prefix
+  if (item.variant === 'souvenir') {
+    displayName += 'Souvenir ';
+  } else if (item.variant === 'stattrak') {
+    displayName += 'StatTrak™ ';
+  }
+  
+  // Add base name and skin name
+  if (item.skin_name) {
+    displayName += `${item.name || 'Custom'} ${item.skin_name}`;
+  } else {
+    displayName += item.name;
+  }
+  
+  // Add condition in parentheses if present
+  if (item.condition) {
+    displayName += ` (${item.condition})`;
+  }
+  
+  return displayName;
+};
+
 // Hook for handling form submission to add new investments
 export const useFormSubmission = (supabase) => {
   const [submitting, setSubmitting] = useState(false);
+  const toast = useToast(); // toast hook
 
   const handleSubmit = useCallback(async (formData, userSession, currentCategory, onAdd, onClose) => {
     // Validate user session before proceeding
@@ -69,6 +97,12 @@ export const useFormSubmission = (supabase) => {
 
       if (insertError) throw insertError;
       
+      // Build detailed name for toast
+      const detailedName = buildDetailedItemName(insertData);
+
+      // Show success toast using the enhanced method
+      toast.itemAdded(detailedName, insertData.quantity, insertData.buy_price);
+
       // Update UI and close modal on success
       onAdd(insertData);
       onClose();
@@ -78,11 +112,16 @@ export const useFormSubmission = (supabase) => {
       
       // Show user-friendly error message based on error type
       const errorType = Object.keys(ERROR_MESSAGES).find(key => err.message.includes(key));
+      const errorMessage = errorType ? ERROR_MESSAGES[errorType] : `Failed to add investment: ${err.message}`;
+
+      toast.error(errorMessage, 'Failed to Add Item');
+
       alert(errorType ? ERROR_MESSAGES[errorType] : `Failed to add investment: ${err.message}`);
+
     } finally {
       setSubmitting(false);
     }
-  }, [supabase]);
+  }, [supabase, toast]);
 
   return {
     submitting,

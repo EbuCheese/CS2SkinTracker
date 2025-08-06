@@ -6,9 +6,13 @@ import { QuickAddItemForm, QuickSellModal } from '@/components/forms';
 import { supabase } from '@/supabaseClient';
 import { useScrollLock, useAdvancedDebounce, formatPrice, formatChartDate } from '@/hooks/util';
 import { useCalculatePortfolioHealth, useChartData, usePortfolioData, useQuickActions, useRecentActivity, usePortfolioSummary } from '@/hooks/portfolio';
+import { useToast } from '@/contexts/ToastContext';
 
 // Main InvestmentDashboard component
 const InvestmentDashboard = ({ userSession }) => {
+  // Add toast hook
+  const toast = useToast();
+
   const { investments, soldItems, portfolioSummary, loading, error, refetch, setInvestments, setSoldItems } = usePortfolioData(userSession);
   
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('MAX');
@@ -61,6 +65,31 @@ const InvestmentDashboard = ({ userSession }) => {
     };
   }, [portfolioSummary, investments]);
 
+  // Helper function to build detailed item name for toasts
+  const buildDetailedItemName = useCallback((item) => {
+    let displayName = '';
+    
+    // Add variant prefix
+    if (item.variant === 'souvenir') {
+      displayName += 'Souvenir ';
+    } else if (item.variant === 'stattrak') {
+      displayName += 'StatTrak™ ';
+    }
+    
+    // Add base name and skin name
+    if (item.skin_name) {
+      displayName += `${item.name || 'Custom'} ${item.skin_name}`;
+    } else {
+      displayName += item.name;
+    }
+    
+    // Add condition in parentheses if present
+    if (item.condition && item.condition.toLowerCase() !== 'unknown') {
+      displayName += ` (${item.condition})`;
+    }
+    
+    return displayName;
+  }, []);
 
   // Handles adding a new item
   const handleAddItem = useCallback((newItem) => {
@@ -77,9 +106,13 @@ const InvestmentDashboard = ({ userSession }) => {
   // Add to investments list optimistically
   setInvestments(prev => [itemWithMetrics, ...prev]);
   
+  // Show success toast
+  const detailedName = buildDetailedItemName(newItem);
+  toast.itemAdded(detailedName, newItem.quantity, newItem.buy_price);
+
   // NO REFETCH NEEDED - all data is available client-side
   console.log('New item added to dashboard:', itemWithMetrics);
-}, [setInvestments]);
+}, [setInvestments, buildDetailedItemName, toast]);
 
   // Handles completion of a sale transaction
     const handleSaleComplete = useCallback((investmentId, quantitySold, salePrice, remainingQuantity) => {
@@ -89,6 +122,7 @@ const InvestmentDashboard = ({ userSession }) => {
     // Calculate profit/loss for this sale
     const saleValue = salePrice * quantitySold;
     const saleProfitLoss = (salePrice - soldItem.buy_price) * quantitySold;
+    const isFullSale = remainingQuantity === 0;
 
     // Create sold item data for recent activity and sold items tracking
     const soldItemData = {
@@ -133,15 +167,31 @@ const InvestmentDashboard = ({ userSession }) => {
     // Add to sold items for recent activity display
     setSoldItems(prev => [soldItemData, ...prev]);
 
-    // NO REFETCH NEEDED - optimistic updates handle everything
-  }, [investments, userSession.id, setInvestments, setSoldItems]);
+    // Show appropriate success toast based on sale type
+    const detailedName = buildDetailedItemName(soldItem);
+    
+    if (isFullSale) {
+      toast.fullSaleCompleted(detailedName, quantitySold, saleValue, saleProfitLoss);
+    } else {
+      toast.partialSaleCompleted(detailedName, quantitySold, remainingQuantity, saleValue, saleProfitLoss);
+    }
+
+    console.log(`${isFullSale ? 'Full' : 'Partial'} sale completed:`, {
+      item: detailedName,
+      quantity: quantitySold,
+      saleValue,
+      profitLoss: saleProfitLoss,
+      remaining: remainingQuantity
+    });
+
+  }, [investments, userSession.id, setInvestments, setSoldItems, buildDetailedItemName, toast]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center">
         <div className="flex items-center space-x-2 text-white">
           <Loader2 className="w-8 h-8 animate-spin" />
-          <span>Loading Portfolio...</span>
+          <span>Loading Dashboard...</span>
         </div>
       </div>
     );
