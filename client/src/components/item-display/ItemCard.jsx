@@ -389,13 +389,9 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
       // FULL SALE
       onRemove?.(item.id, false, soldItemData);
       
-      // show full sale toast
-      toast.addToast({
-        type: 'sale',
-        title: 'Full Sale Recorded',
-        message: `Sold all ${quantity}x "${fullItemName}" for $${totalSaleValue.toFixed(2)} (${profitLoss >= 0 ? '+' : ''}${profitLoss.toFixed(2)})`,
-        duration: 5000 // Show longer for full sales
-      });
+      // enhanced show full sale toast
+      toast.fullSaleCompleted(fullItemName, quantity, totalSaleValue, profitLoss);
+
     } else {
       // PARTIAL SALE
       const updatedItem = {
@@ -408,13 +404,8 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
       };
       onUpdate(item.id, updatedItem, false, soldItemData);
       
-      // show partial sale toast
-      toast.addToast({
-        type: 'sale',
-        title: 'Partial Sale Recorded',
-        message: `Sold ${quantity}x "${fullItemName}" for $${totalSaleValue.toFixed(2)} (${remainingQuantity} remaining)`,
-        duration: 4000
-      });
+      // enhanced show partial sale toast
+      toast.partialSaleCompleted(fullItemName, quantity, remainingQuantity, totalSaleValue, profitLoss);
     }
     
     // Reset form state
@@ -471,11 +462,8 @@ const handleEditFormSubmit = useCallback(async () => {
     onUpdate(item.id, updatedItem, false);
     setMode(ITEM_MODES.VIEW);
 
-    // Show success toast
-      toast.success(
-        `"${fullItemName}" has been updated successfully`,
-        'Item Updated'
-      );
+    // enhanced Show success toast
+    toast.itemUpdated(fullItemName);
 
   }).catch(err => {
     // toast update error

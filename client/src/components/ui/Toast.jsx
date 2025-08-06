@@ -1,8 +1,16 @@
+// Toast.jsx - Enhanced with metadata styling
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle, XCircle, AlertCircle, X, Plus, TrendingUp, Trash2, Info, DollarSign } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, X, Plus, Trash2, Info, DollarSign } from 'lucide-react';
 
 import { useToast } from '@/contexts/ToastContext';
+
+// Helper function to determine profit/loss color
+const getProfitLossColor = (profitLoss) => {
+  if (profitLoss.startsWith('+')) return 'text-green-400';
+  if (profitLoss.startsWith('-')) return 'text-red-400'; 
+  return 'text-gray-300';
+};
 
 // Individual Toast Component
 const Toast = ({ toast, onRemove }) => {
@@ -160,28 +168,63 @@ const Toast = ({ toast, onRemove }) => {
         </div>
         
         <div className="flex-1 min-w-0">
+          {/* Title */}
           {toast.title && (
             <div className={`font-semibold ${styles.titleColor} text-sm mb-1 leading-tight`}>
               {toast.title}
             </div>
           )}
-          <div className="text-gray-200 text-sm leading-relaxed">
+          
+          {/* Main message - item name */}
+          <div className="text-gray-200 text-sm leading-relaxed font-medium mb-2">
             {toast.message}
           </div>
           
-          {/* Additional metadata */}
+          {/* Enhanced metadata display with three separate cards */}
           {toast.metadata && (
-            <div className="mt-2 text-xs text-gray-400 flex items-center space-x-2">
-              {toast.metadata.amount && (
-                <span className="px-2 py-1 bg-gray-700/50 rounded-md">
-                  {toast.metadata.amount}
+            <div className="flex items-center flex-wrap gap-2 text-xs">
+              {/* Sale amount - neutral gray */}
+              {toast.metadata.saleAmount && (
+                <span className="px-2 py-1 bg-gray-700/50 rounded-md text-gray-300 flex-shrink-0">
+                  {toast.metadata.saleAmount}
                 </span>
               )}
-              {toast.metadata.item && (
-                <span className="px-2 py-1 bg-gray-700/50 rounded-md truncate max-w-32">
+              
+              {/* Profit/Loss with color coding - green/red */}
+              {toast.metadata.profitLoss && (
+                <span className={`px-2 py-1 bg-gray-800/60 rounded-md font-medium flex-shrink-0 ${getProfitLossColor(toast.metadata.profitLoss)}`}>
+                  {toast.metadata.profitLoss}
+                </span>
+              )}
+              
+              {/* Quantity details - neutral gray */}
+              {toast.metadata.quantity && (
+                <span className="px-2 py-1 bg-gray-700/50 rounded-md text-gray-300 flex-shrink-0">
+                  {toast.metadata.quantity}
+                </span>
+              )}
+              
+              {/* Legacy fields for backward compatibility */}
+              {toast.metadata.item && !toast.metadata.quantity && (
+                <span className="px-2 py-1 bg-gray-700/50 rounded-md text-gray-300 flex-shrink-0">
                   {toast.metadata.item}
                 </span>
               )}
+              
+              {toast.metadata.amount && !toast.metadata.saleAmount && !toast.metadata.profitLoss && (
+                <span className={`px-2 py-1 bg-gray-800/60 rounded-md font-medium flex-shrink-0 ${getProfitLossColor(toast.metadata.amount)}`}>
+                  {toast.metadata.amount}
+                </span>
+              )}
+            </div>
+          )}
+          
+          {/* Legacy metadata support (for backward compatibility) */}
+          {!toast.metadata && toast.amount && (
+            <div className="mt-2 text-xs text-gray-400">
+              <span className="px-2 py-1 bg-gray-700/50 rounded-md">
+                {toast.amount}
+              </span>
             </div>
           )}
         </div>

@@ -24,7 +24,6 @@ export const ToastProvider = ({ children }) => {
       duration: 4000, // Default 4 seconds
       ...toast
     };
-
     setToasts(prev => [...prev, newToast]);
     return id;
   };
@@ -38,49 +37,98 @@ export const ToastProvider = ({ children }) => {
   };
 
   // Convenience methods for different toast types
-  const success = (message, title = 'Success', options = {}) => 
+  const success = (message, title = 'Success', options = {}) =>
     addToast({ type: 'success', title, message, ...options });
 
-  const error = (message, title = 'Error', options = {}) => 
+  const error = (message, title = 'Error', options = {}) =>
     addToast({ type: 'error', title, message, ...options });
 
-  const warning = (message, title = 'Warning', options = {}) => 
+  const warning = (message, title = 'Warning', options = {}) =>
     addToast({ type: 'warning', title, message, ...options });
 
-  const info = (message, title = '', options = {}) => 
+  const info = (message, title = '', options = {}) =>
     addToast({ type: 'info', title, message, ...options });
 
-  // Investment-specific methods matching your app's domain
-  const itemAdded = (itemName, options = {}) => 
-    addToast({ 
-      type: 'add', 
-      title: 'Item Added', 
-      message: `"${itemName}" has been added to your portfolio`, 
-      ...options 
-    });
+  // ENHANCED INVESTMENT-SPECIFIC METHODS WITH METADATA SUPPORT
 
-  const itemSold = (itemName, quantity, saleValue, options = {}) => 
-    addToast({ 
-      type: 'sale', 
-      title: 'Sale Completed', 
-      message: `Sold ${quantity}x "${itemName}" for $${saleValue.toFixed(2)}`, 
-      ...options 
+  const fullSaleCompleted = (itemName, quantity, saleValue, profitLoss, options = {}) => {
+    const cleanName = itemName.replace(/^(Souvenir |StatTrak™ )/, '');
+    return addToast({
+      type: 'sale',
+      title: 'Full Sale Completed',
+      message: cleanName,
+      metadata: {
+        saleAmount: `$${saleValue.toFixed(2)} sale`,
+        profitLoss: `${profitLoss >= 0 ? '+' : '-'}${Math.abs(profitLoss).toFixed(2)} p/l`,
+        quantity: `${quantity}x sold`
+      },
+      duration: 5000,
+      ...options
     });
+};
 
-  const itemDeleted = (itemName, options = {}) => 
-    addToast({ 
-      type: 'delete', 
-      title: 'Item Deleted', 
-      message: `"${itemName}" has been removed from your portfolio`, 
-      ...options 
+  const partialSaleCompleted = (itemName, soldQty, totalQty, saleValue, profitLoss, options = {}) => {
+    const cleanName = itemName.replace(/^(Souvenir |StatTrak™ )/, '');
+    return addToast({
+      type: 'sale',
+      title: 'Partial Sale Completed',
+      message: cleanName,
+      metadata: {
+        saleAmount: `$${saleValue.toFixed(2)} sale`,
+        profitLoss: `${profitLoss >= 0 ? '+' : '-'}${Math.abs(profitLoss).toFixed(2)} p/l`,
+        quantity: `${soldQty} of ${totalQty + soldQty} sold`
+      },
+      duration: 4000,
+      ...options
     });
+  };
 
-  const itemUpdated = (itemName, options = {}) => 
-    addToast({ 
-      type: 'success', 
-      title: 'Item Updated', 
-      message: `"${itemName}" has been updated successfully`, 
-      ...options 
+  const itemAdded = (itemName, quantity = 1, buyPrice, options = {}) => {
+    const cleanName = itemName.replace(/^(Souvenir |StatTrak™ )/, '');
+    return addToast({
+      type: 'add',
+      title: 'Item Added',
+      message: cleanName,
+      metadata: {
+        amount: `$${buyPrice.toFixed(2)} each`,
+        item: `${quantity}x added`
+      },
+      duration: 4000,
+      ...options
+    });
+  };
+
+  const itemDeleted = (itemName, options = {}) => {
+    const cleanName = itemName.replace(/^(Souvenir |StatTrak™ )/, '');
+    return addToast({
+      type: 'delete',
+      title: 'Item Deleted',
+      message: cleanName,
+      metadata: null, // No additional details needed for deletions
+      duration: 3000,
+      ...options
+    });
+  };
+
+  const itemUpdated = (itemName, options = {}) => {
+    // Keep full name with variants for edit confirmations
+    return addToast({
+      type: 'success',
+      title: 'Item Updated',
+      message: itemName, // Full name including variants
+      metadata: null, // No metadata needed for updates
+      duration: 3000,
+      ...options
+    });
+  };
+
+  // LEGACY METHODS (for backward compatibility)
+  const itemSold = (itemName, quantity, saleValue, options = {}) =>
+    addToast({
+      type: 'sale',
+      title: 'Sale Completed',
+      message: `Sold ${quantity}x "${itemName}" for $${saleValue.toFixed(2)}`,
+      ...options
     });
 
   // Context value with all toast functionality
@@ -93,10 +141,14 @@ export const ToastProvider = ({ children }) => {
     error,
     warning,
     info,
+    // Enhanced methods
+    fullSaleCompleted,
+    partialSaleCompleted,
     itemAdded,
-    itemSold,
     itemDeleted,
-    itemUpdated
+    itemUpdated,
+    // Legacy methods
+    itemSold
   };
 
   return (

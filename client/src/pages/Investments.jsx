@@ -37,6 +37,32 @@ const InvestmentsPage = ({ userSession }) => {
   // lock scroll on add form or delete message  
   useScrollLock(showAddForm || !!itemToDelete);
   
+  // ADD THIS HELPER FUNCTION
+  const buildDetailedItemName = (item) => {
+    let displayName = '';
+    
+    // Add variant prefix
+    if (item.variant === 'souvenir') {
+      displayName += 'Souvenir ';
+    } else if (item.variant === 'stattrak') {
+      displayName += 'StatTrak™ ';
+    }
+    
+    // Add base name and skin name
+    if (item.skin_name) {
+      displayName += `${item.name || 'Custom'} ${item.skin_name}`;
+    } else {
+      displayName += item.name;
+    }
+    
+    // Add condition in parentheses if present
+    if (item.condition) {
+      displayName += ` (${item.condition})`;
+    }
+    
+    return displayName;
+  };
+
   // STABLE CALLBACKS: Prevent unnecessary re-renders
   const handleItemUpdate = useCallback((itemId, updates, shouldRefresh = false, soldItemData = null) => {
     // update local state for immediate UI feedback
@@ -78,7 +104,7 @@ const InvestmentsPage = ({ userSession }) => {
     refetch();
   }, [refetch]);
 
-  // handle addition of new investment items
+// handle addition of new investment items
 const handleAddItem = useCallback((newItem) => {
   // Calculate initial metrics manually
   const itemWithMetrics = {
@@ -92,9 +118,10 @@ const handleAddItem = useCallback((newItem) => {
   
   setInvestments(prev => [itemWithMetrics, ...prev]);
   setNewItemIds(prev => new Set([...prev, newItem.id]));
-  
-  // show add toast
-  toast.itemAdded(newItem.name || 'New Item');
+    
+  // Enhanced toast method
+  const detailedName = buildDetailedItemName(newItem);
+  toast.itemAdded(detailedName, newItem.quantity, newItem.buy_price);
   
   setTimeout(() => {
     setNewItemIds(prev => {
@@ -146,7 +173,8 @@ const handleAddItem = useCallback((newItem) => {
       setInvestments(prev => prev.filter(inv => inv.id !== itemToDelete.id));
 
       // show delete toast
-      toast.itemDeleted(itemToDelete.name || 'Item');
+      const detailedName = buildDetailedItemName(itemToDelete);
+      toast.itemDeleted(detailedName);
 
       // Close the confirmation modal
       setItemToDelete(null);
