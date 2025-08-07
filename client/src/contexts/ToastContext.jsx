@@ -52,60 +52,56 @@ export const ToastProvider = ({ children }) => {
   // ENHANCED INVESTMENT-SPECIFIC METHODS WITH METADATA SUPPORT
 
   const fullSaleCompleted = (itemName, quantity, saleValue, profitLoss, options = {}) => {
-    const cleanName = itemName.replace(/^(Souvenir |StatTrak™ )/, '');
     return addToast({
       type: 'sale',
       title: 'Full Sale Completed',
-      message: cleanName,
+      message: itemName,
       metadata: {
         saleAmount: `$${saleValue.toFixed(2)} sale`,
-        profitLoss: `${profitLoss >= 0 ? '+' : '-'}${Math.abs(profitLoss).toFixed(2)} p/l`,
+        profitLoss: `${profitLoss >= 0 ? '+' : '-'}$${Math.abs(profitLoss).toFixed(2)} p/l`,
         quantity: `${quantity}x sold`
       },
-      duration: 5000,
+      duration: 6000,
       ...options
     });
 };
 
   const partialSaleCompleted = (itemName, soldQty, totalQty, saleValue, profitLoss, options = {}) => {
-    const cleanName = itemName.replace(/^(Souvenir |StatTrak™ )/, '');
     return addToast({
       type: 'sale',
       title: 'Partial Sale Completed',
-      message: cleanName,
+      message: itemName,
       metadata: {
         saleAmount: `$${saleValue.toFixed(2)} sale`,
-        profitLoss: `${profitLoss >= 0 ? '+' : '-'}${Math.abs(profitLoss).toFixed(2)} p/l`,
+        profitLoss: `${profitLoss >= 0 ? '+' : '-'}$${Math.abs(profitLoss).toFixed(2)} p/l`,
         quantity: `${soldQty} of ${totalQty + soldQty} sold`
       },
-      duration: 4000,
+      duration: 6000,
       ...options
     });
   };
 
   const itemAdded = (itemName, quantity = 1, buyPrice, options = {}) => {
-    const cleanName = itemName.replace(/^(Souvenir |StatTrak™ )/, '');
     return addToast({
       type: 'add',
       title: 'Item Added',
-      message: cleanName,
+      message: itemName,
       metadata: {
         amount: `$${buyPrice.toFixed(2)} each`,
         item: `${quantity}x added`
       },
-      duration: 4000,
+      duration: 5000,
       ...options
     });
   };
 
   const itemDeleted = (itemName, options = {}) => {
-    const cleanName = itemName.replace(/^(Souvenir |StatTrak™ )/, '');
     return addToast({
       type: 'delete',
       title: 'Item Deleted',
-      message: cleanName,
+      message: itemName,
       metadata: null, // No additional details needed for deletions
-      duration: 3000,
+      duration: 3500,
       ...options
     });
   };
