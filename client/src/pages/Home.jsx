@@ -106,13 +106,9 @@ const InvestmentDashboard = ({ userSession }) => {
   // Add to investments list optimistically
   setInvestments(prev => [itemWithMetrics, ...prev]);
   
-  // Show success toast
-  const detailedName = buildDetailedItemName(newItem);
-  toast.itemAdded(detailedName, newItem.quantity, newItem.buy_price);
-
   // NO REFETCH NEEDED - all data is available client-side
   console.log('New item added to dashboard:', itemWithMetrics);
-}, [setInvestments, buildDetailedItemName, toast]);
+}, [setInvestments]);
 
   // Handles completion of a sale transaction
     const handleSaleComplete = useCallback((investmentId, quantitySold, salePrice, remainingQuantity) => {
