@@ -227,7 +227,7 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
       )}
 
       {/* Quantity selector - only for stackable items (cases, liquids) */}
-      {(currentCategory === 'Cases' || currentCategory === 'Liquids') && (
+      {(currentCategory !== 'Crafts') && (
         <QuantitySelector
           quantity={formData.quantity}
           onQuantityChange={handleQuantityChange}

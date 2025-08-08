@@ -142,7 +142,7 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
       )}
 
       {/* Quantity Selector - For Liquids and Cases that can be bought in bulk */}
-      {(type === 'Liquids' || type === 'Cases') && (
+        {type !== 'Crafts' && (
         <QuantitySelector
           quantity={formData.quantity}
           onQuantityChange={handleQuantityChange}

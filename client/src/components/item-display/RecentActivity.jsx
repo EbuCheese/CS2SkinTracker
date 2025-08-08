@@ -100,6 +100,42 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
     [recentActivity, visibleItems]
   );
 
+  // Memoize activity processing to avoid recalculating subtitles on every render
+  const processedActivities = useMemo(() => {
+    return visibleActivities.map(activity => {
+      // Build subtitle once and cache it
+      const condition = activity.item_condition || activity.condition;
+      const variant = activity.item_variant || activity.variant;
+      const quantity = activity.quantity_sold || activity.quantity || 1;
+      
+      // Build condition text
+      const conditionText = condition && condition.toLowerCase() !== 'unknown' && condition.toLowerCase() !== ''
+        ? condition
+        : '';
+      
+      // Build variant abbreviation
+      const variantText = variant && variant.toLowerCase() !== 'normal'
+        ? ` (${variant.toLowerCase() === 'stattrak' ? 'ST' : 
+              variant.toLowerCase() === 'souvenir' ? 'SV' : 
+              variant})`
+        : '';
+      
+      // Combine parts
+      const parts = [];
+      if (conditionText) {
+        parts.push(`${conditionText}${variantText}`);
+      } else if (variantText) {
+        parts.push(variantText.trim());
+      }
+      parts.push(`Qty: ${quantity}`);
+      
+      return {
+        ...activity,
+        processedSubtitle: parts.join(' • ')
+      };
+    });
+  }, [visibleActivities]);
+
   // Memoize date formatting options
   const dateOptions = useMemo(() => ({
     compact: { month: 'short', day: 'numeric' },
@@ -126,9 +162,8 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
         {recentActivity.length > 0 ? (
           <>
             <div className="flex-1 flex flex-col" style={{ gap: '12px' }}>
-              {visibleActivities.map((activity, index) => {
-              
-                // Calculate date format inline to avoid hook order issues in map
+              {processedActivities.map((activity, index) => {
+                // Calculate date format inline (this is fine since it's lightweight)
                 const formattedDate = (() => {
                   if (!activity.date || isNaN(activity.date.getTime())) {
                     return 'Unknown date';
@@ -138,7 +173,7 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
                   );
                 })();
 
-                // Direct style calculations
+                // Direct style calculations (these are fine - very fast)
                 const activityIconBg = activity.type === 'purchase' 
                   ? 'bg-blue-500/20 text-blue-400' 
                   : 'bg-green-500/20 text-green-400';
@@ -185,25 +220,7 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
                           </h3>
                           {!isVeryCompact && (
                             <p className={`text-gray-400 truncate ${isCompact ? 'text-xs' : 'text-sm'}`}>
-                              {activity.subtitle && activity.subtitle.toLowerCase() !== 'unknown' 
-                                ? (() => {
-                                    // Parse and format item details (condition, variant, quantity)
-                                    const parts = activity.subtitle.split(' • ');
-                                    const condition = parts[0];
-                                    const qtyPart = parts.find(part => part.startsWith('Qty:')) || `Qty: ${activity.quantity || 1}`;
-                                    
-                                    // Convert variant names to abbreviations for space efficiency
-                                    const variant = (activity.variant || activity.item_variant) && 
-                                                (activity.variant || activity.item_variant).toLowerCase() !== 'normal' 
-                                    ? ` (${(activity.variant || activity.item_variant).toLowerCase() === 'stattrak' ? 'ST' : 
-                                          (activity.variant || activity.item_variant).toLowerCase() === 'souvenir' ? 'SV' : 
-                                          (activity.variant || activity.item_variant)})`
-                                    : '';
-                                      
-                                    return `${condition}${variant} • ${qtyPart}`;
-                                  })()
-                                : `Qty: ${activity.quantity || 1}`
-                              }
+                              {activity.processedSubtitle}
                             </p>
                           )}
                           <p className={`text-gray-500 ${isCompact ? 'text-xs' : 'text-sm'}`}>
@@ -211,7 +228,7 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
                           </p>
                         </div>
                       </div>
-                     
+                    
                       {/* Amount */}
                       <div className="text-right flex-shrink-0 ml-4">
                         <span className={`font-medium ${isCompact ? 'text-sm' : 'text-base'} ${amountColor}`}>
