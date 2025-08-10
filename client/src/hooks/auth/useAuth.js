@@ -191,11 +191,16 @@ const loginWithBetaKey = useCallback(async (betaKey) => {
   setRevocationMessage(null);
 
   try {
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    console.log('🌍 Detected timezone:', userTimezone);
     console.log('📡 Calling create_beta_session function...');
     
     // Call Supabase function to create new session
     const { data, error } = await supabase
-      .rpc('create_beta_session', { input_key_value: betaKey });
+      .rpc('create_beta_session', {
+        input_key_value: betaKey,
+        user_timezone: userTimezone
+      });
     
     console.log('🔑 create_beta_session raw response:', { 
       data, 
