@@ -202,21 +202,35 @@ const PortfolioPerformanceChart = ({
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
           </div>
+        ) : !chartData || chartData.length === 0 ? (
+          // No Data State
+          <div className="flex flex-col items-center justify-center h-full">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <TrendingUp className="w-8 h-8 text-gray-500" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-300 mb-2">
+                No data for {selectedTimePeriod}
+              </h3>
+              <p className="text-sm text-gray-500 max-w-md">
+                {!chartData || chartData.length === 0 ? 
+                  "Chart data will appear here once you make your first investment." :
+                  "No portfolio data available for this time frame."
+                }
+              </p>
+            </div>
+          </div>
         ) : (
           // Chart Rendering
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
-              {/* Grid Lines */}
+              {/* ... rest of your existing chart JSX ... */}
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-
-              {/* X-Axis (Dates) */}
               <XAxis 
                 dataKey="date" 
                 stroke="#9CA3AF"
                 fontSize={12}
               />
-
-              {/* Y-Axis (Values) */}
               <YAxis 
                 stroke="#9CA3AF"
                 fontSize={12}
@@ -224,18 +238,12 @@ const PortfolioPerformanceChart = ({
                 domain={yAxisDomain}
                 tickCount={tickCount}
               />
-
-              {/* Interactive Tooltip */}
               <Tooltip 
                 formatter={tooltipFormatter}
                 labelFormatter={tooltipLabelFormatter}
                 contentStyle={tooltipContentStyle}
               />
-
-              {/* Main Chart Line */}
               <Line {...lineProps} />
-
-              {/* Gradient Definition for Line Color */}
               <defs>
                 <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
                   <stop offset="0%" stopColor="#F97316" />

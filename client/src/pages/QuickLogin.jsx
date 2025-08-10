@@ -43,8 +43,12 @@ const QuickLogin = ({ onQuickLogin, onNewBetaKey, storedBetaKey, revocationMessa
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl flex items-center justify-center shadow-2xl mx-auto mb-6">
-            <TrendingUp className="w-10 h-10 text-white" />
+          <div className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-2xl mx-auto mb-6">
+            <img 
+              src="/logoTEST10.png" 
+              alt="SkinWatch Logo" 
+              className="w-20 h-20 object-contain rounded-2xl"
+            />
           </div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent mb-2">
             Welcome Back

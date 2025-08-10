@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingUp, Key, ArrowRight, Mail, Users, Shield, CheckCircle, AlertCircle } from 'lucide-react';
+import { Key, ArrowRight, Mail, Users, Shield, CheckCircle, AlertCircle } from 'lucide-react';
 
 const BetaKeyEntry = ({ onSuccess }) => {
   // Beta key entry states
@@ -89,10 +89,14 @@ const BetaKeyEntry = ({ onSuccess }) => {
 
   //// Render Helpers ////
   // Renders the main logo and branding section
-  const renderLogo = (title = "SkinTracker", subtitle = "Enter your beta key to continue") => (
+  const renderLogo = (title = "SkinWatch", subtitle = "Enter your beta key to continue") => (
     <div className="text-center mb-8">
-      <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl flex items-center justify-center shadow-2xl mx-auto mb-6">
-        <TrendingUp className="w-10 h-10 text-white" />
+      <div className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-2xl mx-auto mb-6">
+        <img 
+          src="/logoTEST10.png" 
+          alt="SkinWatch Logo" 
+          className="w-20 h-20 object-contain rounded-2xl"
+        />
       </div>
       <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent mb-2">
         {title}
@@ -144,7 +148,7 @@ const BetaKeyEntry = ({ onSuccess }) => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          {renderLogo("SkinTracker", "Request Beta Access")}
+          {renderLogo("SkinWatch", "Request Beta Access")}
 
           {/* Request Form Container */}
           <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-8 shadow-2xl">
@@ -178,7 +182,7 @@ const BetaKeyEntry = ({ onSuccess }) => {
               id: 'reason',
               value: requestForm.reason,
               onChange: (e) => updateRequestForm('reason', e.target.value),
-              placeholder: 'Tell us about your interest in SkinTracker...',
+              placeholder: 'Tell us about your interest in SkinWatch...',
               label: 'Why do you want beta access?',
               disabled: requestLoading,
               rows: 4
@@ -241,7 +245,7 @@ const BetaKeyEntry = ({ onSuccess }) => {
           
           <h1 className="text-3xl font-bold text-white mb-4">Request Submitted!</h1>
           <p className="text-gray-400 mb-8">
-            Thanks for your interest in SkinTracker. We've received your beta access request and will review it shortly.
+            Thanks for your interest in SkinWatch. We've received your beta access request and will review it shortly.
           </p>
 
           {/* Next Steps Information */}
@@ -258,7 +262,7 @@ const BetaKeyEntry = ({ onSuccess }) => {
               </div>
               <div className="flex items-center space-x-3">
                 <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
-                <span>Use your beta key to access SkinTracker</span>
+                <span>Use your beta key to access SkinWatch</span>
               </div>
             </div>
           </div>
@@ -350,7 +354,7 @@ const BetaKeyEntry = ({ onSuccess }) => {
             <div>
               <h3 className="text-white font-medium text-sm mb-1">Limited Beta Access</h3>
               <p className="text-gray-400 text-xs leading-relaxed">
-                SkinTracker is currently in private beta. We're working with a select group of users to refine the experience before our public launch.
+                SkinWatch is currently in private beta. We're working with a select group of users to refine the experience before our public launch.
               </p>
             </div>
           </div>

@@ -104,7 +104,7 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent mb-2">
             Account Settings
           </h1>
-          <p className="text-gray-400">Manage your SkinTracker beta account</p>
+          <p className="text-gray-400">Manage your SkinWatch beta account</p>
         </div>
 
         {/* Account Information Display Card */}
