@@ -310,9 +310,11 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
           // Empty state - centered in the entire available space
           <div className="flex-grow flex items-center justify-center">
             <div className="text-center mb-12">
-              <ChartNoAxesColumn className="w-12 h-12 mx-auto mb-3 opacity-30 text-gray-300" />
-              <p className="text-xl text-gray-400">No price changes to display</p>
-              <p className="text-md text-gray-500">Items will appear here when adding investments</p>
+              <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <ChartNoAxesColumn className="w-8 h-8 text-gray-500" />
+              </div>
+              <h3 className="text-xl font-medium text-gray-400 mb-2">No price changes to display</h3>
+              <p className="text-gray-500 max-w-md">Items will appear here when adding investments</p>
             </div>
           </div>
         ) : (

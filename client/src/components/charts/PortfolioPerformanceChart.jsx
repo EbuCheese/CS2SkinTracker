@@ -1,6 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Loader2, ChartLine } from 'lucide-react';
 import { formatPrice, timePeriods } from '@/hooks/util';
 
 // Pure presentation component for displaying portfolio performance chart
@@ -207,14 +207,15 @@ const PortfolioPerformanceChart = ({
           <div className="flex flex-col items-center justify-center h-full">
             <div className="text-center mb-4">
               <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <TrendingUp className="w-8 h-8 text-gray-500" />
+                <ChartLine className="w-8 h-8 text-gray-500" />
               </div>
+              {/* <ChartLine className="w-12 h-12 mx-auto mb-2 opacity-50 text-gray-400" /> */}
               <h3 className="text-xl font-medium text-gray-400 mb-2">
                 No data for {selectedTimePeriod}
               </h3>
               <p className="text-gray-500 max-w-md">
                 {!chartData || chartData.length === 0 ? 
-                  "Chart data will appear here once you make your first investment." :
+                  "Performance chart data will appear here once you make your first investment." :
                   "No portfolio data available for this time frame."
                 }
               </p>

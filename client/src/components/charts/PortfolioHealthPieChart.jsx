@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip} from 'recharts';
+import { ChartPie, Table, List } from 'lucide-react';
 
 // Memoized component for rendering individual distribution items in the list
 const DistributionItem = React.memo(({ 
@@ -124,6 +125,11 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
 
   // Consolidated breakdown calculation for item view
   const consolidatedBreakdown = actualPortfolio.weaponBreakdown || [];
+
+  // Empty section
+  const isEmpty = !actualPortfolio || 
+  ((!actualPortfolio.typeBreakdown || actualPortfolio.typeBreakdown.length === 0) && 
+   (!consolidatedBreakdown || consolidatedBreakdown.length === 0));
 
   // Main data processing pipeline with search filtering and small slice handling
   const processedData = useMemo(() => {
@@ -502,7 +508,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
       </div>
 
       {/* Controls Row */}
-      <div className={`flex items-center justify-between gap-4 ${viewMode === 'table' ? 'mb-4' : ''}`}>
+      <div className={`flex items-center justify-between gap-4 ${viewMode === 'table' && !isEmpty ? 'mb-4' : ''}`}>
         {/* Search Input */}
         <div className="flex-1 max-w-xs">
           <input
@@ -555,8 +561,27 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
       </div>
 
       {/* Main content area - Chart or Table View */}
-      <div className={viewMode === 'table' ? 'mb-6' : ''}></div>
-      {viewMode === 'chart' ? (
+      <div className={viewMode === 'table' && !isEmpty ? 'mb-6' : ''}></div>
+      {isEmpty ? (
+        // Empty State - Different text based on view mode
+        <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
+          <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
+            {viewMode === 'table' ? (
+              <Table className="w-8 h-8 text-gray-500" />
+            ) : (
+              <ChartPie className="w-8 h-8 text-gray-500" />
+            )}
+          </div>
+          <h3 className="text-xl font-medium text-gray-400 mb-1">No Portfolio Data</h3>
+          <p className="text-gray-500 text-md max-w-md">
+            {viewMode === 'table' 
+              ? 'Portfolio distribution table view will appear here when you add investments.'
+              : 'Portfolio distribution pie chart will appear here when you add investments.'
+            }
+          </p>
+        </div>
+      ) :
+      viewMode === 'chart' ? (
         <div className="flex-1" style={{ minHeight: '320px', maxHeight: '320px' }} onClick={handleChartContainerClick}>
           {/* Recharts ResponsiveContainer - Automatically adjusts to parent dimensions */}
           <ResponsiveContainer width="100%" height="100%">
@@ -670,20 +695,36 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
           </div>
           {/* Distribution items container with fixed minimum height for layout stability */}
           <div className="space-y-1" style={{ minHeight: '255px' }}>
-            {/* Render current page of distribution items using memoized component */}
-            {currentPageData.map((item, index) => (
-              <DistributionItem
-                key={`${item.name}-${index}`}
-                item={item}
-                index={index}
-                startIndex={startIndex}
-                isSelected={selectedSlice === item.name}
-                onClick={() => handleDistributionItemClick(item)}
-                getItemColor={getItemColor}
-                formatCurrency={formatCurrency}
-                formatPercentage={formatPercentage}
-              />
-            ))}
+            {/* Show empty state if no data after filtering/search */}
+            {currentData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center py-8">
+                <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <List className="w-8 h-8 text-gray-500" />
+                </div>
+                <h4 className="text-xl font-medium text-gray-400 mb-2">No {activeToggle === 'item' ? 'Items' : 'Types'} Found</h4>
+                <p className="text-gray-500 max-w-md">
+                  {debouncedSearchTerm
+                    ? `No ${activeToggle}s match your search "${debouncedSearchTerm}"`
+                    : `${activeToggle === 'item' ? 'Item' : 'Type'} distribution list will appear here when you add investments.`
+                  }
+                </p>
+              </div>
+            ) : (
+              /* Render current page of distribution items using memoized component */
+              currentPageData.map((item, index) => (
+                <DistributionItem
+                  key={`${item.name}-${index}`}
+                  item={item}
+                  index={index}
+                  startIndex={startIndex}
+                  isSelected={selectedSlice === item.name}
+                  onClick={() => handleDistributionItemClick(item)}
+                  getItemColor={getItemColor}
+                  formatCurrency={formatCurrency}
+                  formatPercentage={formatPercentage}
+                />
+              ))
+            )}
           </div>
         </div>
       ) : (
