@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { TrendingUp, TrendingDown, ListFilterPlus, ListFilter} from 'lucide-react';
+import { TrendingUp, TrendingDown, ListFilterPlus, ListFilter, ChartNoAxesColumn} from 'lucide-react';
 import { ImageWithLoading } from '@/components/ui';
 
 // Memoized sub-component for individual investment items
@@ -239,7 +239,7 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
   // Navigate to next page
   const handleNextPage = useCallback(() => {
     setCurrentPage(prev => Math.min(totalPages - 1, prev + 1));
-  }, [totalPages]);
+  }, []);
 
   // Navigate to specific page by clicking page number
   const handlePageClick = useCallback((pageIndex) => {
@@ -305,37 +305,40 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
       
       {/* Main content area - uses flexbox to fill available space */}
       <div className="flex-grow flex flex-col overflow-hidden">
-        {/* Investment items list */}
-        <div className="space-y-4 flex-grow">
-          {currentPageItems.map((investment) => (
-            <InvestmentItem 
-              key={investment.id}
-              investment={investment}
-              formatPrice={formatPrice}
-            />
-          ))}
-          
-          {/* Empty state when no items to display */}
-          {currentPageItems.length === 0 && (
-            <div className="flex items-center justify-center py-12 text-gray-400">
-              <div className="text-center">
-                <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p className="text-lg">No price changes to display</p>
-                <p className="text-sm">Items will appear here as prices fluctuate</p>
-              </div>
+        {/* Conditional rendering: either show items or centered empty state */}
+        {currentPageItems.length === 0 ? (
+          // Empty state - centered in the entire available space
+          <div className="flex-grow flex items-center justify-center">
+            <div className="text-center mb-12">
+              <ChartNoAxesColumn className="w-12 h-12 mx-auto mb-3 opacity-30 text-gray-300" />
+              <p className="text-xl text-gray-400">No price changes to display</p>
+              <p className="text-md text-gray-500">Items will appear here when adding investments</p>
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <>
+            {/* Investment items list */}
+            <div className="space-y-4 flex-grow">
+              {currentPageItems.map((investment) => (
+                <InvestmentItem 
+                  key={investment.id}
+                  investment={investment}
+                  formatPrice={formatPrice}
+                />
+              ))}
+            </div>
 
-        {/* Pagination controls - pinned to bottom of container */}
-        {totalPages > 1 && (
-          <PaginationControls
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPrevious={handlePreviousPage}
-            onNext={handleNextPage}
-            onPageClick={handlePageClick}
-          />
+            {/* Pagination controls - pinned to bottom of container */}
+            {totalPages > 1 && (
+              <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPrevious={handlePreviousPage}
+                onNext={handleNextPage}
+                onPageClick={handlePageClick}
+              />
+            )}
+          </>
         )}
       </div>
     </div>

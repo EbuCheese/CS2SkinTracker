@@ -261,9 +261,10 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
             )}
           </>
         ) : (
-          <div className="text-center py-8 text-gray-400 flex-1 flex flex-col justify-center">
+          <div className="text-center py-8 text-gray-400 flex-1 flex flex-col justify-center mb-12">
             <Activity className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p>No recent activity</p>
+            <p className="text-xl text-gray-400">No recent activity</p>
+            <p className="text-md text-gray-500">Items will appear here when adding investments</p>
           </div>
         )}
       </div>

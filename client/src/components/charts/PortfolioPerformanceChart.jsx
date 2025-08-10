@@ -205,14 +205,14 @@ const PortfolioPerformanceChart = ({
         ) : !chartData || chartData.length === 0 ? (
           // No Data State
           <div className="flex flex-col items-center justify-center h-full">
-            <div className="text-center">
+            <div className="text-center mb-4">
               <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <TrendingUp className="w-8 h-8 text-gray-500" />
               </div>
-              <h3 className="text-lg font-medium text-gray-300 mb-2">
+              <h3 className="text-xl font-medium text-gray-400 mb-2">
                 No data for {selectedTimePeriod}
               </h3>
-              <p className="text-sm text-gray-500 max-w-md">
+              <p className="text-gray-500 max-w-md">
                 {!chartData || chartData.length === 0 ? 
                   "Chart data will appear here once you make your first investment." :
                   "No portfolio data available for this time frame."
