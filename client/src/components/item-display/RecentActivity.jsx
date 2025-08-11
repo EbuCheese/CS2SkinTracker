@@ -4,46 +4,47 @@ import { ImageWithLoading } from '@/components/ui';
 
 const RecentActivity = ({ recentActivity, formatPrice }) => {
   const [visibleItems, setVisibleItems] = useState(3);
-  const [cardHeight, setCardHeight] = useState('auto');
+  const [cardHeight, setCardHeight] = useState(120); // Default to max height
   const containerRef = useRef(null);
   const headerRef = useRef(null);
   const resizeObserverRef = useRef(null);
   const timeoutRef = useRef(null);
 
   // Calculate how many items can fit based on available container height
-  // Balances between showing more items vs maintaining readable card sizes
   const calculateOptimalLayout = useCallback(() => {
-    if (!containerRef.current || !headerRef.current) return;
+    if (!containerRef.current || !headerRef.current || recentActivity.length === 0) {
+      return;
+    }
 
-    const containerHeight = containerRef.current.offsetHeight;
-    const headerHeight = headerRef.current.offsetHeight;
-    const availableHeight = containerHeight - headerHeight - 48;
-
+    // Handle empty state separately
     if (recentActivity.length === 0) {
       setVisibleItems(0);
       return;
     }
 
+    const containerHeight = containerRef.current.offsetHeight;
+    const headerHeight = headerRef.current.offsetHeight;
+    const availableHeight = containerHeight - headerHeight - 48; // padding and margins
+
     const minCardHeight = 80;
     const maxCardHeight = 120;
-    const spacing = 16;
+    const spacing = 12; // gap between items
 
-    let optimalItems = 1;
-    let optimalHeight = maxCardHeight;
+    // Calculate how many items can actually fit, then limit by available items
+  const maxItemsThatFit = Math.floor((availableHeight + spacing) / (minCardHeight + spacing));
+  const actualItemCount = Math.min(recentActivity.length, Math.max(maxItemsThatFit, 1));
+  setVisibleItems(actualItemCount);
 
-    // Find the sweet spot between number of items and card readability
-    for (let items = 1; items <= Math.min(recentActivity.length, 8); items++) {
-      const totalSpacing = (items - 1) * spacing;
-      const heightPerCard = (availableHeight - totalSpacing) / items;
-      
-      if (heightPerCard >= minCardHeight) {
-        optimalItems = items;
-        optimalHeight = Math.min(heightPerCard, maxCardHeight);
-      }
-    }
+    if (actualItemCount === 0) return;
 
-    setVisibleItems(optimalItems);
-    setCardHeight(optimalHeight);
+    // Calculate optimal card height
+    const totalSpacing = (actualItemCount - 1) * spacing;
+    const heightPerCard = (availableHeight - totalSpacing) / actualItemCount;
+    
+    // Constrain to reasonable bounds
+    const finalHeight = Math.min(Math.max(heightPerCard, minCardHeight), maxCardHeight);
+    setCardHeight(finalHeight);
+
   }, [recentActivity.length]);
 
   // Debounce resize events to prevent excessive recalculations
@@ -51,39 +52,48 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
-    timeoutRef.current = setTimeout(calculateOptimalLayout, 100);
+    timeoutRef.current = setTimeout(calculateOptimalLayout, 200);
   }, [calculateOptimalLayout]);
 
   useEffect(() => {
+  // Add a small delay to let DOM settle after prop changes
+  const initialLayoutTimer = setTimeout(() => {
     calculateOptimalLayout();
+  }, 50);
 
-    window.addEventListener('resize', handleResize);
-    
-    // Create ResizeObserver only once to avoid multiple observers
-    if (!resizeObserverRef.current) {
-      resizeObserverRef.current = new ResizeObserver(calculateOptimalLayout);
-    }
-    
-    if (containerRef.current) {
-      resizeObserverRef.current.observe(containerRef.current);
-    }
+  window.addEventListener('resize', handleResize);
+  
+  if (!resizeObserverRef.current) {
+    resizeObserverRef.current = new ResizeObserver((entries) => {
+      // Only recalculate if the container actually changed size significantly
+      for (let entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (height > 100) { // Only trigger if container has meaningful height
+          handleResize();
+        }
+      }
+    });
+  }
+  
+  if (containerRef.current) {
+    resizeObserverRef.current.observe(containerRef.current);
+  }
 
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-      if (resizeObserverRef.current && containerRef.current) {
-        resizeObserverRef.current.unobserve(containerRef.current);
-      }
-    };
-  }, [calculateOptimalLayout, handleResize]);
+  return () => {
+    clearTimeout(initialLayoutTimer);
+    window.removeEventListener('resize', handleResize);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+  };
+}, [handleResize]);
 
   // Cleanup ResizeObserver on unmount
   useEffect(() => {
     return () => {
       if (resizeObserverRef.current) {
         resizeObserverRef.current.disconnect();
+        resizeObserverRef.current = null;
       }
     };
   }, []);
@@ -150,123 +160,110 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
     >
       <div 
         ref={headerRef}
-        className="flex items-center justify-between mb-6"
+        className="flex items-center justify-between mb-6 flex-shrink-0"
       >
         <h2 className="text-xl font-semibold text-white">Recent Activity</h2>
         <div className="text-sm text-gray-400">
-          {visibleItems > 0 ? `${visibleItems} of ${recentActivity.length}` : `${recentActivity.length} transactions`}
+          {recentActivity.length === 0 ? 'No transactions' : `${recentActivity.length} transaction${recentActivity.length !== 1 ? 's' : ''}`}
         </div>
       </div>
      
-      <div className="flex-1 flex flex-col h-full">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {recentActivity.length > 0 ? (
-          <>
-            <div className="flex-1 flex flex-col" style={{ gap: '12px' }}>
-              {processedActivities.map((activity, index) => {
-                // Calculate date format inline (this is fine since it's lightweight)
-                const formattedDate = (() => {
-                  if (!activity.date || isNaN(activity.date.getTime())) {
-                    return 'Unknown date';
-                  }
-                  return activity.date.toLocaleDateString('en-US', 
-                    isCompact ? dateOptions.compact : dateOptions.normal
-                  );
-                })();
+          <div className="flex flex-col space-y-3 flex-shrink-0">
+            {processedActivities.map((activity, index) => {
+              // Calculate date format inline (this is fine since it's lightweight)
+              const formattedDate = (() => {
+                if (!activity.date || isNaN(activity.date.getTime())) {
+                  return 'Unknown date';
+                }
+                return activity.date.toLocaleDateString('en-US', 
+                  isCompact ? dateOptions.compact : dateOptions.normal
+                );
+              })();
 
-                // Direct style calculations (these are fine - very fast)
-                const activityIconBg = activity.type === 'purchase' 
-                  ? 'bg-blue-500/20 text-blue-400' 
-                  : 'bg-green-500/20 text-green-400';
+              // Direct style calculations (these are fine - very fast)
+              const activityIconBg = activity.type === 'purchase' 
+                ? 'bg-blue-500/20 text-blue-400' 
+                : 'bg-green-500/20 text-green-400';
 
-                const amountColor = activity.type === 'purchase' ? 'text-red-400' : 'text-green-400';
+              const amountColor = activity.type === 'purchase' ? 'text-red-400' : 'text-green-400';
 
-                return (
+              return (
+                <div 
+                  key={`${activity.type}-${activity.id || activity.investment_id || index}-${activity.date?.getTime()}`}
+                  className="flex-shrink-0"
+                >
                   <div 
-                    key={`${activity.type}-${activity.id || index}`}
-                    className="flex-1"
+                    className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-colors duration-200"
                     style={{ minHeight: `${Math.floor(cardHeight)}px` }}
                   >
-                    <div 
-                      className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-colors duration-200"
-                      style={{ minHeight: `${cardHeight}px` }}
-                    >
-                      <div className="flex items-center space-x-4 flex-1 min-w-0">
-                        {/* ImageWithLoading and custom fallback */}
-                        <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
-                          <ImageWithLoading
-                            src={activity.image_url}
-                            alt={activity.title}
-                            customFallback={
+                    <div className="flex items-center space-x-4 flex-1 min-w-0">
+                      {/* ImageWithLoading and custom fallback */}
+                      <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                        <ImageWithLoading
+                          src={activity.image_url}
+                          alt={activity.title}
+                          customFallback={
+                            <div className="w-full h-full flex items-center justify-center">
                               <span className="text-sm font-medium text-white">
-                                {activity.title.substring(0, 2).toUpperCase()}
+                                {activity.title?.substring(0, 2).toUpperCase() || 'CS'}
                               </span>
-                            }
-                          />
-                        </div>
-                        
-                        {/* Activity Icon */}
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${activityIconBg}`}>
-                          {activity.type === 'purchase' ? (
-                            <Plus className="w-5 h-5" />
-                          ) : (
-                            <DollarSign className="w-5 h-5" />
-                          )}
-                        </div>
-                        
-                        {/* Activity Details */}
-                        <div className="min-w-0 flex-1">
-                          <h3 className={`font-medium text-white truncate ${isCompact ? 'text-sm' : 'text-base'}`}>
-                            {activity.title}
-                          </h3>
-                          {!isVeryCompact && (
-                            <p className={`text-gray-400 truncate ${isCompact ? 'text-xs' : 'text-sm'}`}>
-                              {activity.processedSubtitle}
-                            </p>
-                          )}
-                          <p className={`text-gray-500 ${isCompact ? 'text-xs' : 'text-sm'}`}>
-                            {formattedDate}
-                          </p>
-                        </div>
+                            </div>
+                          }
+                        />
                       </div>
-                    
-                      {/* Amount */}
-                      <div className="text-right flex-shrink-0 ml-4">
-                        <span className={`font-medium ${isCompact ? 'text-sm' : 'text-base'} ${amountColor}`}>
-                          {activity.type === 'purchase' ? '-' : '+'}{formatPrice(Math.abs(activity.amount))}
-                        </span>
-                        {!isVeryCompact && (
-                          <p className={`text-gray-400 capitalize ${isCompact ? 'text-xs' : 'text-sm'}`}>
-                            {activity.type}
-                          </p>
+                      
+                      {/* Activity Icon */}
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${activityIconBg}`}>
+                        {activity.type === 'purchase' ? (
+                          <Plus className="w-5 h-5" />
+                        ) : (
+                          <DollarSign className="w-5 h-5" />
                         )}
                       </div>
+                      
+                      {/* Activity Details */}
+                      <div className="min-w-0 flex-1">
+                        <h3 className={`font-medium text-white truncate ${isCompact ? 'text-sm' : 'text-base'}`}>
+                          {activity.title}
+                        </h3>
+                        {!isVeryCompact && activity.processedSubtitle && (
+                          <p className={`text-gray-400 truncate ${isCompact ? 'text-xs' : 'text-sm'}`}>
+                            {activity.processedSubtitle}
+                          </p>
+                        )}
+                        <p className={`text-gray-500 ${isCompact ? 'text-xs' : 'text-sm'}`}>
+                          {formattedDate}
+                        </p>
+                      </div>
+                    </div>
+                  
+                    {/* Amount */}
+                    <div className="text-right flex-shrink-0 ml-4">
+                      <span className={`font-medium ${isCompact ? 'text-sm' : 'text-base'} ${amountColor}`}>
+                        {activity.type === 'purchase' ? '-' : '+'}{formatPrice(Math.abs(activity.amount))}
+                      </span>
+                      {!isVeryCompact && (
+                        <p className={`text-gray-400 capitalize ${isCompact ? 'text-xs' : 'text-sm'}`}>
+                          {activity.type}
+                        </p>
+                      )}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-            
-            {/* Footer with additional info */}
-            {recentActivity.length > visibleItems && (
-              <div className="mt-4 pt-4 border-t border-gray-600/30 flex-shrink-0">
-                <div className="flex items-center justify-between">
-                  <button className="text-sm text-orange-400 hover:text-orange-300 font-medium transition-colors">
-                    View all activity →
-                  </button>
-                  <span className="text-xs text-gray-500">
-                    +{recentActivity.length - visibleItems} more
-                  </span>
                 </div>
-              </div>
-            )}
-          </>
+              );
+            })}
+          </div>
         ) : (
-          <div className="text-center py-8 text-gray-400 flex-1 flex flex-col justify-center mb-12">
-            <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Activity className="w-8 h-8 text-gray-500" />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center mb-12">
+              <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Activity className="w-8 h-8 text-gray-500" />
+              </div>
+              <p className="text-xl font-medium text-gray-400 mb-2">No recent activity</p>
+              <p className="text-gray-500">Items will appear here when adding investments</p>
             </div>
-            <p className="text-xl font-medium text-gray-400 mb-2">No recent activity</p>
-            <p className="text-gray-500">Items will appear here when adding investments</p>
           </div>
         )}
       </div>
