@@ -15,6 +15,14 @@ const InvestmentDashboard = ({ userSession }) => {
 
   const { investments, soldItems, portfolioSummary, loading, error, refetch, setInvestments, setSoldItems } = usePortfolioData(userSession);
   
+  // track optimistics updates
+    const [optimisticUpdates, setOptimisticUpdates] = useState({
+    totalInvested: 0,
+    totalCurrentValue: 0,
+    totalRealizedPL: 0,
+    totalUnrealizedPL: 0
+  });
+
   const [selectedTimePeriod, setSelectedTimePeriod] = useState('MAX');
   const { chartData, chartLoading } = useChartData(userSession, selectedTimePeriod, investments.length > 0);
   
@@ -27,43 +35,91 @@ const InvestmentDashboard = ({ userSession }) => {
   // Calculate portfolio health metrics using custom hook
   const portfolioHealth = useCalculatePortfolioHealth(investments);
   
-  // Use the same portfolio summary logic as the Investments page
-  const portfolioMetrics = usePortfolioSummary(
-    'All', // Show all investments on dashboard
-    investments, 
-    soldItems, 
-    investments, // currentItems = all investments for dashboard
-    [], // no grouped sold items for dashboard view
-    portfolioSummary
-  );
+  // Reset optimistic updates when data is refetched
+  useEffect(() => {
+    if (!loading && portfolioSummary) {
+      setOptimisticUpdates({
+        totalInvested: 0,
+        totalCurrentValue: 0,
+        totalRealizedPL: 0,
+        totalUnrealizedPL: 0
+      });
+    }
+  }, [loading, portfolioSummary]);
 
   // Calculate separate realized vs unrealized P&L for display
   const separatedPL = useMemo(() => {
-    if (!portfolioSummary) {
-      // Fallback to manual calculation if portfolio summary not available
-      const totalRealizedPL = investments.reduce((sum, inv) =>
-        sum + (parseFloat(inv.realized_profit_loss) || 0), 0);
-      
-      const totalUnrealizedPL = investments.reduce((sum, inv) =>
-        sum + (parseFloat(inv.unrealized_profit_loss) || 0), 0);
-      
-      return {
-        totalRealizedPL,
-        totalUnrealizedPL,
-        totalProfitLoss: totalRealizedPL + totalUnrealizedPL
-      };
-    }
-
-    // Use pre-calculated values from database
-    const totalRealizedPL = parseFloat(portfolioSummary.total_realized_pl || 0);
-    const totalUnrealizedPL = parseFloat(portfolioSummary.total_unrealized_pl || 0);
+  if (!portfolioSummary) {
+    // Fallback to manual calculation if portfolio summary not available
+    const totalRealizedPL = investments.reduce((sum, inv) =>
+      sum + (parseFloat(inv.realized_profit_loss) || 0), 0);
+    
+    const totalUnrealizedPL = investments.reduce((sum, inv) =>
+      sum + (parseFloat(inv.unrealized_profit_loss) || 0), 0);
     
     return {
-      totalRealizedPL,
-      totalUnrealizedPL,
-      totalProfitLoss: totalRealizedPL + totalUnrealizedPL
+      totalRealizedPL: totalRealizedPL + optimisticUpdates.totalRealizedPL,
+      totalUnrealizedPL: totalUnrealizedPL + optimisticUpdates.totalUnrealizedPL,
+      totalProfitLoss: totalRealizedPL + totalUnrealizedPL + optimisticUpdates.totalRealizedPL + optimisticUpdates.totalUnrealizedPL
     };
-  }, [portfolioSummary, investments]);
+  }
+
+  // Use pre-calculated values from database + optimistic updates
+  const totalRealizedPL = parseFloat(portfolioSummary.total_realized_pl || 0) + optimisticUpdates.totalRealizedPL;
+  const totalUnrealizedPL = parseFloat(portfolioSummary.total_unrealized_pl || 0) + optimisticUpdates.totalUnrealizedPL;
+  
+  return {
+    totalRealizedPL,
+    totalUnrealizedPL,
+    totalProfitLoss: totalRealizedPL + totalUnrealizedPL
+  };
+}, [portfolioSummary, investments, optimisticUpdates]);
+
+// Get base portfolio metrics (call hook at top level)
+const basePortfolioMetrics = usePortfolioSummary(
+  'All',
+  investments, 
+  soldItems, 
+  investments,
+  [],
+  portfolioSummary
+);
+
+// Use the same portfolio summary logic as the Investments page
+const portfolioMetrics = useMemo(() => {
+  // Apply optimistic updates
+  const updatedTotalCurrentValue = basePortfolioMetrics.totalCurrentValue + optimisticUpdates.totalCurrentValue;
+  const updatedTotalInvested = basePortfolioMetrics.totalInvested + optimisticUpdates.totalInvested;
+  const updatedTotalProfitLoss = separatedPL.totalProfitLoss;
+  
+  // Check if we have optimistic updates that would affect the percentage
+  const hasOptimisticUpdates = optimisticUpdates.totalInvested !== 0 || 
+                               optimisticUpdates.totalCurrentValue !== 0 || 
+                               optimisticUpdates.totalRealizedPL !== 0 || 
+                               optimisticUpdates.totalUnrealizedPL !== 0;
+
+  const updatedProfitPercentage = hasOptimisticUpdates ? 
+    (() => {
+      // For percentage calculation, the denominator should be the UPDATED total investment
+      // This includes both original investments AND new purchases (optimistic updates)
+      const totalInvestmentForPercentage = portfolioSummary ? 
+        parseFloat(portfolioSummary.total_investment || 0) + optimisticUpdates.totalInvested : // DB + optimistic additions
+        basePortfolioMetrics.totalInvested; // Already includes optimistic updates
+      
+      return totalInvestmentForPercentage > 0 
+        ? (updatedTotalProfitLoss / totalInvestmentForPercentage) * 100 
+        : 0;
+    })() : 
+    basePortfolioMetrics.profitPercentage; // Use pre-calculated DB value
+
+  return {
+    ...basePortfolioMetrics,
+    totalCurrentValue: updatedTotalCurrentValue,
+    totalInvested: updatedTotalInvested,
+    totalProfit: updatedTotalProfitLoss,
+    profitPercentage: updatedProfitPercentage
+  };
+}, [basePortfolioMetrics, optimisticUpdates, separatedPL, portfolioSummary]);
 
   // Helper function to build detailed item name for toasts
   const buildDetailedItemName = useCallback((item) => {
@@ -93,7 +149,7 @@ const InvestmentDashboard = ({ userSession }) => {
 
   // Handles adding a new item
   const handleAddItem = useCallback((newItem) => {
-  // Calculate initial metrics manually - same logic as InvestmentsPage
+  // Calculate initial metrics manually
   const itemWithMetrics = {
     ...newItem,
     unrealized_profit_loss: (newItem.current_price - newItem.buy_price) * newItem.quantity,
@@ -106,12 +162,23 @@ const InvestmentDashboard = ({ userSession }) => {
   // Add to investments list optimistically
   setInvestments(prev => [itemWithMetrics, ...prev]);
   
-  // NO REFETCH NEEDED - all data is available client-side
-  console.log('New item added to dashboard:', itemWithMetrics);
+  // Update optimistic portfolio summary
+  const totalInvestedIncrease = newItem.buy_price * newItem.quantity;
+  const totalCurrentValueIncrease = newItem.current_price * newItem.quantity;
+  const unrealizedPLIncrease = itemWithMetrics.unrealized_profit_loss;
+  
+  setOptimisticUpdates(prev => ({
+    totalInvested: prev.totalInvested + totalInvestedIncrease,
+    totalCurrentValue: prev.totalCurrentValue + totalCurrentValueIncrease,
+    totalRealizedPL: prev.totalRealizedPL, // No change
+    totalUnrealizedPL: prev.totalUnrealizedPL + unrealizedPLIncrease
+  }));
+  
+  console.log('New item added with optimistic updates:', itemWithMetrics);
 }, [setInvestments]);
 
   // Handles completion of a sale transaction
-    const handleSaleComplete = useCallback((investmentId, quantitySold, salePrice, remainingQuantity) => {
+  const handleSaleComplete = useCallback((investmentId, quantitySold, salePrice, remainingQuantity) => {
     const soldItem = investments.find(inv => inv.id === investmentId);
     if (!soldItem) return;
 
@@ -119,10 +186,16 @@ const InvestmentDashboard = ({ userSession }) => {
     const saleValue = salePrice * quantitySold;
     const saleProfitLoss = (salePrice - soldItem.buy_price) * quantitySold;
     const isFullSale = remainingQuantity === 0;
+    
+    // Calculate optimistic updates
+    const totalInvestedDecrease = isFullSale ? soldItem.buy_price * soldItem.quantity : 0;
+    const totalCurrentValueDecrease = soldItem.current_price * quantitySold;
+    const realizedPLIncrease = saleProfitLoss;
+    const unrealizedPLDecrease = (soldItem.current_price - soldItem.buy_price) * quantitySold;
 
-    // Create sold item data for recent activity and sold items tracking
+    // Create sold item data
     const soldItemData = {
-      id: `temp_${Date.now()}`, // Temporary ID until DB sync
+      id: `temp_${Date.now()}`,
       investment_id: investmentId,
       user_id: userSession.id,
       quantity_sold: quantitySold,
@@ -143,44 +216,38 @@ const InvestmentDashboard = ({ userSession }) => {
       return prev.map(inv => {
         if (inv.id !== investmentId) return inv;
 
-        if (remainingQuantity === 0) {
-          // Item fully sold - we'll filter it out
-          return null;
-        } else {
-          // Partial sale - update quantities and P&L
-          return {
-            ...inv,
-            quantity: remainingQuantity,
-            total_sold_quantity: (inv.total_sold_quantity || 0) + quantitySold,
-            total_sale_value: (inv.total_sale_value || 0) + saleValue,
-            realized_profit_loss: (inv.realized_profit_loss || 0) + saleProfitLoss,
-            unrealized_profit_loss: (inv.current_price - inv.buy_price) * remainingQuantity
-          };
-        }
-      }).filter(Boolean); // Remove null entries (fully sold items)
+        return {
+          ...inv,
+          quantity: remainingQuantity,
+          is_fully_sold: remainingQuantity === 0, // Mark as fully sold instead of removing
+          total_sold_quantity: (inv.total_sold_quantity || 0) + quantitySold,
+          total_sale_value: (inv.total_sale_value || 0) + saleValue,
+          realized_profit_loss: (inv.realized_profit_loss || 0) + saleProfitLoss,
+          unrealized_profit_loss: remainingQuantity > 0 ? (inv.current_price - inv.buy_price) * remainingQuantity : 0
+        };
+      });
     });
 
-    // Add to sold items for recent activity display
+    // Add to sold items
     setSoldItems(prev => [soldItemData, ...prev]);
-
-    // Show appropriate success toast based on sale type
-    const detailedName = buildDetailedItemName(soldItem);
     
+    // Update optimistic portfolio summary
+    setOptimisticUpdates(prev => ({
+      totalInvested: prev.totalInvested,
+      totalCurrentValue: prev.totalCurrentValue - totalCurrentValueDecrease,
+      totalRealizedPL: prev.totalRealizedPL + realizedPLIncrease,
+      totalUnrealizedPL: prev.totalUnrealizedPL - unrealizedPLDecrease
+    }));
+
+    // Show toast
+    const detailedName = buildDetailedItemName(soldItem);
     if (isFullSale) {
       toast.fullSaleCompleted(detailedName, quantitySold, saleValue, saleProfitLoss);
     } else {
       toast.partialSaleCompleted(detailedName, quantitySold, remainingQuantity, saleValue, saleProfitLoss);
     }
 
-    console.log(`${isFullSale ? 'Full' : 'Partial'} sale completed:`, {
-      item: detailedName,
-      quantity: quantitySold,
-      saleValue,
-      profitLoss: saleProfitLoss,
-      remaining: remainingQuantity
-    });
-
-  }, [investments, userSession.id, setInvestments, setSoldItems, buildDetailedItemName, toast]);
+}, [investments, userSession.id, setInvestments, setSoldItems, buildDetailedItemName, toast]);
 
   if (loading) {
     return (
@@ -238,12 +305,6 @@ const InvestmentDashboard = ({ userSession }) => {
                   <p className={`text-2xl font-bold ${separatedPL.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {separatedPL.totalProfitLoss >= 0 ? '+' : ''}{formatPrice(separatedPL.totalProfitLoss)}
                   </p>
-                  {/* Trending icon based on P&L */}
-                  {portfolioMetrics.profitPercentage >= 0 ? (
-                    <TrendingUp className="w-5 h-5 text-green-400" />
-                  ) : (
-                    <TrendingDown className="w-5 h-5 text-red-400" />
-                  )}
                 </div>
               </div>
               <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
