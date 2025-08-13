@@ -238,8 +238,11 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
 
   // Navigate to next page
   const handleNextPage = useCallback(() => {
-    setCurrentPage(prev => Math.min(totalPages - 1, prev + 1));
-  }, []);
+  setCurrentPage(prev => {
+    const currentTotalPages = Math.ceil(priceChanges.length / itemsPerPage);
+    return Math.min(currentTotalPages - 1, prev + 1);
+  });
+}, [priceChanges.length, itemsPerPage]);
 
   // Navigate to specific page by clicking page number
   const handlePageClick = useCallback((pageIndex) => {
