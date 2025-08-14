@@ -68,6 +68,9 @@ export const SelectedItemDisplay = ({
   // Don't render anything if no item is selected
   if (!displayName) return null;
 
+  // Check if this is a music kit box with StatTrak already in the name
+  const isMusicKitWithStatTrak = displayName?.includes('StatTrak™') && displayName?.includes('Music Kit Box');
+
   return (
     <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
       <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -89,18 +92,23 @@ export const SelectedItemDisplay = ({
             {isCrafts ? 'Base skin selected' : 'Ready to add'}
           </p>
           {/* Show current variant status (StatTrak/Souvenir) */}
-          <VariantBadge stattrak={formData.stattrak} souvenir={formData.souvenir} />
+          <VariantBadge 
+            stattrak={formData.stattrak || isMusicKitWithStatTrak} 
+            souvenir={formData.souvenir} 
+          />
         </div>
       </div>
       
-      {/* StatTrak/Souvenir variant controls */}
-      <VariantControls
-        hasStatTrak={formData.hasStatTrak}
-        hasSouvenir={formData.hasSouvenir}
-        selectedVariant={formData.selectedVariant || formData.variant}
-        onVariantChange={handleVariantChange}
-        type={isCrafts ? "Skin" : "Item"}
-      />
+      {/* StatTrak/Souvenir variant controls - hide for music kits with StatTrak in name */}
+      {!isMusicKitWithStatTrak && (
+        <VariantControls
+          hasStatTrak={formData.hasStatTrak}
+          hasSouvenir={formData.hasSouvenir}
+          selectedVariant={formData.selectedVariant || formData.variant}
+          onVariantChange={handleVariantChange}
+          type={isCrafts ? "Skin" : "Item"}
+        />
+      )}
       
       {/* Notes section for additional item details */}
       <div className="border-t border-gray-600 pt-3 mt-3">

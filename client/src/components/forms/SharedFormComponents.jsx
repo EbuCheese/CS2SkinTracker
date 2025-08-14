@@ -156,6 +156,7 @@ export const QuantitySelector = memo(({ quantity, onQuantityChange, compact = fa
 ));
 
 // Allows users to select between different item variants (Normal, StatTrak™, Souvenir).
+// Allows users to select between different item variants (Normal, StatTrak™, Souvenir).
 export const VariantControls = memo(({
   hasStatTrak,
   hasSouvenir,
@@ -185,7 +186,8 @@ export const VariantControls = memo(({
 
   // Don't render the component if no special variants are available
   // This prevents showing a single "Normal" button which would be redundant
-  if (!hasStatTrak && !hasSouvenir) return null;
+  // Also check if there's only one variant (normal) - don't show redundant controls
+  if ((!hasStatTrak && !hasSouvenir) || variants.length <= 1) return null;
 
   return (
     <div className="border-t border-gray-600 pt-3">

@@ -141,26 +141,29 @@ const CSItemSearch = ({
   }, [onChange, debouncedSearch]);
 
   // Handle item selection with variant support
-  const handleItemSelect = useCallback((item, variant = 'normal') => {
-    // Get the appropriate variant item from the Map
-    const selectedItem = item.variants.get(variant) || item.variants.get('normal') || Array.from(item.variants.values())[0];
-    
-    // Add variant info to the selected item for form handling
-    const itemWithVariant = {
-      ...selectedItem,
-      selectedVariant: variant,
-      hasStatTrak: item.variants.has('stattrak'),
-      hasSouvenir: item.variants.has('souvenir'),
-      baseName: item.baseName
-    };
-    
-    onSelect?.(itemWithVariant);
+const handleItemSelect = useCallback((item, variant = 'normal') => {
+  // Get the appropriate variant item from the Map
+  const selectedItem = item.variants.get(variant) || item.variants.get('normal') || Array.from(item.variants.values())[0];
+  
+  // Check if this is a music kit box with StatTrak in the name
+  const isMusicKitWithStatTrak = selectedItem.name?.includes('StatTrak™') && selectedItem.name?.includes('Music Kit Box');
+  
+  // Add variant info to the selected item for form handling
+  const itemWithVariant = {
+    ...selectedItem,
+    selectedVariant: variant,
+    hasStatTrak: item.variants.has('stattrak') && !isMusicKitWithStatTrak, // Disable if music kit with StatTrak
+    hasSouvenir: item.variants.has('souvenir'),
+    baseName: item.baseName
+  };
+  
+  onSelect?.(itemWithVariant);
 
-    // Close dropdown and clear results
-    setIsOpen(false);
-    setResults([]);
-    setSelectedVariant({});
-  }, [onSelect]);
+  // Close dropdown and clear results
+  setIsOpen(false);
+  setResults([]);
+  setSelectedVariant({});
+}, [onSelect]);
 
   // Handle variant selection for individual items
   const handleVariantChange = useCallback((itemId, variant) => {
