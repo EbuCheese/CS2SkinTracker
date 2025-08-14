@@ -179,7 +179,7 @@ const CSItemSearch = ({
 
   const handleBlur = () => {
     // Delay closing to allow for click events
-    setTimeout(() => setIsOpen(false), 150);
+    setTimeout(() => setIsOpen(false), 200);
   };
 
   const handleKeyDown = (e) => {
@@ -302,14 +302,20 @@ const OptimizedSearchResultItem = React.memo(({
   const availableVariants = Array.from(item.variants.keys());
 
   // Event handlers
-  const handleVariantButtonClick = (e, variant) => {
-    e.stopPropagation(); // Prevent item selection when clicking variant
+  const handleVariantButtonClick = useCallback((e, variant) => {
+    e.preventDefault();
+    e.stopPropagation();
     onVariantChange(variant);
-  };
+  }, [onVariantChange]);
 
-  const handleItemClick = () => {
-    onClick(currentVariant);
-  };
+  // Use onMouseDown and attach to the entire container, not just flex div
+  const handleItemMouseDown = useCallback((e) => {
+    // Only trigger if we're not clicking on a variant button
+    if (!e.target.closest('button')) {
+      e.preventDefault();
+      onClick(currentVariant);
+    }
+  }, [onClick, currentVariant]);
 
   // Skip rendering if no variant item found
   if (!currentVariantItem) {
@@ -317,9 +323,13 @@ const OptimizedSearchResultItem = React.memo(({
   }
 
   return (
-    <div className={`${paddingSize} hover:bg-gray-700 cursor-pointer transition-colors border-b border-gray-700 last:border-b-0`}>
-      {/* Main item content */}
-      <div className="flex items-center" onClick={handleItemClick}>
+    // Move the mouseDown handler to the entire container
+    <div 
+      className={`${paddingSize} hover:bg-gray-700 cursor-pointer transition-colors border-b border-gray-700 last:border-b-0`}
+      onMouseDown={handleItemMouseDown}
+    >
+      {/* Main item content - Remove the mouseDown handler from here */}
+      <div className="flex items-center">
         {/* Item Image */}
         <div className={`relative ${imageSize} ${showLargeView ? 'mr-4' : 'mr-3'} flex-shrink-0 bg-gray-700 rounded overflow-hidden`}>
           <ImageWithLoading
@@ -376,7 +386,7 @@ const OptimizedSearchResultItem = React.memo(({
           {availableVariants.map(variant => (
             <button
               key={variant}
-              onClick={(e) => handleVariantButtonClick(e, variant)}
+              onMouseDown={(e) => handleVariantButtonClick(e, variant)}
               className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                 currentVariant === variant
                   ? variant === 'stattrak' 
@@ -387,7 +397,6 @@ const OptimizedSearchResultItem = React.memo(({
                   : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
               }`}
             >
-              {/* Display appropriate variant label */}
               {variant === 'normal' ? 'Normal' : 
                variant === 'stattrak' ? 'StatTrak™' : 
                'Souvenir'}
