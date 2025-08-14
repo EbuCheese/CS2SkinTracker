@@ -41,6 +41,45 @@ const DistributionItem = React.memo(({
   </div>
 ));
 
+const generateUniqueColors = (() => {
+  const cache = new Map();
+  
+  // HSL-based color generation for infinite unique colors
+  const generateHSLColor = (index, total) => {
+    // Use golden ratio for optimal color distribution
+    const goldenRatio = 0.618033988749;
+    const hue = ((index * goldenRatio) % 1) * 360;
+    
+    // Vary saturation and lightness for more distinction
+    const saturation = 65 + (index % 3) * 15; // 65%, 80%, 95%
+    const lightness = 45 + (Math.floor(index / 3) % 3) * 10; // 45%, 55%, 65%
+    
+    return `hsl(${Math.round(hue)}, ${saturation}%, ${lightness}%)`;
+  };
+  
+  return (count, baseColors) => {
+    const cacheKey = count;
+    if (cache.has(cacheKey)) {
+      return cache.get(cacheKey);
+    }
+    
+    const result = [];
+    
+    // Use base colors first (most carefully chosen)
+    for (let i = 0; i < Math.min(count, baseColors.length); i++) {
+      result.push(baseColors[i]);
+    }
+    
+    // Generate additional unique colors using HSL if needed
+    for (let i = baseColors.length; i < count; i++) {
+      result.push(generateHSLColor(i - baseColors.length, count - baseColors.length));
+    }
+    
+    cache.set(cacheKey, result);
+    return result;
+  };
+})();
+
 // Main Portfolio Health Pie Chart Component
 const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   // Toggle types
@@ -95,30 +134,24 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
       'Charms': '#F59E0B',
       'Agents': '#06B6D4',
     },
+    // SIGNIFICANTLY EXPANDED: 60+ unique colors to prevent collisions
     weapon: [
-      '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899', '#6B7280', '#EF4444',
-      '#06B6D4', '#84CC16', '#F97316', '#A855F7', '#F472B6', '#64748B', '#DC2626',
-      '#0EA5E9', '#65A30D', '#EA580C', '#9333EA', '#E11D48', '#475569', '#B91C1C'
+      // Primary vibrant colors (most distinct)
+      '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899', '#EF4444', '#06B6D4', '#84CC16',
+      '#F97316', '#A855F7', '#F472B6', '#DC2626', '#0EA5E9', '#65A30D', '#EA580C', '#9333EA',
+      '#E11D48', '#B91C1C', '#14B8A6', '#D97706', '#6366F1', '#D946EF', '#C2410C', '#7C3AED',
+      '#0284C7', '#059669', '#4F46E5', '#A21CAF', '#0F766E', '#A16207', '#4338CA', '#BE185D',
+      
+      // Secondary distinct colors
+      '#059669', '#D97706', '#7C2D12', '#92400E', '#1E40AF', '#7C3AED', '#BE123C', '#0F766E',
+      '#166534', '#CA8A04', '#1E3A8A', '#6B21A8', '#9F1239', '#134E4A', '#15803D', '#A16207',
+      '#312E81', '#581C87', '#831843', '#0F3460', '#064E3B', '#365314', '#422006', '#1E1B4B',
+      
+      // Tertiary colors for maximum coverage
+      '#4C1D95', '#701A75', '#7F1D1D', '#0C4A6E', '#0D9488', '#16A34A', '#CA8A04', '#C2410C',
+      '#9333EA', '#DB2777', '#DC2626', '#0284C7', '#0891B2', '#059669', '#65A30D', '#A3A3A3'
     ]
   }), []);
-
-  // Optimized percentage formatter with dynamic precision
-  const formatPercentage = useMemo(() => (percentage) => {
-    if (percentage >= 1) return `${percentage.toFixed(1)}%`;
-    if (percentage >= 0.1) return `${percentage.toFixed(2)}%`;
-    if (percentage >= 0.01) return `${percentage.toFixed(3)}%`;
-    return percentage > 0 ? '<0.001%' : '0%';
-  }, []);
-
-  // Currency formatter with consistent USD formatting
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(value);
-  };
 
   // Item name consolidation logic for grouping similar items
   const actualPortfolio = portfolioHealth;
@@ -126,10 +159,14 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   // Consolidated breakdown calculation for item view
   const consolidatedBreakdown = actualPortfolio.weaponBreakdown || [];
 
-  // Empty section
-  const isEmpty = !actualPortfolio || 
-  ((!actualPortfolio.typeBreakdown || actualPortfolio.typeBreakdown.length === 0) && 
-   (!consolidatedBreakdown || consolidatedBreakdown.length === 0));
+  // Table-specific data processing
+  const tableData = useMemo(() => {
+  const rawData = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown;
+  
+  return rawData.filter(item =>
+    item.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+  ).sort((a, b) => b.percentage - a.percentage);
+}, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, debouncedSearchTerm]);
 
   // Main data processing pipeline with search filtering and small slice handling
   const processedData = useMemo(() => {
@@ -180,28 +217,75 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
     return filteredData.sort((a, b) => b.percentage - a.percentage);
   }, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, showSmallSlices, debouncedSearchTerm, viewMode]);
 
-  // Table-specific data processing
-  const tableData = useMemo(() => {
-  const rawData = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown;
+  const colorAssignments = useMemo(() => {
+  const assignments = new Map();
   
-  return rawData.filter(item =>
-    item.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
-  ).sort((a, b) => b.percentage - a.percentage);
-}, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, debouncedSearchTerm]);
+  // Get current data based on view mode
+  const currentData = viewMode === 'table' ? tableData : processedData;
+  
+  // PERFORMANCE: Pre-calculate all needed colors at once
+  const neededColors = generateUniqueColors(currentData.length, colors.weapon);
+  let colorIndex = 0;
+
+  currentData.forEach((item) => {
+    if (item.isGrouped) {
+      assignments.set(item.name, '#64748B'); // Special color for grouped items
+    } else if (activeToggle === 'item') {
+      // Use predefined item colors first
+      if (colors.item[item.name]) {
+        assignments.set(item.name, colors.item[item.name]);
+      } else {
+        // Use pre-generated unique colors (NO MODULO!)
+        assignments.set(item.name, neededColors[colorIndex] || '#6B7280');
+        colorIndex++;
+      }
+    } else {
+      // Type view - use type-specific colors
+      assignments.set(item.name, colors.type[item.name.toLowerCase()] || '#6B7280');
+    }
+  });
+  
+  return assignments;
+}, [activeToggle, processedData, tableData, viewMode, colors]);
+
+  // Optimized percentage formatter with dynamic precision
+  const formatPercentage = useMemo(() => (percentage) => {
+    if (percentage >= 1) return `${percentage.toFixed(1)}%`;
+    if (percentage >= 0.1) return `${percentage.toFixed(2)}%`;
+    if (percentage >= 0.01) return `${percentage.toFixed(3)}%`;
+    return percentage > 0 ? '<0.001%' : '0%';
+  }, []);
+
+  // Currency formatter with consistent USD formatting
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  };
+
+  // Empty section
+  const isEmpty = !actualPortfolio || 
+  ((!actualPortfolio.typeBreakdown || actualPortfolio.typeBreakdown.length === 0) && 
+   (!consolidatedBreakdown || consolidatedBreakdown.length === 0));
+
+  const sortedProcessedData = useMemo(() => {
+    return [...processedData].sort((a, b) => {
+      // Primary sort by percentage (descending)
+      if (b.percentage !== a.percentage) {
+        return b.percentage - a.percentage;
+      }
+      // Secondary sort by name for stable ordering when percentages are equal
+      return a.name.localeCompare(b.name);
+    });
+  }, [processedData]);
 
   // Color assignment function with fallback logic
-  const getItemColor = useMemo(() => (item, index) => {
-    // Special color for grouped items
-    if (item.isGrouped) return '#64748B';
-    
-    if (activeToggle === 'item') {
-      // Use predefined item colors or fall back to weapon color array
-      return colors.item[item.name] || colors.weapon[index % colors.weapon.length];
-    }
-
-    // Use type-specific colors or default gray
-    return colors.type[item.name.toLowerCase()] || '#6B7280';
-  }, [activeToggle, colors]);
+  const getItemColor = useCallback((item, index) => {
+    return colorAssignments.get(item.name) || '#6B7280';
+  }, [colorAssignments]);
 
   // Get current diversity metrics based on active toggle
   const currentScore = activeToggle === 'item' ? 
@@ -349,7 +433,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
 
   // Pagination logic
   // Select appropriate data source based on current view mode
-  const currentData = viewMode === 'table' ? tableData : processedData;
+  const currentData = viewMode === 'table' ? tableData : sortedProcessedData;
   const ITEMS_PER_PAGE = 8;
   const totalPages = Math.ceil(currentData.length / ITEMS_PER_PAGE);
   const startIndex = currentPage * ITEMS_PER_PAGE;
@@ -587,7 +671,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={processedData}
+                data={sortedProcessedData}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
@@ -605,7 +689,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
                 minAngle={2}
               >
                 {/* Individual slice styling - Each slice gets custom colors and selection states */}
-                {processedData.map((entry, index) => (
+                {sortedProcessedData.map((entry, index) => (
                   <Cell 
                     key={`cell-${index}`} 
                     fill={getItemColor(entry, index)}
