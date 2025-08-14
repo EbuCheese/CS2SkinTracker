@@ -145,15 +145,15 @@ const handleItemSelect = useCallback((item, variant = 'normal') => {
   // Get the appropriate variant item from the Map
   const selectedItem = item.variants.get(variant) || item.variants.get('normal') || Array.from(item.variants.values())[0];
   
-  // Check if this is a music kit box with StatTrak in the name
-  const isMusicKitWithStatTrak = selectedItem.name?.includes('StatTrak™') && selectedItem.name?.includes('Music Kit Box');
+  // Check if this is any music kit box (normal or StatTrak)
+  const isMusicKitBox = selectedItem.name?.includes('Music Kit Box');
   
   // Add variant info to the selected item for form handling
   const itemWithVariant = {
     ...selectedItem,
     selectedVariant: variant,
-    hasStatTrak: item.variants.has('stattrak') && !isMusicKitWithStatTrak, // Disable if music kit with StatTrak
-    hasSouvenir: item.variants.has('souvenir'),
+    hasStatTrak: item.variants.has('stattrak') && !isMusicKitBox, // Disable variants for all music kit boxes
+    hasSouvenir: item.variants.has('souvenir') && !isMusicKitBox, // Disable variants for all music kit boxes
     baseName: item.baseName
   };
   

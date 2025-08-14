@@ -68,8 +68,9 @@ export const SelectedItemDisplay = ({
   // Don't render anything if no item is selected
   if (!displayName) return null;
 
-  // Check if this is a music kit box with StatTrak already in the name
-  const isMusicKitWithStatTrak = displayName?.includes('StatTrak™') && displayName?.includes('Music Kit Box');
+  // Check if this is any music kit box (normal or StatTrak)
+  const isMusicKitBox = displayName?.includes('Music Kit Box');
+  const hasStatTrakInName = displayName?.includes('StatTrak™');
 
   return (
     <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
@@ -93,14 +94,14 @@ export const SelectedItemDisplay = ({
           </p>
           {/* Show current variant status (StatTrak/Souvenir) */}
           <VariantBadge 
-            stattrak={formData.stattrak || isMusicKitWithStatTrak} 
+            stattrak={formData.stattrak || hasStatTrakInName} 
             souvenir={formData.souvenir} 
           />
         </div>
       </div>
       
-      {/* StatTrak/Souvenir variant controls - hide for music kits with StatTrak in name */}
-      {!isMusicKitWithStatTrak && (
+      {/* StatTrak/Souvenir variant controls - hide for all music kit boxes */}
+      {!isMusicKitBox && (
         <VariantControls
           hasStatTrak={formData.hasStatTrak}
           hasSouvenir={formData.hasSouvenir}
