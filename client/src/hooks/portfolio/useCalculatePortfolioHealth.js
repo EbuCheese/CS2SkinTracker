@@ -8,68 +8,91 @@ const formatDisplayName = (name) => {
   ).join(' ');
 };
 
-// consolidate item names into broader categories
+// Updated consolidateItems function with better case handling and metadata support
 const consolidateItems = (() => {
   const cache = new Map();
   
-  // agent organizations array since agents don't follow the same pattern
+  // Pre-computed mappings for maximum efficiency
+  const typeMap = {
+    // Direct type mappings (fastest path)
+    'sticker capsule': 'Sticker Capsules',
+    'autograph capsule': 'Autograph Capsules', 
+    'pins capsule': 'Pins Capsules',
+    'patch capsule': 'Patch Capsules',
+    'music kit box': 'Music Kit Boxes',
+    'souvenir': 'Souvenir Packages',
+    'souvenir package': 'Souvenir Packages',
+    'agent': 'Agents',
+    'craft': 'Custom Craft'
+  };
+  
+  // Pre-compiled regex patterns for name-based detection (compiled once)
+  const namePatterns = [
+    { pattern: /souvenir package|souvenir/i, result: 'Souvenir Packages' },
+    { pattern: /sticker capsule/i, result: 'Sticker Capsules' },
+    { pattern: /autograph capsule/i, result: 'Autograph Capsules' },
+    { pattern: /pins capsule/i, result: 'Pins Capsules' },
+    { pattern: /music kit box/i, result: 'Music Kit Boxes' },
+    { pattern: /patch capsule/i, result: 'Patch Capsules' },
+    { pattern: /sticker/i, result: 'Stickers' },
+    { pattern: /patch/i, result: 'Patches' },
+    { pattern: /sealed graffiti/i, result: 'Graffiti' },
+    { pattern: /charm/i, result: 'Charms' }
+  ];
+  
+  // Agent organizations for agent-specific logic
   const agentOrganizations = [
     'elite crew', 'fbi swat', 'phoenix', 'guerrilla warfare', 'pirates', 
     'gendarmerie nationale', 'sabre', 'nswc seal', 'the professionals',
     'blackwolf', 'taskforce 121', 'superior agents', 'master agents',
     'distinguished agents', 'exceptional agents'
   ];
-  
-  return (itemName, itemType = null, skinName = null) => {
-    const cacheKey = `${itemName}-${itemType}-${skinName}`;
+
+  return (itemName, itemType = null, skinName = null, actualItemType = null) => {
+    // Use actualItemType (from metadata) as primary cache key for better performance
+    const primaryType = actualItemType || itemType;
+    const cacheKey = `${itemName}-${primaryType}`;
+    
     if (cache.has(cacheKey)) {
       return cache.get(cacheKey);
     }
     
-    const lowerName = itemName.toLowerCase();
     let result;
+    const lowerType = primaryType?.toLowerCase() || '';
     
-    // Handle knives - extract type directly from name structure
-    if (itemName.startsWith('★') && !lowerName.includes('gloves') && !lowerName.includes('wraps')) {
-      // Format: "★ Bayonet | Doppler (Phase 4)" -> "Bayonet"
-      const nameWithoutStar = itemName.substring(2); // Remove "★ "
-      const pipeIndex = nameWithoutStar.indexOf(' | ');
-      
-      if (pipeIndex > 0) {
-        const knifeType = nameWithoutStar.substring(0, pipeIndex).trim();
-        const formattedType = formatDisplayName(knifeType);
-        
-        // Special cases that don't need "Knife" suffix
-        if (knifeType.toLowerCase().includes('daggers')) {
-          result = formattedType;
-        } else {
-          result = formattedType;
-        }
+    // FASTEST PATH: Direct type mapping lookup (O(1))
+    if (typeMap[lowerType]) {
+      result = typeMap[lowerType];
+    }
+    
+    // Handle knives (★ prefix, no gloves/wraps)
+    else if (itemName.startsWith('★') && !lowerType.includes('gloves') && !lowerType.includes('wraps')) {
+      const pipeIndex = itemName.indexOf(' | ', 2); // Start search after "★ "
+      if (pipeIndex > 2) {
+        const knifeType = itemName.substring(2, pipeIndex).trim();
+        result = formatDisplayName(knifeType);
       } else {
-        result = 'Knives'; // fallback for unexpected format
+        result = 'Knives';
       }
     }
     
-    // Handle gloves - extract type directly from name structure  
-    else if (itemName.startsWith('★') && (lowerName.includes('gloves') || lowerName.includes('wraps'))) {
-      // Format: "★ Sport Gloves | Hedge Maze" -> "Sport Gloves"
-      const nameWithoutStar = itemName.substring(2); // Remove "★ "
-      const pipeIndex = nameWithoutStar.indexOf(' | ');
-      
-      if (pipeIndex > 0) {
-        const gloveType = nameWithoutStar.substring(0, pipeIndex).trim();
+    // Handle gloves (★ prefix with gloves/wraps)
+    else if (itemName.startsWith('★') && (lowerType.includes('gloves') || lowerType.includes('wraps'))) {
+      const pipeIndex = itemName.indexOf(' | ', 2);
+      if (pipeIndex > 2) {
+        const gloveType = itemName.substring(2, pipeIndex).trim();
         result = formatDisplayName(gloveType);
       } else {
-        result = 'Gloves'; // fallback for unexpected format
+        result = 'Gloves';
       }
     }
-
-    // Handle custom crafts - use skin_name to get weapon type
-    else if (itemType === 'craft') {
+    
+    // Handle custom crafts
+    else if (lowerType === 'craft') {
       if (skinName) {
-        const parts = skinName.split(' | ');
-        if (parts.length > 0) {
-          const weaponName = parts[0].trim();
+        const pipeIndex = skinName.indexOf(' | ');
+        if (pipeIndex > 0) {
+          const weaponName = skinName.substring(0, pipeIndex).trim();
           result = `Custom ${weaponName} Craft`;
         } else {
           result = 'Custom Craft';
@@ -78,43 +101,57 @@ const consolidateItems = (() => {
         result = 'Custom Craft';
       }
     }
-
-    // Handle agents - check type first, then group by organization
-    else if (itemType === 'agent') {
-      const parts = itemName.split(' | ');
-      if (parts.length > 1) {
-        const organization = parts[1].trim();
+    
+    // Handle agents with organization extraction
+    else if (lowerType === 'agent') {
+      const pipeIndex = itemName.indexOf(' | ');
+      if (pipeIndex > 0) {
+        const organization = itemName.substring(pipeIndex + 3).trim();
         result = `${organization} Agent`;
       } else {
-        // Fallback - try to find organization in name
+        // Fallback: find organization in name
         const foundOrg = agentOrganizations.find(org => 
-          lowerName.includes(org.toLowerCase())
+          itemName.toLowerCase().includes(org)
         );
-        
-        if (foundOrg) {
-          const formattedOrg = formatDisplayName(foundOrg);
-          result = `${formattedOrg} Agent`;
-        } else {
-          result = 'Agents';
-        }
+        result = foundOrg ? `${formatDisplayName(foundOrg)} Agent` : 'Agents';
       }
     }
     
-    // Handle other item types (existing logic)
-    else if (lowerName.includes('sticker')) {
-      result = 'Stickers';
-    } else if (lowerName.includes('patch')) {
-      result = 'Patches';
-    } else if (lowerName.includes('sealed graffiti')) {
-      result = 'Graffiti';
-    } else if (lowerName.includes('charm')) {
-      result = 'Charms';
-    } else if (lowerName.includes('case')) {
-      result = itemName; // Keep cases as individual items
-    } else {
-      // Default logic for other items
-      const parts = itemName.split(' | ');
-      result = parts.length > 1 ? parts[0] : itemName.split(' ')[0];
+    // Handle generic 'case' type - this is where your Supabase items fall
+    else if (lowerType === 'case') {
+      // For items stored as generic 'case', use name-based detection
+      // This is less optimal but necessary for your current data structure
+      let found = false;
+      for (const { pattern, result: patternResult } of namePatterns) {
+        if (pattern.test(itemName)) {
+          result = patternResult;
+          found = true;
+          break;
+        }
+      }
+      
+      if (!found) {
+        // Default: keep individual case names for weapon cases
+        result = itemName;
+      }
+    }
+    
+    // Fallback: name-based pattern matching
+    else {
+      let found = false;
+      for (const { pattern, result: patternResult } of namePatterns) {
+        if (pattern.test(itemName)) {
+          result = patternResult;
+          found = true;
+          break;
+        }
+      }
+      
+      if (!found) {
+        // Default: extract first part of name
+        const pipeIndex = itemName.indexOf(' | ');
+        result = pipeIndex > 0 ? itemName.substring(0, pipeIndex) : itemName.split(' ')[0];
+      }
     }
     
     cache.set(cacheKey, result);
@@ -145,6 +182,17 @@ const aggregatePortfolioData = (investments) => {
   let totalRealizedPL = 0;
   let totalUnrealizedPL = 0;
   
+  // Pre-compile metadata type detection for efficiency
+  const metadataTypeMap = {
+    'sticker capsule': 'Sticker Capsule',
+    'autograph capsule': 'Autograph Capsule', 
+    'pins capsule': 'Pins Capsule',
+    'patch capsule': 'Patch Capsule',
+    'music kit box': 'Music Kit Box',
+    'souvenir package': 'Souvenir',
+    'souvenir': 'Souvenir'
+  };
+  
   // Process each investment
   for (const inv of investments) {
     const quantity = parseFloat(inv.quantity || 0);
@@ -157,19 +205,32 @@ const aggregatePortfolioData = (investments) => {
     const value = currentPrice * quantity;
     totalValue += value;
     
-    // Use original_quantity from the view for accurate buy value calculation
     const originalQuantity = parseFloat(inv.original_quantity || quantity);
     totalBuyValue += buyPrice * originalQuantity;
     
-    // Use pre-calculated profit/loss values from investment_summary view
     totalRealizedPL += parseFloat(inv.realized_profit_loss || 0);
     totalUnrealizedPL += parseFloat(inv.unrealized_profit_loss || 0);
     
-    // Calculate safe allocation (cases and keys are considered "safe")
+    // Calculate safe allocation
     const itemType = inv.type?.toLowerCase() || 'unknown';
     const itemName = inv.name?.toLowerCase() || '';
     if (itemType === 'case' || itemName.includes('case') || itemType === 'key') {
       safeValue += value;
+    }
+    
+    // OPTIMIZED: Extract actual type from metadata once per item
+    let actualItemType = inv.type; // Default to stored type
+    
+    // Only process metadata if it's a generic 'case' type
+    if (itemType === 'case' && inv.metadata && Array.isArray(inv.metadata)) {
+      // Use find with pre-compiled map for O(n) instead of O(n*m)
+      for (const meta of inv.metadata) {
+        const lowerMeta = meta.toLowerCase();
+        if (metadataTypeMap[lowerMeta]) {
+          actualItemType = metadataTypeMap[lowerMeta];
+          break;
+        }
+      }
     }
     
     // Process type groups
@@ -182,8 +243,8 @@ const aggregatePortfolioData = (investments) => {
     typeGroup.totalValue += value;
     typeGroup.items.push(inv);
     
-    // Process item groups
-    const consolidatedName = consolidateItems(inv.name, inv.type, inv.skin_name);
+    // Process item groups with optimized consolidation
+    const consolidatedName = consolidateItems(inv.name, inv.type, inv.skin_name, actualItemType);
     if (!itemGroups.has(consolidatedName)) {
       itemGroups.set(consolidatedName, { name: consolidatedName, count: 0, totalValue: 0, items: [] });
     }
@@ -227,13 +288,17 @@ const calculateBreakdowns = (typeGroups, itemGroups, totalValue) => {
 
 // Calculates diversification score based on investment type distribution
 const calculateTypeDiversityScore = (typeBreakdown, safeAllocation) => {
+  // Add early return for empty data
+  if (!typeBreakdown || typeBreakdown.length === 0) {
+    return 0;
+  }
+  
   const numTypes = typeBreakdown.length;
-  const typeMaxConcentration = typeBreakdown.length > 0 ? 
-    Math.max(...typeBreakdown.map(t => t.percentage)) : 0;
+  const typeMaxConcentration = Math.max(...typeBreakdown.map(t => t.percentage));
   
   let typeDiversityScore = 0;
   
-  // Base scoring based on maximum concentration in any single typ
+  // Base scoring based on maximum concentration in any single type
   if (typeMaxConcentration >= 98) {
     typeDiversityScore = 5;
   } else if (typeMaxConcentration >= 90) {
