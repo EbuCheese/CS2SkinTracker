@@ -96,6 +96,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   const [showSmallSlices, setShowSmallSlices] = useState(true);
   const [selectedSlice, setSelectedSlice] = useState(null);
   const [stickyTooltip, setStickyTooltip] = useState(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ side: 'right', x: 0, y: 0 });
 
   // Search states
   const [searchTerm, setSearchTerm] = useState('');
@@ -371,27 +372,40 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   return null;
 });
 
-  // Sticky tooltip component for expanded group details
+// Updated StickyTooltip component - replace the existing one
 const StickyTooltip = React.memo(() => {
   if (!stickyTooltip) return null;
   
   const data = stickyTooltip;
   const hasItemBreakdown = data.items && data.items.length > 0;
   
-  return (
-    <div 
-      className="absolute bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs z-50 pointer-events-auto"
-      style={{
+  // Fixed positioning - simple left/right placement
+  const getTooltipStyle = () => {
+    if (tooltipPosition.side === 'left') {
+      return {
+        left: '13px',
+        top: '220px'
+      };
+    } else {
+      return {
         right: '13px',
         top: '220px'
-      }}
+      };
+    }
+  };
+  
+  return (
+    <div 
+      className="absolute bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-sm z-50 pointer-events-auto"
+      style={getTooltipStyle()}
+      onClick={(e) => e.stopPropagation()} // Prevent clicks inside tooltip from bubbling up
     >
       {/* Header with close button */}
       <div className="flex items-center justify-between mb-2">
-        <p className="text-white font-medium text-base">{data.name}</p>
+        <p className="text-white font-medium text-base pr-2">{data.name}</p>
         <button
           onClick={() => setStickyTooltip(null)}
-          className="text-gray-400 hover:text-white ml-2 text-sm"
+          className="text-gray-400 hover:text-white ml-2 text-sm flex-shrink-0"
         >
           ✕
         </button>
@@ -415,24 +429,31 @@ const StickyTooltip = React.memo(() => {
             <p className="text-yellow-400 text-xs mb-1">
               {data.isGrouped ? `Contains ${data.items.length} items:` : `Individual items (${data.items.length}):`}
             </p>
-            <div className="text-xs text-gray-300 max-h-20 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+            <div className="text-xs text-gray-300 max-h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
               {data.items.map((item, i) => {
-                // FIXED: Calculate percentage properly based on individual item's contribution
-                // Use the individual investment's current value and quantity
-                const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
+                let itemPercentage;
                 
-                // Get total portfolio value from the main portfolio data
-                const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
-                                           consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
-                                           actualPortfolio.totalValue || 
-                                           data.value;
-                
-                // Calculate percentage relative to total portfolio
-                const itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
+                if (data.isGrouped) {
+                  // For grouped items (like "Others"), use the item's existing percentage
+                  // These should already be calculated correctly in the grouping logic
+                  itemPercentage = item.percentage || 0;
+                } else {
+                  // For regular consolidated items, calculate percentage from raw investment data
+                  const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
+                  
+                  // Get total portfolio value from the main portfolio data
+                  const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
+                                             consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
+                                             actualPortfolio.totalValue || 
+                                             data.value;
+                  
+                  // Calculate percentage relative to total portfolio
+                  itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
+                }
                 
                 return (
-                  <div key={i} className="py-0.5">
-                    • {item.name} ({formatPercentage(itemPercentage)})
+                  <div key={i} className="py-0.5 leading-relaxed break-words">
+                    <span className="inline-block">• {item.name} ({formatPercentage(itemPercentage)})</span>
                   </div>
                 );
               })}
@@ -485,13 +506,16 @@ const StickyTooltip = React.memo(() => {
   const currentPageData = currentData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   // Handle clicks on distribution list items
-  const handleDistributionItemClick = useCallback((item) => {
+  const handleDistributionItemClick = useCallback((item, event) => {
   if (activeToggle === 'item') {
     const isCurrentlySelected = selectedSlice === item.name;
     if (isCurrentlySelected) {
       setStickyTooltip(null);
       setSelectedSlice(null);
     } else {
+      // For list clicks, default to right side but could be enhanced
+      // to detect which side of the screen the list is on
+      setTooltipPosition({ side: 'right', x: 0, y: 250 });
       setStickyTooltip(item);
       setSelectedSlice(item.name);
     }
@@ -511,13 +535,35 @@ const StickyTooltip = React.memo(() => {
   }, []);
 
   // Handle pie chart slice clicks
-  const handleSliceClick = useCallback((data, index) => {
+  const handleSliceClick = useCallback((data, index, event) => {
   if (activeToggle === 'item') {
     const isCurrentlySelected = selectedSlice === data.name;
     if (isCurrentlySelected) {
       setStickyTooltip(null);
       setSelectedSlice(null);
     } else {
+      // Get the chart container to calculate relative position
+      const chartContainer = event.currentTarget.closest('.recharts-wrapper') || event.currentTarget.closest('[data-chart-container]');
+      const containerRect = chartContainer?.getBoundingClientRect();
+      
+      if (containerRect) {
+        const clickX = event.clientX - containerRect.left;
+        const containerWidth = containerRect.width;
+        const centerX = containerWidth / 2;
+        
+        // Determine which side to show tooltip based on click position
+        const side = clickX < centerX ? 'left' : 'right';
+        
+        setTooltipPosition({
+          side,
+          x: clickX,
+          y: event.clientY - containerRect.top
+        });
+      } else {
+        // Fallback to right side if we can't determine position
+        setTooltipPosition({ side: 'right', x: 0, y: 250 });
+      }
+      
       setStickyTooltip(data);
       setSelectedSlice(data.name);
     }
@@ -731,7 +777,7 @@ const StickyTooltip = React.memo(() => {
                 strokeWidth={1}
                 animationBegin={0}
                 animationDuration={800}
-                onClick={handleSliceClick}
+                onClick={(data, index, event) => handleSliceClick(data, index, event)}
                 className="cursor-pointer"
                 minAngle={2}
               >
