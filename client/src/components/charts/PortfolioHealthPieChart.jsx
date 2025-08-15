@@ -43,34 +43,37 @@ const DistributionItem = React.memo(({
 
 const generateUniqueColors = (() => {
   const cache = new Map();
-  
-  // HSL-based color generation for infinite unique colors
+  // Improved HSL-based color generation with better spacing
   const generateHSLColor = (index, total) => {
-    // Use golden ratio for optimal color distribution
-    const goldenRatio = 0.618033988749;
-    const hue = ((index * goldenRatio) % 1) * 360;
+    const primeOffset = 137.508; // Golden angle in degrees
     
-    // Vary saturation and lightness for more distinction
-    const saturation = 65 + (index % 3) * 15; // 65%, 80%, 95%
-    const lightness = 45 + (Math.floor(index / 3) % 3) * 10; // 45%, 55%, 65%
+    // Better hue distribution to avoid clustering
+    const hue = (index * primeOffset) % 360;
+    
+    // More varied saturation and lightness with better contrast
+    const saturationVariations = [70, 85, 95, 60, 80]; // 5 variations
+    const lightnessVariations = [45, 55, 65, 35, 75];  // 5 variations
+    
+    const saturation = saturationVariations[index % saturationVariations.length];
+    const lightness = lightnessVariations[Math.floor(index / saturationVariations.length) % lightnessVariations.length];
     
     return `hsl(${Math.round(hue)}, ${saturation}%, ${lightness}%)`;
   };
   
   return (count, baseColors) => {
-    const cacheKey = count;
+    const cacheKey = `${count}-${baseColors.length}`;
     if (cache.has(cacheKey)) {
       return cache.get(cacheKey);
     }
     
     const result = [];
     
-    // Use base colors first (most carefully chosen)
+    // Use base colors first
     for (let i = 0; i < Math.min(count, baseColors.length); i++) {
       result.push(baseColors[i]);
     }
     
-    // Generate additional unique colors using HSL if needed
+    // Generate additional unique colors if needed
     for (let i = baseColors.length; i < count; i++) {
       result.push(generateHSLColor(i - baseColors.length, count - baseColors.length));
     }
@@ -170,19 +173,27 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
 
   // Main data processing pipeline with search filtering and small slice handling
   const processedData = useMemo(() => {
-    // Select base data based on current toggle
-    const rawData = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown;
-    
-    // Apply search filter
-    const filteredData = rawData.filter(item =>
-      item.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
-    );
+  // Select base data based on current toggle
+  const rawData = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown;
+  
+  // Apply search filter
+  const filteredData = rawData.filter(item =>
+    item.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+  );
+  
+  // For item view, enhance each item with individual breakdown if available
+  if (activeToggle === 'item') {
+    const enhancedData = filteredData.map(item => ({
+      ...item,
+      // Add individual items breakdown if available from the original portfolio data
+      items: item.items || (actualPortfolio.detailedItems && actualPortfolio.detailedItems[item.name]) || []
+    }));
     
     // Small slice grouping logic - only for item view in chart mode
-    if (activeToggle === 'item' && viewMode === 'chart') {
+    if (viewMode === 'chart') {
       const threshold = 2; // 2% threshold for small slices
-      const largeSlices = filteredData.filter(item => item.percentage >= threshold);
-      const smallSlices = filteredData.filter(item => item.percentage < threshold);
+      const largeSlices = enhancedData.filter(item => item.percentage >= threshold);
+      const smallSlices = enhancedData.filter(item => item.percentage < threshold);
       
       let processedData = [...largeSlices];
       
@@ -213,35 +224,44 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
       return processedData.sort((a, b) => b.percentage - a.percentage);
     }
     
-    // For type view or table view, return filtered data without grouping
-    return filteredData.sort((a, b) => b.percentage - a.percentage);
-  }, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, showSmallSlices, debouncedSearchTerm, viewMode]);
+    return enhancedData.sort((a, b) => b.percentage - a.percentage);
+  }
+  
+  // For type view or table view, return filtered data without grouping
+  return filteredData.sort((a, b) => b.percentage - a.percentage);
+}, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, actualPortfolio.detailedItems, showSmallSlices, debouncedSearchTerm, viewMode]);
 
   const colorAssignments = useMemo(() => {
   const assignments = new Map();
   
-  // Get current data based on view mode
   const currentData = viewMode === 'table' ? tableData : processedData;
   
-  // PERFORMANCE: Pre-calculate all needed colors at once
-  const neededColors = generateUniqueColors(currentData.length, colors.weapon);
-  let colorIndex = 0;
-
-  currentData.forEach((item) => {
-    if (item.isGrouped) {
-      assignments.set(item.name, '#64748B'); // Special color for grouped items
-    } else if (activeToggle === 'item') {
-      // Use predefined item colors first
-      if (colors.item[item.name]) {
-        assignments.set(item.name, colors.item[item.name]);
+  // PERFORMANCE: Calculate exact number of colors needed
+  const uniqueItems = new Set(currentData.map(item => item.name));
+  const neededColors = generateUniqueColors(uniqueItems.size, colors.weapon);
+  
+  // Create deterministic mapping based on item names (not array index)
+  const sortedUniqueNames = Array.from(uniqueItems).sort();
+  
+  sortedUniqueNames.forEach((itemName, index) => {
+    if (activeToggle === 'item') {
+      // Check for predefined colors first
+      if (colors.item[itemName]) {
+        assignments.set(itemName, colors.item[itemName]);
       } else {
-        // Use pre-generated unique colors (NO MODULO!)
-        assignments.set(item.name, neededColors[colorIndex] || '#6B7280');
-        colorIndex++;
+        // Use index in sorted array for consistent color assignment
+        assignments.set(itemName, neededColors[index] || '#6B7280');
       }
     } else {
-      // Type view - use type-specific colors
-      assignments.set(item.name, colors.type[item.name.toLowerCase()] || '#6B7280');
+      // Type view
+      assignments.set(itemName, colors.type[itemName.toLowerCase()] || '#6B7280');
+    }
+  });
+  
+  // Special handling for grouped items
+  currentData.forEach((item) => {
+    if (item.isGrouped) {
+      assignments.set(item.name, '#64748B');
     }
   });
   
@@ -301,77 +321,26 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
 
   // Custom tooltip component for pie chart hover interactions
   const CustomTooltip = React.memo(({ active, payload, coordinate }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      
-      // Prevent hover tooltip when sticky tooltip is open for the same slice
-      if (data.isGrouped && stickyTooltip && stickyTooltip.name === data.name) {
-        return null; // Don't show hover tooltip when sticky is open for same slice
-      }
-      
-      // Adjust tooltip position to avoid overlap with sticky tooltips
-      const tooltipStyle = data.isGrouped ? {} : {
-        transform: 'translateX(-65%)',
-        marginLeft: '-15px'
-      };
-      
-      return (
-        <div 
-          className="bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs"
-          style={tooltipStyle}
-        >
-          <p className="text-white font-medium text-base mb-2">{data.name}</p>
-          <div className="space-y-1">
-            <p className="text-gray-300 text-sm">
-              <span className="text-green-400">Value:</span> {formatCurrency(data.value)}
-            </p>
-            <p className="text-gray-300 text-sm">
-              <span className="text-blue-400">Share:</span> {formatPercentage(data.percentage)}
-            </p>
-            <p className="text-gray-300 text-sm">
-              <span className="text-purple-400">Items:</span> {data.count}
-            </p>
-            {/* Interactive hint for grouped items */}
-            {data.isGrouped && (
-              <p className="text-yellow-400 text-xs mt-1">
-                {selectedSlice === data.name 
-                  ? `Click to deselect • ${data.items.length} items`
-                  : `Click to see ${data.items.length} grouped items`
-                }
-              </p>
-            )}
-          </div>
-        </div>
-      );
-    }
-    return null;
-  });
-
-  // Sticky tooltip component for expanded "Others" group details
-  const StickyTooltip = React.memo(() => {
-    if (!stickyTooltip) return null;
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
     
-    const data = stickyTooltip;
+    // Prevent hover tooltip when sticky tooltip is open for the same slice
+    if (stickyTooltip && stickyTooltip.name === data.name) {
+      return null;
+    }
+    
+    // Adjust tooltip position to avoid overlap with sticky tooltips
+    const tooltipStyle = data.isGrouped ? {} : {
+      transform: 'translateX(-65%)',
+      marginLeft: '-15px'
+    };
+    
     return (
       <div 
-        className="absolute bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs z-50 pointer-events-auto"
-        style={{
-          right: '13px',
-          top: '250px'
-        }}
+        className="bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs"
+        style={tooltipStyle}
       >
-        {/* Header with close button */}
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-white font-medium text-base">{data.name}</p>
-          <button
-            onClick={() => setStickyTooltip(null)}
-            className="text-gray-400 hover:text-white ml-2 text-sm"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Summary information */}
+        <p className="text-white font-medium text-base mb-2">{data.name}</p>
         <div className="space-y-1">
           <p className="text-gray-300 text-sm">
             <span className="text-green-400">Value:</span> {formatCurrency(data.value)}
@@ -382,22 +351,98 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
           <p className="text-gray-300 text-sm">
             <span className="text-purple-400">Items:</span> {data.count}
           </p>
-
-          {/* Detailed breakdown of grouped items */}
-          <div className="mt-2 pt-2 border-t border-gray-600">
-            <p className="text-yellow-400 text-xs mb-1">
-              Contains {data.items.length} items:
+          {/* Interactive hint for items in item view */}
+          {activeToggle === 'item' && (
+            <p className="text-yellow-400 text-xs mt-1">
+              {selectedSlice === data.name 
+                ? 'Click to deselect'
+                : data.isGrouped 
+                  ? `Click to see ${data.items.length} grouped items`
+                  : data.items && data.items.length > 0
+                    ? `Click to see ${data.items.length} individual items`
+                    : 'Click for details'
+              }
             </p>
-            <div className="text-xs text-gray-300 max-h-20 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-              {data.items.map((item, i) => (
-                <div key={i} className="py-0.5">• {item.name} ({formatPercentage(item.percentage)})</div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
       </div>
     );
-  });
+  }
+  return null;
+});
+
+  // Sticky tooltip component for expanded group details
+const StickyTooltip = React.memo(() => {
+  if (!stickyTooltip) return null;
+  
+  const data = stickyTooltip;
+  const hasItemBreakdown = data.items && data.items.length > 0;
+  
+  return (
+    <div 
+      className="absolute bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs z-50 pointer-events-auto"
+      style={{
+        right: '13px',
+        top: '220px'
+      }}
+    >
+      {/* Header with close button */}
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-white font-medium text-base">{data.name}</p>
+        <button
+          onClick={() => setStickyTooltip(null)}
+          className="text-gray-400 hover:text-white ml-2 text-sm"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Summary information */}
+      <div className="space-y-1">
+        <p className="text-gray-300 text-sm">
+          <span className="text-green-400">Value:</span> {formatCurrency(data.value)}
+        </p>
+        <p className="text-gray-300 text-sm">
+          <span className="text-blue-400">Share:</span> {formatPercentage(data.percentage)}
+        </p>
+        <p className="text-gray-300 text-sm">
+          <span className="text-purple-400">Items:</span> {data.count}
+        </p>
+
+        {/* Show individual item breakdown if available */}
+        {hasItemBreakdown && (
+          <div className="mt-2 pt-2 border-t border-gray-600">
+            <p className="text-yellow-400 text-xs mb-1">
+              {data.isGrouped ? `Contains ${data.items.length} items:` : `Individual items (${data.items.length}):`}
+            </p>
+            <div className="text-xs text-gray-300 max-h-20 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
+              {data.items.map((item, i) => {
+                // FIXED: Calculate percentage properly based on individual item's contribution
+                // Use the individual investment's current value and quantity
+                const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
+                
+                // Get total portfolio value from the main portfolio data
+                const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
+                                           consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
+                                           actualPortfolio.totalValue || 
+                                           data.value;
+                
+                // Calculate percentage relative to total portfolio
+                const itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
+                
+                return (
+                  <div key={i} className="py-0.5">
+                    • {item.name} ({formatPercentage(itemPercentage)})
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
 
   // Custom label renderer for pie chart slices
   const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percentage, name, startAngle, endAngle }) => {
@@ -441,20 +486,21 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
 
   // Handle clicks on distribution list items
   const handleDistributionItemClick = useCallback((item) => {
-  if (item.isGrouped) {
+  if (activeToggle === 'item') {
     const isCurrentlySelected = selectedSlice === item.name;
     if (isCurrentlySelected) {
       setStickyTooltip(null);
       setSelectedSlice(null);
     } else {
-      setStickyTooltip(item); // Show detailed breakdown
+      setStickyTooltip(item);
       setSelectedSlice(item.name);
     }
   } else {
+    // For type view, just handle selection without sticky tooltip
     setStickyTooltip(null);
     setSelectedSlice(selectedSlice === item.name ? null : item.name);
   }
-}, [selectedSlice]);
+}, [selectedSlice, activeToggle]);
 
   // Handle toggle changes between type and item views
   const handleToggleChange = useCallback((newToggle) => {
@@ -466,20 +512,21 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
 
   // Handle pie chart slice clicks
   const handleSliceClick = useCallback((data, index) => {
-    if (data.isGrouped) {
-      const isCurrentlySelected = selectedSlice === data.name;
-      if (isCurrentlySelected) {
-        setStickyTooltip(null);
-        setSelectedSlice(null);
-      } else {
-        setStickyTooltip(data);
-        setSelectedSlice(data.name);
-      }
-    } else {
+  if (activeToggle === 'item') {
+    const isCurrentlySelected = selectedSlice === data.name;
+    if (isCurrentlySelected) {
       setStickyTooltip(null);
-      setSelectedSlice(selectedSlice === data.name ? null : data.name);
+      setSelectedSlice(null);
+    } else {
+      setStickyTooltip(data);
+      setSelectedSlice(data.name);
     }
-  }, [selectedSlice]);
+  } else {
+    // For type view, just handle selection without sticky tooltip
+    setStickyTooltip(null);
+    setSelectedSlice(selectedSlice === data.name ? null : data.name);
+  }
+}, [selectedSlice, activeToggle]);
 
   // Handle clicks outside chart elements to deselect
   const handleChartContainerClick = useCallback((e) => {
