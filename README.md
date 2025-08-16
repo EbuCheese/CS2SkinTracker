@@ -1,4 +1,4 @@
-# 🧠 SkinWatch – Counter-Strike Skin Investment Tracker
+# <img src="./client/public/logoTEST10.png" width="35" style="margin-right:6px; position:relative; top:5px;" /> SkinWatch – Counter-Strike Skin Investment Tracker
 
 **SkinWatch** is a web application designed to help you track, manage, and analyze your Counter-Strike skin investments with precision and ease. Whether you're flipping custom crafts, selling knives, or looking to track your long-term investments, SkinWatch gives you real-time insight into your portfolio's performance.
 
@@ -41,7 +41,6 @@
 - **Authentication:** Custom Supabase Beta Key system
 - **APIs:** Skin price data from third-party APIs (CSFloat, Buff, etc.)
 - **State Management:** React Context, custom hooks
-- **Deployment:** Vercel or Netlify (recommended)
 
 ## 🗺️ Roadmap
 
