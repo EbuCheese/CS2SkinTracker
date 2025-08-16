@@ -232,16 +232,18 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   return filteredData.sort((a, b) => b.percentage - a.percentage);
 }, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, actualPortfolio.detailedItems, showSmallSlices, debouncedSearchTerm, viewMode]);
 
-  const colorAssignments = useMemo(() => {
+const colorAssignments = useMemo(() => {
   const assignments = new Map();
   
+  // Use the original data (without grouping) for consistent color assignment
+  const baseData = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown;
   const currentData = viewMode === 'table' ? tableData : processedData;
   
-  // PERFORMANCE: Calculate exact number of colors needed
-  const uniqueItems = new Set(currentData.map(item => item.name));
+  // PERFORMANCE: Calculate exact number of colors needed based on original data
+  const uniqueItems = new Set(baseData.map(item => item.name));
   const neededColors = generateUniqueColors(uniqueItems.size, colors.weapon);
   
-  // Create deterministic mapping based on item names (not array index)
+  // Create deterministic mapping based on original item names (not grouped data)
   const sortedUniqueNames = Array.from(uniqueItems).sort();
   
   sortedUniqueNames.forEach((itemName, index) => {
@@ -259,7 +261,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
     }
   });
   
-  // Special handling for grouped items
+  // Special handling for grouped items (Others group gets a distinct color)
   currentData.forEach((item) => {
     if (item.isGrouped) {
       assignments.set(item.name, '#64748B');
@@ -267,7 +269,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   });
   
   return assignments;
-}, [activeToggle, processedData, tableData, viewMode, colors]);
+}, [activeToggle, processedData, tableData, viewMode, colors, consolidatedBreakdown, actualPortfolio.typeBreakdown]);
 
   // Optimized percentage formatter with dynamic precision
   const formatPercentage = useMemo(() => (percentage) => {
@@ -330,6 +332,9 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
       return null;
     }
     
+    // Get slice color for styling
+    const sliceColor = getItemColor(data, 0);
+    
     // Adjust tooltip position to avoid overlap with sticky tooltips
     const tooltipStyle = data.isGrouped ? {} : {
       transform: 'translateX(-65%)',
@@ -338,10 +343,20 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
     
     return (
       <div 
-        className="bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs"
-        style={tooltipStyle}
+        className="bg-gray-900/95 border-2 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs"
+        style={{
+          ...tooltipStyle,
+          borderColor: sliceColor
+        }}
       >
-        <p className="text-white font-medium text-base mb-2">{data.name}</p>
+        <p 
+          className="font-medium text-base mb-2"
+          style={{ 
+            color: sliceColor
+          }}
+        >
+          {data.name}
+        </p>
         <div className="space-y-1">
           <p className="text-gray-300 text-sm">
             <span className="text-green-400">Value:</span> {formatCurrency(data.value)}
@@ -378,34 +393,52 @@ const StickyTooltip = React.memo(() => {
   
   const data = stickyTooltip;
   const hasItemBreakdown = data.items && data.items.length > 0;
+  const sliceColor = getItemColor(data, 0);
   
   // Fixed positioning - simple left/right placement
   const getTooltipStyle = () => {
     if (tooltipPosition.side === 'left') {
       return {
         left: '13px',
-        top: '220px'
+        top: '220px',
+        width: 'auto',
+        maxWidth: '200px',
+        minWidth: '150px',
+        borderColor: sliceColor
       };
     } else {
       return {
         right: '13px',
-        top: '220px'
+        top: '220px',
+        width: 'auto',
+        maxWidth: '200px',
+        minWidth: '150px',
+        borderColor: sliceColor
       };
     }
   };
   
   return (
     <div 
-      className="absolute bg-gray-900/95 border border-gray-600 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-sm z-50 pointer-events-auto"
+      className="absolute bg-gray-900/95 border-2 rounded-lg p-3 shadow-xl backdrop-blur-sm z-50 pointer-events-auto"
       style={getTooltipStyle()}
       onClick={(e) => e.stopPropagation()} // Prevent clicks inside tooltip from bubbling up
     >
       {/* Header with close button */}
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-white font-medium text-base pr-2">{data.name}</p>
+      <div className="flex items-start justify-between mb-2 gap-2">
+        <div 
+          className="font-medium text-base flex-1 break-words"
+          style={{ 
+            color: sliceColor,
+            lineHeight: '1.3'
+          }}
+        >
+          {data.name}
+        </div>
         <button
           onClick={() => setStickyTooltip(null)}
-          className="text-gray-400 hover:text-white ml-2 text-sm flex-shrink-0"
+          className="text-gray-400 hover:text-white text-sm flex-shrink-0 mt-0.5"
+          style={{ minWidth: '16px' }} // Ensure button doesn't shrink
         >
           ✕
         </button>
@@ -429,34 +462,193 @@ const StickyTooltip = React.memo(() => {
             <p className="text-yellow-400 text-xs mb-1">
               {data.isGrouped ? `Contains ${data.items.length} items:` : `Individual items (${data.items.length}):`}
             </p>
-            <div className="text-xs text-gray-300 max-h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-              {data.items.map((item, i) => {
-                let itemPercentage;
-                
-                if (data.isGrouped) {
-                  // For grouped items (like "Others"), use the item's existing percentage
-                  // These should already be calculated correctly in the grouping logic
-                  itemPercentage = item.percentage || 0;
+            <div className="text-xs text-gray-300 max-h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 pr-1.5">
+              {(() => {
+                // Handle "Others" grouped items specially
+                if (data.isGrouped && data.items) {
+                  // For "Others" group, we need to flatten the individual items from each category
+                  const allIndividualItems = data.items.flatMap(categoryItem => {
+                    // Each categoryItem is like {name: "AWP", items: [...actual items...]}
+                    return (categoryItem.items || []).map(actualItem => ({
+                      ...actualItem,
+                      categoryName: categoryItem.name, // Keep track of original category
+                      categoryPercentage: categoryItem.percentage
+                    }));
+                  });
+                  
+                  return allIndividualItems
+                    .map((item, i) => {
+                      // Build consolidated display name with proper CS format
+                      let fullName = item.name || 'Unknown Item';
+                      
+                      // Add special prefixes first (StatTrak™, Souvenir, etc.)
+                      let prefixes = '';
+                      
+                      // Check for StatTrak™ - handle both boolean and string values
+                      if (item.variant === 'stattrak' || 
+                          (item.stattrak && (item.stattrak === true || item.stattrak === 'true' || item.stattrak === 'stattrak'))) {
+                        prefixes += 'StatTrak™ ';
+                      }
+                      
+                      // Check for Souvenir - handle both variant and direct property
+                      if (item.variant === 'souvenir' || 
+                          (item.souvenir && (item.souvenir === true || item.souvenir === 'true'))) {
+                        prefixes += 'Souvenir ';
+                      }
+                      
+                      // Add variant/skin name if it exists and isn't 'normal' or the base weapon name
+                      if (item.variant && 
+                          item.variant !== 'Unknown' && 
+                          item.variant.toLowerCase() !== 'normal' && 
+                          item.variant !== 'stattrak' && 
+                          item.variant !== 'souvenir' && 
+                          item.variant !== item.name) {
+                        fullName += ` | ${item.variant}`;
+                      }
+                      
+                      // If no variant but skin_name exists, use that
+                      else if (item.skin_name && 
+                              item.skin_name !== 'Unknown' && 
+                              item.skin_name.toLowerCase() !== 'normal' && 
+                              item.skin_name !== item.name) {
+                        fullName += ` | ${item.skin_name}`;
+                      }
+                      
+                      // Combine prefix with weapon name
+                      fullName = prefixes + fullName;
+                      
+                      // Add condition with abbreviated format
+                      if (item.condition && item.condition !== 'Unknown') {
+                        const conditionAbbrev = {
+                          'Factory New': 'FN',
+                          'Minimal Wear': 'MW', 
+                          'Field-Tested': 'FT',
+                          'Well-Worn': 'WW',
+                          'Battle-Scarred': 'BS'
+                        };
+                        const shortCondition = conditionAbbrev[item.condition] || item.condition;
+                        fullName += ` (${shortCondition})`;
+                      }
+                      
+                      // Calculate individual item percentage
+                      const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
+                      const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
+                                                consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
+                                                actualPortfolio.totalValue || 
+                                                data.value;
+                      const itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
+                      
+                      return {
+                        ...item,
+                        displayName: fullName,
+                        itemPercentage,
+                        originalIndex: i
+                      };
+                    })
+                    .sort((a, b) => b.itemPercentage - a.itemPercentage) // Sort by percentage descending
+                    .map((item, sortedIndex) => (
+                      <div key={`${item.categoryName}-${item.originalIndex}`} className="py-0.5 leading-relaxed">
+                        <span 
+                          className="inline-block break-words"
+                          style={{ 
+                            lineHeight: '1.4'
+                          }}
+                        >
+                          • {item.displayName} ({formatPercentage(item.itemPercentage)})
+                        </span>
+                      </div>
+                    ));
                 } else {
-                  // For regular consolidated items, calculate percentage from raw investment data
-                  const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
-                  
-                  // Get total portfolio value from the main portfolio data
-                  const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
-                                             consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
-                                             actualPortfolio.totalValue || 
-                                             data.value;
-                  
-                  // Calculate percentage relative to total portfolio
-                  itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
+                  // Handle regular (non-grouped) items
+                  return data.items
+                    .map((item, i) => {
+                      let itemPercentage;
+                      let displayName = item.name || 'Unknown Item';
+                      
+                      // Build consolidated display name with proper CS format
+                      let fullName = item.name || 'Unknown Item';
+                      
+                      // Add special prefixes first (StatTrak™, Souvenir, etc.)
+                      let prefixes = '';
+                      
+                      // Check for StatTrak™ - handle both boolean and string values
+                      if (item.variant === 'stattrak' || 
+                          (item.stattrak && (item.stattrak === true || item.stattrak === 'true' || item.stattrak === 'stattrak'))) {
+                        prefixes += 'StatTrak™ ';
+                      }
+                      
+                      // Check for Souvenir - handle both variant and direct property
+                      if (item.variant === 'souvenir' || 
+                          (item.souvenir && (item.souvenir === true || item.souvenir === 'true'))) {
+                        prefixes += 'Souvenir ';
+                      }
+                      
+                      // Add variant/skin name if it exists and isn't 'normal' or the base weapon name
+                      if (item.variant && 
+                          item.variant !== 'Unknown' && 
+                          item.variant.toLowerCase() !== 'normal' && 
+                          item.variant !== 'stattrak' && 
+                          item.variant !== 'souvenir' && 
+                          item.variant !== item.name) {
+                        fullName += ` | ${item.variant}`;
+                      }
+                      
+                      // If no variant but skin_name exists, use that
+                      else if (item.skin_name && 
+                              item.skin_name !== 'Unknown' && 
+                              item.skin_name.toLowerCase() !== 'normal' && 
+                              item.skin_name !== item.name) {
+                        fullName += ` | ${item.skin_name}`;
+                      }
+                      
+                      // Combine prefix with weapon name
+                      fullName = prefixes + fullName;
+                      
+                      // Add condition with abbreviated format
+                      if (item.condition && item.condition !== 'Unknown') {
+                        const conditionAbbrev = {
+                          'Factory New': 'FN',
+                          'Minimal Wear': 'MW', 
+                          'Field-Tested': 'FT',
+                          'Well-Worn': 'WW',
+                          'Battle-Scarred': 'BS'
+                        };
+                        const shortCondition = conditionAbbrev[item.condition] || item.condition;
+                        fullName += ` (${shortCondition})`;
+                      }
+                      
+                      displayName = fullName;
+                      
+                      // Calculate percentage for regular items
+                      const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
+                      const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
+                                                consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
+                                                actualPortfolio.totalValue || 
+                                                data.value;
+                      itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
+                      
+                      return {
+                        ...item,
+                        displayName,
+                        itemPercentage,
+                        originalIndex: i
+                      };
+                    })
+                    .sort((a, b) => b.itemPercentage - a.itemPercentage) // Sort by percentage descending
+                    .map((item, sortedIndex) => (
+                      <div key={item.originalIndex} className="py-0.5 leading-relaxed">
+                        <span 
+                          className="inline-block break-words"
+                          style={{ 
+                            lineHeight: '1.4'
+                          }}
+                        >
+                          • {item.displayName} ({formatPercentage(item.itemPercentage)})
+                        </span>
+                      </div>
+                    ));
                 }
-                
-                return (
-                  <div key={i} className="py-0.5 leading-relaxed break-words">
-                    <span className="inline-block">• {item.name} ({formatPercentage(itemPercentage)})</span>
-                  </div>
-                );
-              })}
+              })()}
             </div>
           </div>
         )}
