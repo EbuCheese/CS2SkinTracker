@@ -4,43 +4,43 @@ import { ChartPie, Table, List } from 'lucide-react';
 
 // color palette  constant
 const COLOR_PALETTES = {
-    type: {
-      liquid: '#10B981',
-      craft: '#F59E0B',
-      case: '#3B82F6',
-      sticker: '#32f1ffff',
-      agent: '#8B5CF6',
-      keychain: '#EC4899',
-      graffiti: '#6B7280',
-      patch: '#EF4444'
-    },
-    item: {
-      'Knives': '#8B5CF6',
-      'Gloves': '#EC4899',
-      'Stickers': '#10B981',
-      'Patches': '#EF4444',
-      'Graffiti': '#6B7280',
-      'Charms': '#F59E0B',
-      'Agents': '#06B6D4',
-    },
-    // SIGNIFICANTLY EXPANDED: 60+ unique colors to prevent collisions
-    weapon: [
-      // Primary vibrant colors (most distinct)
-      '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899', '#EF4444', '#06B6D4', '#84CC16',
-      '#F97316', '#A855F7', '#F472B6', '#DC2626', '#0EA5E9', '#65A30D', '#EA580C', '#9333EA',
-      '#E11D48', '#B91C1C', '#14B8A6', '#D97706', '#6366F1', '#D946EF', '#C2410C', '#7C3AED',
-      '#0284C7', '#059669', '#4F46E5', '#A21CAF', '#0F766E', '#A16207', '#4338CA', '#BE185D',
-      
-      // Secondary distinct colors
-      '#059669', '#D97706', '#7C2D12', '#92400E', '#1E40AF', '#7C3AED', '#BE123C', '#0F766E',
-      '#166534', '#CA8A04', '#1E3A8A', '#6B21A8', '#9F1239', '#134E4A', '#15803D', '#A16207',
-      '#312E81', '#581C87', '#831843', '#0F3460', '#064E3B', '#365314', '#422006', '#1E1B4B',
-      
-      // Tertiary colors for maximum coverage
-      '#4C1D95', '#701A75', '#7F1D1D', '#0C4A6E', '#0D9488', '#16A34A', '#CA8A04', '#C2410C',
-      '#9333EA', '#DB2777', '#DC2626', '#0284C7', '#0891B2', '#059669', '#65A30D', '#A3A3A3'
-    ]
-  };
+  type: {
+    liquid:  '#10B981',
+    craft:  '#F59E0B',
+    case:   '#3B82F6',
+    sticker:'#32F1FF',
+    agent:  '#8B5CF6',
+    keychain:'#EC4899',
+    graffiti:'#EF4444',
+    patch:  '#06B6D4'
+  },
+  item: {
+    'Knives':   '#14B8A6',
+    'Gloves':   '#A855F7',
+    'Stickers': '#84CC16',
+    'Patches':  '#DC2626',
+    'Graffiti': '#F97316',
+    'Charms':   '#7C3AED',
+    'Agents':   '#581C87'
+  },
+  // Weapon palette WITHOUT any of the colors above
+  weapon: [
+    '#0EA5E9', '#65A30D', '#EA580C', '#9333EA', '#E11D48',
+    '#B91C1C', '#D97706', '#6366F1', '#D946EF', '#C2410C',
+    '#7C2D12', '#92400E', '#1E40AF', '#BE123C', '#0F766E',
+    '#166534', '#CA8A04', '#1E3A8A', '#6B21A8', '#9F1239',
+    '#134E4A', '#15803D', '#312E81', '#701A75', '#831843',
+    '#0F3460', '#064E3B', '#365314', '#422006', '#1E1B4B',
+    '#4C1D95', '#DB2777', '#0891B2', '#059669', '#7F1D1D',
+    '#0C4A6E', '#D97706', '#0284C7', '#0D9488', '#16A34A'
+  ]
+};
+
+// 1) A set of hand-picked, high-contrast colors
+const CONTRAST_COLORS = [
+  '#4e79a7', '#f28e2c', '#e15759', '#76b7b2',
+  '#59a14f', '#edc948', '#af7aa1', '#ff9da7'
+];
 
 // Memoized component for rendering individual distribution items in the list
 const DistributionItem = React.memo(({ 
@@ -83,41 +83,38 @@ const DistributionItem = React.memo(({
 
 const generateUniqueColors = (() => {
   const cache = new Map();
-  // Improved HSL-based color generation with better spacing
+ 
+  // HSL-based color generation for infinite unique colors
   const generateHSLColor = (index, total) => {
-    const primeOffset = 137.508; // Golden angle in degrees
-    
-    // Better hue distribution to avoid clustering
-    const hue = (index * primeOffset) % 360;
-    
-    // More varied saturation and lightness with better contrast
-    const saturationVariations = [70, 85, 95, 60, 80]; // 5 variations
-    const lightnessVariations = [45, 55, 65, 35, 75];  // 5 variations
-    
-    const saturation = saturationVariations[index % saturationVariations.length];
-    const lightness = lightnessVariations[Math.floor(index / saturationVariations.length) % lightnessVariations.length];
-    
+    // Use golden ratio for optimal color distribution
+    const goldenRatio = 0.618033988749;
+    const hue = ((index * goldenRatio) % 1) * 360;
+   
+    // Vary saturation and lightness for more distinction
+    const saturation = 65 + (index % 3) * 15; // 65%, 80%, 95%
+    const lightness = 45 + (Math.floor(index / 3) % 3) * 10; // 45%, 55%, 65%
+   
     return `hsl(${Math.round(hue)}, ${saturation}%, ${lightness}%)`;
   };
-  
+ 
   return (count, baseColors) => {
-    const cacheKey = `${count}-${baseColors.length}`;
+    const cacheKey = `${count}-${baseColors?.length || 0}`;
     if (cache.has(cacheKey)) {
       return cache.get(cacheKey);
     }
-    
+   
     const result = [];
-    
-    // Use base colors first
+   
+    // Use base colors first (most carefully chosen)
     for (let i = 0; i < Math.min(count, baseColors.length); i++) {
       result.push(baseColors[i]);
     }
-    
-    // Generate additional unique colors if needed
+   
+    // Generate additional unique colors using HSL if needed
     for (let i = baseColors.length; i < count; i++) {
       result.push(generateHSLColor(i - baseColors.length, count - baseColors.length));
     }
-    
+   
     cache.set(cacheKey, result);
     return result;
   };
@@ -238,44 +235,83 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   return processedData; // Reuse for chart view
 }, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, debouncedSearchTerm, viewMode, processedData]);
 
+// 2) Helper that will use the contrast palette first, then fallback to HSL
+const getColorByIndex = (index) => {
+  if (index < CONTRAST_COLORS.length) {
+    return CONTRAST_COLORS[index];
+  }
+  const generated = generateUniqueColors(index + 1, []); 
+  return generated[index];
+};
+
+// Modified colorAssignments that prioritizes contrast colors for top items
 const colorAssignments = useMemo(() => {
   const assignments = new Map();
-  
-  // Use the original data (without grouping) for consistent color assignment
-  const baseData = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown;
   const currentData = viewMode === 'table' ? tableData : processedData;
   
-  // PERFORMANCE: Calculate exact number of colors needed based on original data
-  const uniqueItems = new Set(baseData.map(item => item.name));
-  const neededColors = generateUniqueColors(uniqueItems.size, colors.weapon);
-  
-  // Create deterministic mapping based on original item names (not grouped data)
-  const sortedUniqueNames = Array.from(uniqueItems).sort();
-  
-  sortedUniqueNames.forEach((itemName, index) => {
-    if (activeToggle === 'item') {
-      // Check for predefined colors first
-      if (colors.item[itemName]) {
-        assignments.set(itemName, colors.item[itemName]);
-      } else {
-        // Use index in sorted array for consistent color assignment
-        assignments.set(itemName, neededColors[index] || '#6B7280');
-      }
+  // Create a persistent assignment tracker that survives across renders
+  // This should ideally be stored outside the component or in a ref
+  const getStableColorForItem = (itemName, isType = false) => {
+    // Check predefined colors first
+    const predefinedColor = isType 
+      ? colors.type[itemName.toLowerCase()] 
+      : colors.item[itemName];
+    
+    if (predefinedColor) return predefinedColor;
+
+    // Create a deterministic hash that's stable regardless of when item was added
+    let hash = 0;
+    for (let i = 0; i < itemName.length; i++) {
+      hash = ((hash << 5) - hash) + itemName.charCodeAt(i);
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    // Use the hash to determine if this item gets a contrast color or palette color
+    const hashForContrastAssignment = Math.abs(hash);
+    
+    // Items with smaller hash values get priority for contrast colors
+    // This is deterministic - the same item name will always get the same hash
+    const allCurrentItems = currentData.filter(item => item.name !== 'Others' && !item.isGrouped);
+    const itemsWithHashes = allCurrentItems.map(item => ({
+      name: item.name,
+      hash: (() => {
+        let h = 0;
+        for (let i = 0; i < item.name.length; i++) {
+          h = ((h << 5) - h) + item.name.charCodeAt(i);
+          h = h & h;
+        }
+        return Math.abs(h);
+      })()
+    }));
+    
+    // Sort by hash to get consistent priority order
+    itemsWithHashes.sort((a, b) => a.hash - b.hash);
+    
+    // Find this item's priority position
+    const priorityIndex = itemsWithHashes.findIndex(item => item.name === itemName);
+    
+    // First 8 in priority order get contrast colors
+    if (priorityIndex !== -1 && priorityIndex < CONTRAST_COLORS.length) {
+      return CONTRAST_COLORS[priorityIndex];
+    }
+
+    // Remaining items use hash-based selection from weapon palette
+    const availableColors = COLOR_PALETTES.weapon.filter(color => !CONTRAST_COLORS.includes(color));
+    const colorIndex = hashForContrastAssignment % availableColors.length;
+    return availableColors[colorIndex];
+  };
+
+  // Assign colors to all items that appear in current data
+  currentData.forEach(item => {
+    if (item.name === 'Others' && item.isGrouped) {
+      assignments.set(item.name, '#64748B'); // Special color for Others group
     } else {
-      // Type view
-      assignments.set(itemName, colors.type[itemName.toLowerCase()] || '#6B7280');
+      assignments.set(item.name, getStableColorForItem(item.name, activeToggle !== 'item'));
     }
   });
-  
-  // Special handling for grouped items (Others group gets a distinct color)
-  currentData.forEach((item) => {
-    if (item.isGrouped) {
-      assignments.set(item.name, '#64748B');
-    }
-  });
-  
+
   return assignments;
-}, [activeToggle, processedData, tableData, viewMode, colors, consolidatedBreakdown, actualPortfolio.typeBreakdown]);
+}, [activeToggle, processedData, tableData, viewMode, colors]);
 
   // Optimized percentage formatter with dynamic precision
   const formatPercentage = useMemo(() => (percentage) => {
@@ -313,8 +349,16 @@ const colorAssignments = useMemo(() => {
 
   // Color assignment function with fallback logic
   const getItemColor = useCallback((item, index) => {
-    return colorAssignments.get(item.name) || '#6B7280';
-  }, [colorAssignments]);
+  const assignedColor = colorAssignments.get(item.name);
+  
+  // If no assigned color and it's "Others", use specific gray
+  if (!assignedColor && item.isGrouped && item.name === 'Others') {
+    return '#64748B';
+  }
+  
+  // For all other cases, use assigned color or cyan fallback (NOT gray)
+  return assignedColor || '#06B6D4';
+}, [colorAssignments]);
 
   // Get current diversity metrics based on active toggle
   const currentScore = activeToggle === 'item' ? 
@@ -561,7 +605,7 @@ const StickyTooltip = React.memo(() => {
                 {processedItems.map((item, sortedIndex) => (
                   <div 
                     key={data.isGrouped ? `${item.categoryName}-${item.originalIndex}` : item.originalIndex} 
-                    className="group flex items-start justify-between px-2 py-1.5 rounded-md hover:bg-gray-700/40 transition-colors"
+                    className="group flex items-start justify-between px-1 py-1.5 rounded-md hover:bg-gray-700/40 transition-colors"
                   >
                     <div className="flex items-start space-x-2 flex-1 min-w-0">
                       <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mt-2 flex-shrink-0"></div>
@@ -571,7 +615,7 @@ const StickyTooltip = React.memo(() => {
                         </p>
                       </div>
                     </div>
-                    <div className="ml-2 flex-shrink-0">
+                    <div className="ml-2 flex items-center">
                       <span className="text-xs text-gray-400 bg-gray-800/60 px-1.5 py-0.5 rounded">
                         {formatPercentage(item.itemPercentage)}
                       </span>
