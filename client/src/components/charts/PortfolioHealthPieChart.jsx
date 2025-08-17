@@ -2,6 +2,46 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip} from 'recharts';
 import { ChartPie, Table, List } from 'lucide-react';
 
+// color palette  constant
+const COLOR_PALETTES = {
+    type: {
+      liquid: '#10B981',
+      craft: '#F59E0B',
+      case: '#3B82F6',
+      sticker: '#32f1ffff',
+      agent: '#8B5CF6',
+      keychain: '#EC4899',
+      graffiti: '#6B7280',
+      patch: '#EF4444'
+    },
+    item: {
+      'Knives': '#8B5CF6',
+      'Gloves': '#EC4899',
+      'Stickers': '#10B981',
+      'Patches': '#EF4444',
+      'Graffiti': '#6B7280',
+      'Charms': '#F59E0B',
+      'Agents': '#06B6D4',
+    },
+    // SIGNIFICANTLY EXPANDED: 60+ unique colors to prevent collisions
+    weapon: [
+      // Primary vibrant colors (most distinct)
+      '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899', '#EF4444', '#06B6D4', '#84CC16',
+      '#F97316', '#A855F7', '#F472B6', '#DC2626', '#0EA5E9', '#65A30D', '#EA580C', '#9333EA',
+      '#E11D48', '#B91C1C', '#14B8A6', '#D97706', '#6366F1', '#D946EF', '#C2410C', '#7C3AED',
+      '#0284C7', '#059669', '#4F46E5', '#A21CAF', '#0F766E', '#A16207', '#4338CA', '#BE185D',
+      
+      // Secondary distinct colors
+      '#059669', '#D97706', '#7C2D12', '#92400E', '#1E40AF', '#7C3AED', '#BE123C', '#0F766E',
+      '#166534', '#CA8A04', '#1E3A8A', '#6B21A8', '#9F1239', '#134E4A', '#15803D', '#A16207',
+      '#312E81', '#581C87', '#831843', '#0F3460', '#064E3B', '#365314', '#422006', '#1E1B4B',
+      
+      // Tertiary colors for maximum coverage
+      '#4C1D95', '#701A75', '#7F1D1D', '#0C4A6E', '#0D9488', '#16A34A', '#CA8A04', '#C2410C',
+      '#9333EA', '#DB2777', '#DC2626', '#0284C7', '#0891B2', '#059669', '#65A30D', '#A3A3A3'
+    ]
+  };
+
 // Memoized component for rendering individual distribution items in the list
 const DistributionItem = React.memo(({ 
   item, 
@@ -118,44 +158,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   }, [searchTerm]);
 
   // Color palettes for different visualization modes
-  const colors = useMemo(() => ({
-    type: {
-      liquid: '#10B981',
-      craft: '#F59E0B',
-      case: '#3B82F6',
-      sticker: '#32f1ffff',
-      agent: '#8B5CF6',
-      keychain: '#EC4899',
-      graffiti: '#6B7280',
-      patch: '#EF4444'
-    },
-    item: {
-      'Knives': '#8B5CF6',
-      'Gloves': '#EC4899',
-      'Stickers': '#10B981',
-      'Patches': '#EF4444',
-      'Graffiti': '#6B7280',
-      'Charms': '#F59E0B',
-      'Agents': '#06B6D4',
-    },
-    // SIGNIFICANTLY EXPANDED: 60+ unique colors to prevent collisions
-    weapon: [
-      // Primary vibrant colors (most distinct)
-      '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899', '#EF4444', '#06B6D4', '#84CC16',
-      '#F97316', '#A855F7', '#F472B6', '#DC2626', '#0EA5E9', '#65A30D', '#EA580C', '#9333EA',
-      '#E11D48', '#B91C1C', '#14B8A6', '#D97706', '#6366F1', '#D946EF', '#C2410C', '#7C3AED',
-      '#0284C7', '#059669', '#4F46E5', '#A21CAF', '#0F766E', '#A16207', '#4338CA', '#BE185D',
-      
-      // Secondary distinct colors
-      '#059669', '#D97706', '#7C2D12', '#92400E', '#1E40AF', '#7C3AED', '#BE123C', '#0F766E',
-      '#166534', '#CA8A04', '#1E3A8A', '#6B21A8', '#9F1239', '#134E4A', '#15803D', '#A16207',
-      '#312E81', '#581C87', '#831843', '#0F3460', '#064E3B', '#365314', '#422006', '#1E1B4B',
-      
-      // Tertiary colors for maximum coverage
-      '#4C1D95', '#701A75', '#7F1D1D', '#0C4A6E', '#0D9488', '#16A34A', '#CA8A04', '#C2410C',
-      '#9333EA', '#DB2777', '#DC2626', '#0284C7', '#0891B2', '#059669', '#65A30D', '#A3A3A3'
-    ]
-  }), []);
+  const colors = COLOR_PALETTES;
 
   // Item name consolidation logic for grouping similar items
   const actualPortfolio = portfolioHealth;
@@ -163,74 +166,77 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   // Consolidated breakdown calculation for item view
   const consolidatedBreakdown = actualPortfolio.weaponBreakdown || [];
 
-  // Table-specific data processing
-  const tableData = useMemo(() => {
-  const rawData = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown;
-  
-  return rawData.filter(item =>
-    item.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
-  ).sort((a, b) => b.percentage - a.percentage);
-}, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, debouncedSearchTerm]);
-
   // Main data processing pipeline with search filtering and small slice handling
   const processedData = useMemo(() => {
-  // Select base data based on current toggle
+  // Select and filter data in one step
   const rawData = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown;
-  
-  // Apply search filter
   const filteredData = rawData.filter(item =>
     item.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
   );
-  
-  // For item view, enhance each item with individual breakdown if available
-  if (activeToggle === 'item') {
-    const enhancedData = filteredData.map(item => ({
-      ...item,
-      // Add individual items breakdown if available from the original portfolio data
-      items: item.items || (actualPortfolio.detailedItems && actualPortfolio.detailedItems[item.name]) || []
-    }));
-    
-    // Small slice grouping logic - only for item view in chart mode
-    if (viewMode === 'chart') {
-      const threshold = 2; // 2% threshold for small slices
-      const largeSlices = enhancedData.filter(item => item.percentage >= threshold);
-      const smallSlices = enhancedData.filter(item => item.percentage < threshold);
-      
-      let processedData = [...largeSlices];
-      
-      // Handle small slices based on user preference
-      if (smallSlices.length > 0) {
-        if (showSmallSlices) {
-          // Show individual small slices
-          processedData = [...processedData, ...smallSlices];
-        } else {
-          // Group small slices into "Others" category
-          const othersValue = smallSlices.reduce((sum, item) => sum + item.value, 0);
-          const othersPercentage = smallSlices.reduce((sum, item) => sum + item.percentage, 0);
-          const othersCount = smallSlices.reduce((sum, item) => sum + item.count, 0);
-          
-          if (othersValue > 0) {
-            processedData.push({
-              name: 'Others',
-              value: othersValue,
-              percentage: othersPercentage,
-              count: othersCount,
-              isGrouped: true,
-              items: smallSlices
-            });
-          }
-        }
-      }
-      
-      return processedData.sort((a, b) => b.percentage - a.percentage);
-    }
-    
-    return enhancedData.sort((a, b) => b.percentage - a.percentage);
+
+  // Early return for non-chart views or non-item views
+  if (viewMode !== 'chart' || activeToggle !== 'item') {
+    return filteredData.sort((a, b) => b.percentage - a.percentage);
   }
+
+  // Enhanced data with items - only for item view in chart mode
+  const enhancedData = filteredData.map(item => ({
+    ...item,
+    items: item.items || (actualPortfolio.detailedItems?.[item.name]) || []
+  }));
+
+  // Small slice grouping - only when needed
+  const threshold = 2;
+  const largeSlices = [];
+  const smallSlices = [];
   
-  // For type view or table view, return filtered data without grouping
-  return filteredData.sort((a, b) => b.percentage - a.percentage);
+  // Single pass to separate large and small slices
+  enhancedData.forEach(item => {
+    if (item.percentage >= threshold) {
+      largeSlices.push(item);
+    } else {
+      smallSlices.push(item);
+    }
+  });
+
+  // Handle small slices
+  if (smallSlices.length === 0 || showSmallSlices) {
+    return [...largeSlices, ...smallSlices].sort((a, b) => b.percentage - a.percentage);
+  }
+
+  // Group small slices - calculate totals in single pass
+  const totals = smallSlices.reduce(
+    (acc, item) => ({
+      value: acc.value + item.value,
+      percentage: acc.percentage + item.percentage,
+      count: acc.count + item.count
+    }),
+    { value: 0, percentage: 0, count: 0 }
+  );
+
+  if (totals.value > 0) {
+    largeSlices.push({
+      name: 'Others',
+      ...totals,
+      isGrouped: true,
+      items: smallSlices
+    });
+  }
+
+  return largeSlices.sort((a, b) => b.percentage - a.percentage);
 }, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, actualPortfolio.detailedItems, showSmallSlices, debouncedSearchTerm, viewMode]);
+
+  // Table-specific data processing
+  const tableData = useMemo(() => {
+  // Reuse processedData if it's already filtered and doesn't need small slice handling
+  if (viewMode === 'table') {
+    const rawData = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown;
+    return rawData
+      .filter(item => item.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()))
+      .sort((a, b) => b.percentage - a.percentage);
+  }
+  return processedData; // Reuse for chart view
+}, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, debouncedSearchTerm, viewMode, processedData]);
 
 const colorAssignments = useMemo(() => {
   const assignments = new Map();
@@ -387,6 +393,55 @@ const colorAssignments = useMemo(() => {
   return null;
 });
 
+const buildItemDisplayName = (item) => {
+  let fullName = item.name || 'Unknown Item';
+  let prefixes = '';
+  
+  // Build prefixes
+  if (item.variant === 'stattrak' || (item.stattrak && item.stattrak !== 'false')) {
+    prefixes += 'StatTrak™ ';
+  }
+  if (item.variant === 'souvenir' || (item.souvenir && item.souvenir !== 'false')) {
+    prefixes += 'Souvenir ';
+  }
+  
+  // Add skin/variant
+  const skinName = item.variant && 
+    item.variant !== 'Unknown' && 
+    item.variant.toLowerCase() !== 'normal' && 
+    item.variant !== 'stattrak' && 
+    item.variant !== 'souvenir' && 
+    item.variant !== item.name
+      ? item.variant 
+      : item.skin_name && 
+        item.skin_name !== 'Unknown' && 
+        item.skin_name.toLowerCase() !== 'normal' && 
+        item.skin_name !== item.name
+        ? item.skin_name
+        : null;
+  
+  if (skinName) {
+    fullName += ` | ${skinName}`;
+  }
+  
+  fullName = prefixes + fullName;
+  
+  // Add condition
+  if (item.condition && item.condition !== 'Unknown') {
+    const conditionMap = {
+      'Factory New': 'FN',
+      'Minimal Wear': 'MW', 
+      'Field-Tested': 'FT',
+      'Well-Worn': 'WW',
+      'Battle-Scarred': 'BS'
+    };
+    const shortCondition = conditionMap[item.condition] || item.condition;
+    fullName += ` (${shortCondition})`;
+  }
+  
+  return fullName;
+};
+
 // Updated StickyTooltip component - replace the existing one
 const StickyTooltip = React.memo(() => {
   if (!stickyTooltip) return null;
@@ -395,6 +450,42 @@ const StickyTooltip = React.memo(() => {
   const hasItemBreakdown = data.items && data.items.length > 0;
   const sliceColor = getItemColor(data, 0);
   
+  const processedItems = useMemo(() => {
+  if (!hasItemBreakdown) return [];
+  
+  const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
+                              consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
+                              actualPortfolio.totalValue || 
+                              data.value;
+  
+  const allItems = data.isGrouped && data.items
+    ? data.items.flatMap(categoryItem => 
+        (categoryItem.items || []).map(actualItem => ({
+          ...actualItem,
+          displayName: buildItemDisplayName(actualItem),
+          categoryName: categoryItem.name,
+          categoryPercentage: categoryItem.percentage
+        }))
+      )
+    : data.items.map(item => ({
+        ...item,
+        displayName: buildItemDisplayName(item)
+      }));
+  
+  return allItems
+    .map((item, i) => {
+      const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
+      const itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
+      
+      return {
+        ...item,
+        itemPercentage,
+        originalIndex: i
+      };
+    })
+    .sort((a, b) => b.itemPercentage - a.itemPercentage);
+}, [data, hasItemBreakdown, actualPortfolio.typeBreakdown, consolidatedBreakdown, actualPortfolio.totalValue]);
+
   // Fixed positioning - simple left/right placement
   const getTooltipStyle = () => {
     if (tooltipPosition.side === 'left') {
@@ -436,7 +527,10 @@ const StickyTooltip = React.memo(() => {
           {data.name}
         </div>
         <button
-          onClick={() => setStickyTooltip(null)}
+          onClick={() => {
+            setStickyTooltip(null);
+            setSelectedSlice(null);
+          }}
           className="text-gray-400 hover:text-white text-sm flex-shrink-0 mt-0.5"
           style={{ minWidth: '16px' }} // Ensure button doesn't shrink
         >
@@ -464,178 +558,26 @@ const StickyTooltip = React.memo(() => {
             </p>
             <div className="max-h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-800">
               <div className="space-y-1 pr-1">
-                {(() => {
-                  if (data.isGrouped && data.items) {
-                    const allIndividualItems = data.items.flatMap(categoryItem => {
-                      return (categoryItem.items || []).map(actualItem => ({
-                        ...actualItem,
-                        categoryName: categoryItem.name,
-                        categoryPercentage: categoryItem.percentage
-                      }));
-                    });
-                    
-                    return allIndividualItems
-                      .map((item, i) => {
-                        // Your existing name building logic...
-                        let fullName = item.name || 'Unknown Item';
-                        let prefixes = '';
-                        
-                        if (item.variant === 'stattrak' || 
-                            (item.stattrak && (item.stattrak === true || item.stattrak === 'true' || item.stattrak === 'stattrak'))) {
-                          prefixes += 'StatTrak™ ';
-                        }
-                        
-                        if (item.variant === 'souvenir' || 
-                            (item.souvenir && (item.souvenir === true || item.souvenir === 'true'))) {
-                          prefixes += 'Souvenir ';
-                        }
-                        
-                        if (item.variant && 
-                            item.variant !== 'Unknown' && 
-                            item.variant.toLowerCase() !== 'normal' && 
-                            item.variant !== 'stattrak' && 
-                            item.variant !== 'souvenir' && 
-                            item.variant !== item.name) {
-                          fullName += ` | ${item.variant}`;
-                        } else if (item.skin_name && 
-                                  item.skin_name !== 'Unknown' && 
-                                  item.skin_name.toLowerCase() !== 'normal' && 
-                                  item.skin_name !== item.name) {
-                          fullName += ` | ${item.skin_name}`;
-                        }
-                        
-                        fullName = prefixes + fullName;
-                        
-                        if (item.condition && item.condition !== 'Unknown') {
-                          const conditionAbbrev = {
-                            'Factory New': 'FN',
-                            'Minimal Wear': 'MW', 
-                            'Field-Tested': 'FT',
-                            'Well-Worn': 'WW',
-                            'Battle-Scarred': 'BS'
-                          };
-                          const shortCondition = conditionAbbrev[item.condition] || item.condition;
-                          fullName += ` (${shortCondition})`;
-                        }
-                        
-                        const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
-                        const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
-                                                  consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
-                                                  actualPortfolio.totalValue || 
-                                                  data.value;
-                        const itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
-                        
-                        return {
-                          ...item,
-                          displayName: fullName,
-                          itemPercentage,
-                          originalIndex: i
-                        };
-                      })
-                      .sort((a, b) => b.itemPercentage - a.itemPercentage)
-                      .map((item, sortedIndex) => (
-                        <div 
-                          key={`${item.categoryName}-${item.originalIndex}`} 
-                          className="group flex items-start justify-between px-2 py-1.5 rounded-md hover:bg-gray-700/40 transition-colors"
-                        >
-                          <div className="flex items-start space-x-2 flex-1 min-w-0">
-                            <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mt-2 flex-shrink-0"></div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs text-gray-300 break-words leading-relaxed">
-                                {item.displayName}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="ml-2 flex-shrink-0">
-                            <span className="text-xs text-gray-400 bg-gray-800/60 px-1.5 py-0.5 rounded">
-                              {formatPercentage(item.itemPercentage)}
-                            </span>
-                          </div>
-                        </div>
-                      ));
-                  } else {
-                    // For regular (non-grouped) items - similar structure
-                    return data.items
-                      .map((item, i) => {
-                        // Your existing name building logic (same as above)...
-                        let fullName = item.name || 'Unknown Item';
-                        let prefixes = '';
-                        
-                        if (item.variant === 'stattrak' || 
-                            (item.stattrak && (item.stattrak === true || item.stattrak === 'true' || item.stattrak === 'stattrak'))) {
-                          prefixes += 'StatTrak™ ';
-                        }
-                        
-                        if (item.variant === 'souvenir' || 
-                            (item.souvenir && (item.souvenir === true || item.souvenir === 'true'))) {
-                          prefixes += 'Souvenir ';
-                        }
-                        
-                        if (item.variant && 
-                            item.variant !== 'Unknown' && 
-                            item.variant.toLowerCase() !== 'normal' && 
-                            item.variant !== 'stattrak' && 
-                            item.variant !== 'souvenir' && 
-                            item.variant !== item.name) {
-                          fullName += ` | ${item.variant}`;
-                        } else if (item.skin_name && 
-                                  item.skin_name !== 'Unknown' && 
-                                  item.skin_name.toLowerCase() !== 'normal' && 
-                                  item.skin_name !== item.name) {
-                          fullName += ` | ${item.skin_name}`;
-                        }
-                        
-                        fullName = prefixes + fullName;
-                        
-                        if (item.condition && item.condition !== 'Unknown') {
-                          const conditionAbbrev = {
-                            'Factory New': 'FN',
-                            'Minimal Wear': 'MW', 
-                            'Field-Tested': 'FT',
-                            'Well-Worn': 'WW',
-                            'Battle-Scarred': 'BS'
-                          };
-                          const shortCondition = conditionAbbrev[item.condition] || item.condition;
-                          fullName += ` (${shortCondition})`;
-                        }
-                        
-                        const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
-                        const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
-                                                  consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
-                                                  actualPortfolio.totalValue || 
-                                                  data.value;
-                        const itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
-                        
-                        return {
-                          ...item,
-                          displayName: fullName,
-                          itemPercentage,
-                          originalIndex: i
-                        };
-                      })
-                      .sort((a, b) => b.itemPercentage - a.itemPercentage)
-                      .map((item, sortedIndex) => (
-                        <div 
-                          key={item.originalIndex} 
-                          className="group flex items-start justify-between px-0.5 py-1.5 rounded-md hover:bg-gray-700/40 transition-colors"
-                        >
-                          <div className="flex items-start space-x-2 flex-1 min-w-0">
-                            <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mt-2 flex-shrink-0"></div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs text-gray-300 break-words leading-relaxed">
-                                {item.displayName}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="ml-1 flex-shrink-0 flex items-center">
-                            <span className="text-xs text-gray-400 bg-gray-800/60 px-1.5 py-0.5 rounded">
-                              {formatPercentage(item.itemPercentage)}
-                            </span>
-                          </div>
-                        </div>
-                      ));
-                  }
-                })()}
+                {processedItems.map((item, sortedIndex) => (
+                  <div 
+                    key={data.isGrouped ? `${item.categoryName}-${item.originalIndex}` : item.originalIndex} 
+                    className="group flex items-start justify-between px-2 py-1.5 rounded-md hover:bg-gray-700/40 transition-colors"
+                  >
+                    <div className="flex items-start space-x-2 flex-1 min-w-0">
+                      <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mt-2 flex-shrink-0"></div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-gray-300 break-words leading-relaxed">
+                          {item.displayName}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="ml-2 flex-shrink-0">
+                      <span className="text-xs text-gray-400 bg-gray-800/60 px-1.5 py-0.5 rounded">
+                        {formatPercentage(item.itemPercentage)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
