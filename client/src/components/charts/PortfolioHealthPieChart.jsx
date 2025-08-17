@@ -462,193 +462,181 @@ const StickyTooltip = React.memo(() => {
             <p className="text-yellow-400 text-xs mb-1">
               {data.isGrouped ? `Contains ${data.items.length} items:` : `Individual items (${data.items.length}):`}
             </p>
-            <div className="text-xs text-gray-300 max-h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800 pr-1.5">
-              {(() => {
-                // Handle "Others" grouped items specially
-                if (data.isGrouped && data.items) {
-                  // For "Others" group, we need to flatten the individual items from each category
-                  const allIndividualItems = data.items.flatMap(categoryItem => {
-                    // Each categoryItem is like {name: "AWP", items: [...actual items...]}
-                    return (categoryItem.items || []).map(actualItem => ({
-                      ...actualItem,
-                      categoryName: categoryItem.name, // Keep track of original category
-                      categoryPercentage: categoryItem.percentage
-                    }));
-                  });
-                  
-                  return allIndividualItems
-                    .map((item, i) => {
-                      // Build consolidated display name with proper CS format
-                      let fullName = item.name || 'Unknown Item';
-                      
-                      // Add special prefixes first (StatTrak™, Souvenir, etc.)
-                      let prefixes = '';
-                      
-                      // Check for StatTrak™ - handle both boolean and string values
-                      if (item.variant === 'stattrak' || 
-                          (item.stattrak && (item.stattrak === true || item.stattrak === 'true' || item.stattrak === 'stattrak'))) {
-                        prefixes += 'StatTrak™ ';
-                      }
-                      
-                      // Check for Souvenir - handle both variant and direct property
-                      if (item.variant === 'souvenir' || 
-                          (item.souvenir && (item.souvenir === true || item.souvenir === 'true'))) {
-                        prefixes += 'Souvenir ';
-                      }
-                      
-                      // Add variant/skin name if it exists and isn't 'normal' or the base weapon name
-                      if (item.variant && 
-                          item.variant !== 'Unknown' && 
-                          item.variant.toLowerCase() !== 'normal' && 
-                          item.variant !== 'stattrak' && 
-                          item.variant !== 'souvenir' && 
-                          item.variant !== item.name) {
-                        fullName += ` | ${item.variant}`;
-                      }
-                      
-                      // If no variant but skin_name exists, use that
-                      else if (item.skin_name && 
-                              item.skin_name !== 'Unknown' && 
-                              item.skin_name.toLowerCase() !== 'normal' && 
-                              item.skin_name !== item.name) {
-                        fullName += ` | ${item.skin_name}`;
-                      }
-                      
-                      // Combine prefix with weapon name
-                      fullName = prefixes + fullName;
-                      
-                      // Add condition with abbreviated format
-                      if (item.condition && item.condition !== 'Unknown') {
-                        const conditionAbbrev = {
-                          'Factory New': 'FN',
-                          'Minimal Wear': 'MW', 
-                          'Field-Tested': 'FT',
-                          'Well-Worn': 'WW',
-                          'Battle-Scarred': 'BS'
+            <div className="max-h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-800">
+              <div className="space-y-1 pr-1">
+                {(() => {
+                  if (data.isGrouped && data.items) {
+                    const allIndividualItems = data.items.flatMap(categoryItem => {
+                      return (categoryItem.items || []).map(actualItem => ({
+                        ...actualItem,
+                        categoryName: categoryItem.name,
+                        categoryPercentage: categoryItem.percentage
+                      }));
+                    });
+                    
+                    return allIndividualItems
+                      .map((item, i) => {
+                        // Your existing name building logic...
+                        let fullName = item.name || 'Unknown Item';
+                        let prefixes = '';
+                        
+                        if (item.variant === 'stattrak' || 
+                            (item.stattrak && (item.stattrak === true || item.stattrak === 'true' || item.stattrak === 'stattrak'))) {
+                          prefixes += 'StatTrak™ ';
+                        }
+                        
+                        if (item.variant === 'souvenir' || 
+                            (item.souvenir && (item.souvenir === true || item.souvenir === 'true'))) {
+                          prefixes += 'Souvenir ';
+                        }
+                        
+                        if (item.variant && 
+                            item.variant !== 'Unknown' && 
+                            item.variant.toLowerCase() !== 'normal' && 
+                            item.variant !== 'stattrak' && 
+                            item.variant !== 'souvenir' && 
+                            item.variant !== item.name) {
+                          fullName += ` | ${item.variant}`;
+                        } else if (item.skin_name && 
+                                  item.skin_name !== 'Unknown' && 
+                                  item.skin_name.toLowerCase() !== 'normal' && 
+                                  item.skin_name !== item.name) {
+                          fullName += ` | ${item.skin_name}`;
+                        }
+                        
+                        fullName = prefixes + fullName;
+                        
+                        if (item.condition && item.condition !== 'Unknown') {
+                          const conditionAbbrev = {
+                            'Factory New': 'FN',
+                            'Minimal Wear': 'MW', 
+                            'Field-Tested': 'FT',
+                            'Well-Worn': 'WW',
+                            'Battle-Scarred': 'BS'
+                          };
+                          const shortCondition = conditionAbbrev[item.condition] || item.condition;
+                          fullName += ` (${shortCondition})`;
+                        }
+                        
+                        const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
+                        const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
+                                                  consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
+                                                  actualPortfolio.totalValue || 
+                                                  data.value;
+                        const itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
+                        
+                        return {
+                          ...item,
+                          displayName: fullName,
+                          itemPercentage,
+                          originalIndex: i
                         };
-                        const shortCondition = conditionAbbrev[item.condition] || item.condition;
-                        fullName += ` (${shortCondition})`;
-                      }
-                      
-                      // Calculate individual item percentage
-                      const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
-                      const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
-                                                consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
-                                                actualPortfolio.totalValue || 
-                                                data.value;
-                      const itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
-                      
-                      return {
-                        ...item,
-                        displayName: fullName,
-                        itemPercentage,
-                        originalIndex: i
-                      };
-                    })
-                    .sort((a, b) => b.itemPercentage - a.itemPercentage) // Sort by percentage descending
-                    .map((item, sortedIndex) => (
-                      <div key={`${item.categoryName}-${item.originalIndex}`} className="py-0.5 leading-relaxed">
-                        <span 
-                          className="inline-block break-words"
-                          style={{ 
-                            lineHeight: '1.4'
-                          }}
+                      })
+                      .sort((a, b) => b.itemPercentage - a.itemPercentage)
+                      .map((item, sortedIndex) => (
+                        <div 
+                          key={`${item.categoryName}-${item.originalIndex}`} 
+                          className="group flex items-start justify-between px-2 py-1.5 rounded-md hover:bg-gray-700/40 transition-colors"
                         >
-                          • {item.displayName} ({formatPercentage(item.itemPercentage)})
-                        </span>
-                      </div>
-                    ));
-                } else {
-                  // Handle regular (non-grouped) items
-                  return data.items
-                    .map((item, i) => {
-                      let itemPercentage;
-                      let displayName = item.name || 'Unknown Item';
-                      
-                      // Build consolidated display name with proper CS format
-                      let fullName = item.name || 'Unknown Item';
-                      
-                      // Add special prefixes first (StatTrak™, Souvenir, etc.)
-                      let prefixes = '';
-                      
-                      // Check for StatTrak™ - handle both boolean and string values
-                      if (item.variant === 'stattrak' || 
-                          (item.stattrak && (item.stattrak === true || item.stattrak === 'true' || item.stattrak === 'stattrak'))) {
-                        prefixes += 'StatTrak™ ';
-                      }
-                      
-                      // Check for Souvenir - handle both variant and direct property
-                      if (item.variant === 'souvenir' || 
-                          (item.souvenir && (item.souvenir === true || item.souvenir === 'true'))) {
-                        prefixes += 'Souvenir ';
-                      }
-                      
-                      // Add variant/skin name if it exists and isn't 'normal' or the base weapon name
-                      if (item.variant && 
-                          item.variant !== 'Unknown' && 
-                          item.variant.toLowerCase() !== 'normal' && 
-                          item.variant !== 'stattrak' && 
-                          item.variant !== 'souvenir' && 
-                          item.variant !== item.name) {
-                        fullName += ` | ${item.variant}`;
-                      }
-                      
-                      // If no variant but skin_name exists, use that
-                      else if (item.skin_name && 
-                              item.skin_name !== 'Unknown' && 
-                              item.skin_name.toLowerCase() !== 'normal' && 
-                              item.skin_name !== item.name) {
-                        fullName += ` | ${item.skin_name}`;
-                      }
-                      
-                      // Combine prefix with weapon name
-                      fullName = prefixes + fullName;
-                      
-                      // Add condition with abbreviated format
-                      if (item.condition && item.condition !== 'Unknown') {
-                        const conditionAbbrev = {
-                          'Factory New': 'FN',
-                          'Minimal Wear': 'MW', 
-                          'Field-Tested': 'FT',
-                          'Well-Worn': 'WW',
-                          'Battle-Scarred': 'BS'
+                          <div className="flex items-start space-x-2 flex-1 min-w-0">
+                            <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mt-2 flex-shrink-0"></div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs text-gray-300 break-words leading-relaxed">
+                                {item.displayName}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="ml-2 flex-shrink-0">
+                            <span className="text-xs text-gray-400 bg-gray-800/60 px-1.5 py-0.5 rounded">
+                              {formatPercentage(item.itemPercentage)}
+                            </span>
+                          </div>
+                        </div>
+                      ));
+                  } else {
+                    // For regular (non-grouped) items - similar structure
+                    return data.items
+                      .map((item, i) => {
+                        // Your existing name building logic (same as above)...
+                        let fullName = item.name || 'Unknown Item';
+                        let prefixes = '';
+                        
+                        if (item.variant === 'stattrak' || 
+                            (item.stattrak && (item.stattrak === true || item.stattrak === 'true' || item.stattrak === 'stattrak'))) {
+                          prefixes += 'StatTrak™ ';
+                        }
+                        
+                        if (item.variant === 'souvenir' || 
+                            (item.souvenir && (item.souvenir === true || item.souvenir === 'true'))) {
+                          prefixes += 'Souvenir ';
+                        }
+                        
+                        if (item.variant && 
+                            item.variant !== 'Unknown' && 
+                            item.variant.toLowerCase() !== 'normal' && 
+                            item.variant !== 'stattrak' && 
+                            item.variant !== 'souvenir' && 
+                            item.variant !== item.name) {
+                          fullName += ` | ${item.variant}`;
+                        } else if (item.skin_name && 
+                                  item.skin_name !== 'Unknown' && 
+                                  item.skin_name.toLowerCase() !== 'normal' && 
+                                  item.skin_name !== item.name) {
+                          fullName += ` | ${item.skin_name}`;
+                        }
+                        
+                        fullName = prefixes + fullName;
+                        
+                        if (item.condition && item.condition !== 'Unknown') {
+                          const conditionAbbrev = {
+                            'Factory New': 'FN',
+                            'Minimal Wear': 'MW', 
+                            'Field-Tested': 'FT',
+                            'Well-Worn': 'WW',
+                            'Battle-Scarred': 'BS'
+                          };
+                          const shortCondition = conditionAbbrev[item.condition] || item.condition;
+                          fullName += ` (${shortCondition})`;
+                        }
+                        
+                        const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
+                        const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
+                                                  consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
+                                                  actualPortfolio.totalValue || 
+                                                  data.value;
+                        const itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
+                        
+                        return {
+                          ...item,
+                          displayName: fullName,
+                          itemPercentage,
+                          originalIndex: i
                         };
-                        const shortCondition = conditionAbbrev[item.condition] || item.condition;
-                        fullName += ` (${shortCondition})`;
-                      }
-                      
-                      displayName = fullName;
-                      
-                      // Calculate percentage for regular items
-                      const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
-                      const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
-                                                consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
-                                                actualPortfolio.totalValue || 
-                                                data.value;
-                      itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
-                      
-                      return {
-                        ...item,
-                        displayName,
-                        itemPercentage,
-                        originalIndex: i
-                      };
-                    })
-                    .sort((a, b) => b.itemPercentage - a.itemPercentage) // Sort by percentage descending
-                    .map((item, sortedIndex) => (
-                      <div key={item.originalIndex} className="py-0.5 leading-relaxed">
-                        <span 
-                          className="inline-block break-words"
-                          style={{ 
-                            lineHeight: '1.4'
-                          }}
+                      })
+                      .sort((a, b) => b.itemPercentage - a.itemPercentage)
+                      .map((item, sortedIndex) => (
+                        <div 
+                          key={item.originalIndex} 
+                          className="group flex items-start justify-between px-0.5 py-1.5 rounded-md hover:bg-gray-700/40 transition-colors"
                         >
-                          • {item.displayName} ({formatPercentage(item.itemPercentage)})
-                        </span>
-                      </div>
-                    ));
-                }
-              })()}
+                          <div className="flex items-start space-x-2 flex-1 min-w-0">
+                            <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mt-2 flex-shrink-0"></div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs text-gray-300 break-words leading-relaxed">
+                                {item.displayName}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="ml-1 flex-shrink-0 flex items-center">
+                            <span className="text-xs text-gray-400 bg-gray-800/60 px-1.5 py-0.5 rounded">
+                              {formatPercentage(item.itemPercentage)}
+                            </span>
+                          </div>
+                        </div>
+                      ));
+                  }
+                })()}
+              </div>
             </div>
           </div>
         )}
