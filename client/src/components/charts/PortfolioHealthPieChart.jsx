@@ -269,10 +269,12 @@ const colorAssignments = useMemo(() => {
     // Use the hash to determine if this item gets a contrast color or palette color
     const hashForContrastAssignment = Math.abs(hash);
     
-    // Items with smaller hash values get priority for contrast colors
-    // This is deterministic - the same item name will always get the same hash
-    const allCurrentItems = currentData.filter(item => item.name !== 'Others' && !item.isGrouped);
-    const itemsWithHashes = allCurrentItems.map(item => ({
+    // Use the complete dataset for priority calculation, not just visible items
+    // This ensures priority positions don't change when grouping toggles
+    const completeDataset = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown || [];
+    const allItems = completeDataset.filter(item => item.name !== 'Others');
+    
+    const itemsWithHashes = allItems.map(item => ({
       name: item.name,
       hash: (() => {
         let h = 0;
@@ -287,7 +289,7 @@ const colorAssignments = useMemo(() => {
     // Sort by hash to get consistent priority order
     itemsWithHashes.sort((a, b) => a.hash - b.hash);
     
-    // Find this item's priority position
+    // Find this item's priority position in the complete dataset
     const priorityIndex = itemsWithHashes.findIndex(item => item.name === itemName);
     
     // First 8 in priority order get contrast colors
