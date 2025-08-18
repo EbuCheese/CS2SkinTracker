@@ -63,3 +63,52 @@
 .animate-gentle-bounce {
   animation: gentleBounce 0.7s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
 }
+
+/* Override Tailwind's scrollbar classes */
+.scrollbar-thin::-webkit-scrollbar,
+.scrollbar-auto::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 8px !important;
+  height: 8px !important;
+}
+
+.scrollbar-track-gray-800::-webkit-scrollbar-track,
+.scrollbar-track-gray-700::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  background: rgba(31, 41, 55, 0.4) !important;
+  border-radius: 4px !important;
+}
+
+.scrollbar-thumb-gray-500::-webkit-scrollbar-thumb,
+.scrollbar-thumb-gray-400::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  background: rgba(107, 114, 128, 0.6) !important;
+  border-radius: 4px !important;
+  border: 1px solid rgba(75, 85, 99, 0.3) !important;
+  transition: all 0.2s ease !important;
+}
+
+.scrollbar-thumb-gray-500::-webkit-scrollbar-thumb:hover,
+.scrollbar-thumb-gray-400::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.8) !important;
+  border-color: rgba(107, 114, 128, 0.5) !important;
+}
+
+.scrollbar-thumb-gray-500::-webkit-scrollbar-thumb:active,
+.scrollbar-thumb-gray-400::-webkit-scrollbar-thumb:active,
+*::-webkit-scrollbar-thumb:active {
+  background: rgba(249, 115, 22, 0.7) !important;
+}
+
+*::-webkit-scrollbar-corner {
+  background: rgba(31, 41, 55, 0.4) !important;
+}
+
+/* Override Firefox scrollbar colors */
+.scrollbar-thin,
+.scrollbar-auto,
+* {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(107, 114, 128, 0.6) rgba(31, 41, 55, 0.4) !important;
+}

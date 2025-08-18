@@ -752,7 +752,7 @@ const StickyTooltip = React.memo(() => {
   // Table view component for tabular data display
   const TableView = () => (
     <div className="flex-shrink-0" style={{ height: '500px' }}>
-    <div className="h-full overflow-auto">
+    <div className="h-full overflow-auto pr-2">
     <table className="w-full text-sm">
       {/* Sticky header */}
       <thead className="sticky top-0 bg-gray-800/90 backdrop-blur-sm">
