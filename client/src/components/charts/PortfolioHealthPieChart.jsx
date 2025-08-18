@@ -126,9 +126,6 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   const [activeToggle, setActiveToggle] = useState('type');
   const [viewMode, setViewMode] = useState('chart'); // 'chart' or 'table'
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(0);
-
   // Slice states
   const [showSmallSlices, setShowSmallSlices] = useState(true);
   const [selectedSlice, setSelectedSlice] = useState(null);
@@ -665,13 +662,9 @@ const StickyTooltip = React.memo(() => {
     );
   };
 
-  // Pagination logic
   // Select appropriate data source based on current view mode
   const currentData = viewMode === 'table' ? tableData : sortedProcessedData;
-  const ITEMS_PER_PAGE = 8;
-  const totalPages = Math.ceil(currentData.length / ITEMS_PER_PAGE);
-  const startIndex = currentPage * ITEMS_PER_PAGE;
-  const currentPageData = currentData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const startIndex = 0;
 
   // Handle clicks on distribution list items
   const handleDistributionItemClick = useCallback((item, event) => {
@@ -697,7 +690,6 @@ const StickyTooltip = React.memo(() => {
   // Handle toggle changes between type and item views
   const handleToggleChange = useCallback((newToggle) => {
     setActiveToggle(newToggle);
-    setCurrentPage(0);
     setSearchTerm('');
     setSelectedSlice(null);
   }, []);
@@ -759,6 +751,7 @@ const StickyTooltip = React.memo(() => {
 
   // Table view component for tabular data display
   const TableView = () => (
+    <div className="flex-shrink-0" style={{ height: '500px' }}>
     <div className="h-full overflow-auto">
     <table className="w-full text-sm">
       {/* Sticky header */}
@@ -773,7 +766,7 @@ const StickyTooltip = React.memo(() => {
 
         {/* Data rows */}
         <tbody>
-          {currentPageData.map((item, index) => (
+          {currentData.map((item, index) => (
             <tr 
               key={`${item.name}-${index}`} 
               className="border-b border-gray-700/50 hover:bg-gray-700/20 transition-colors"
@@ -806,11 +799,12 @@ const StickyTooltip = React.memo(() => {
         </tbody>
       </table>
     </div>
+    </div>
   );
 
   // Main render
   return (
-    <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 h-full flex flex-col relative" style={{ minHeight: '600px' }}>
+    <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 h-full flex flex-col relative" style={{ minHeight: '800px' }}>
 
       {/* Header Section */}
       <div className="flex items-center justify-between mb-6">
@@ -862,7 +856,6 @@ const StickyTooltip = React.memo(() => {
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
-              setCurrentPage(0);
             }}
             className="w-full px-3 py-1.5 text-sm bg-gray-700/50 border border-gray-600/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50"
           />
@@ -927,7 +920,7 @@ const StickyTooltip = React.memo(() => {
         </div>
       ) :
       viewMode === 'chart' ? (
-        <div className="flex-1" style={{ minHeight: '320px', maxHeight: '320px' }} onClick={handleChartContainerClick}>
+        <div className="flex-shrink-0" style={{ height: '320px', maxHeight: '320px' }} onClick={handleChartContainerClick}>
           {/* Recharts ResponsiveContainer - Automatically adjusts to parent dimensions */}
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -999,12 +992,12 @@ const StickyTooltip = React.memo(() => {
       </div>
 
       {/* Feedback */}
-      <div className="mb-6 p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">
+      <div className={`p-4 bg-gray-700/30 rounded-lg border border-gray-600/30 ${viewMode === 'table' ? 'mb-2' : 'mb-6'}`}>
         <p className="text-sm text-gray-300">{currentFeedback}</p>
       </div>
 
-      {/* Distribution List or Pagination */}
-      {viewMode === 'chart' ? (
+    {/* Distribution List or Pagination */}
+    {viewMode === 'chart' ? (
         <div>
           {/* Distribution list header with dynamic counts and pagination controls */}
           <div className="flex items-center justify-between mb-3">
@@ -1013,34 +1006,10 @@ const StickyTooltip = React.memo(() => {
               {activeToggle === 'item' ? 'Item' : 'Type'} Distribution ({currentData.length} {activeToggle === 'item' ? 'categories' : 'types'})
             </h3>
             {/* Pagination controls - Only show when data spans multiple pages */}
-            {totalPages > 1 && (
-              <div className="flex items-center">
-                {/* Previous page button - Disabled on first page */}
-                <button
-                  onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-                  disabled={currentPage === 0}
-                  className="px-3 py-1 text-xs bg-gray-700/50 text-gray-300 rounded hover:bg-gray-600/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  ← Prev
-                </button>
-                {/* Page indicator - Shows current position */}
-                <span className="text-xs text-gray-400 px-2">
-                  {currentPage + 1} of {totalPages}
-                </span>
-                {/* Next page button - Disabled on last page */}
-                <button
-                  onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
-                  disabled={currentPage === totalPages - 1}
-                  className="px-3 py-1 text-xs bg-gray-700/50 text-gray-300 rounded hover:bg-gray-600/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next →
-                </button>
-              </div>
-            )}
           </div>
           {/* Distribution items container with fixed minimum height for layout stability */}
-          <div className="space-y-1" style={{ minHeight: '255px' }}>
-            {/* Show empty state if no data after filtering/search */}
+          <div className="overflow-y-auto" style={{ height: '200px' }}>
+            <div className="space-y-1 pr-2"> {/* Add right padding for scrollbar */}
             {currentData.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center py-8">
                 <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1056,12 +1025,12 @@ const StickyTooltip = React.memo(() => {
               </div>
             ) : (
               /* Render current page of distribution items using memoized component */
-              currentPageData.map((item, index) => (
+              currentData.map((item, index) => (
                 <DistributionItem
                   key={`${item.name}-${index}`}
                   item={item}
                   index={index}
-                  startIndex={startIndex}
+                  startIndex={0}
                   isSelected={selectedSlice === item.name}
                   onClick={() => handleDistributionItemClick(item)}
                   getItemColor={getItemColor}
@@ -1070,35 +1039,12 @@ const StickyTooltip = React.memo(() => {
                 />
               ))
             )}
-          </div>
+              </div>
+            </div>
         </div>
-      ) : (
-        /* Table View Pagination - Only show pagination controls when needed */
-        totalPages > 1 && (
-          <div className="flex items-center justify-center">
-            {/* Centered pagination controls with same styling as chart view */}
-            <button
-              onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-              disabled={currentPage === 0}
-              className="px-3 py-1 text-xs bg-gray-700/50 text-gray-300 rounded hover:bg-gray-600/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              ← Prev
-            </button>
-            <span className="text-xs text-gray-400 px-4">
-              {currentPage + 1} of {totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
-              disabled={currentPage === totalPages - 1}
-              className="px-3 py-1 text-xs bg-gray-700/50 text-gray-300 rounded hover:bg-gray-600/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Next →
-            </button>
-          </div>
-        )
-      )}
+    ) : null}
     </div>
-  );
+);
 };
 
 export default PortfolioHealthPieChart;
