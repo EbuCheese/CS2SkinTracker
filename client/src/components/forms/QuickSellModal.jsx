@@ -453,10 +453,8 @@ const QuickSellModal = ({
                     {salePreview.vsHistoricalAvg !== null && (
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-500">vs. Historical avg:</span>
-                        <span className={`${
-                          salePreview.vsHistoricalAvg >= 0 ? 'text-green-400' : 'text-red-400'
-                        }`}>
-                          {salePreview.vsHistoricalAvg >= 0 ? '+' : ''}${salePreview.vsHistoricalAvg.toFixed(2)}
+                        <span className={`${salePreview.vsHistoricalAvg >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {salePreview.vsHistoricalAvg >= 0 ? '+' : '-'}${Math.abs(salePreview.vsHistoricalAvg).toFixed(2)}
                         </span>
                       </div>
                     )}
