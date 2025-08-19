@@ -3,39 +3,38 @@ import { useMemo } from 'react';
 // Calculates portfolio summary metrics for the current filtered view.
 export const usePortfolioSummary = (activeTab, investments, soldItems, currentItems, groupedSoldItems, portfolioSummary = null) => {
   const calculatedSummary = useMemo(() => {
-    if (activeTab === 'Sold') {
-      // SOLD ITEMS VIEW: Always calculate client-side for optimistic updates
-      // This ensures immediate UI feedback when items are sold
-      
-      // Use efficient bulk calculations instead of multiple reduces
-      let totalSaleValue = 0;
-      let totalBuyValue = 0;
-      let totalRealizedPL = 0;
-      let totalQuantitySold = 0;
-
-      soldItems.forEach(item => {
-        const saleValue = parseFloat(item.total_sale_value || 0);
-        const quantitySold = parseFloat(item.quantity_sold || 0);
-        const buyPrice = parseFloat(item.buy_price_per_unit || 0);
-        const buyValue = buyPrice * quantitySold;
-        
-        totalSaleValue += saleValue;
-        totalBuyValue += buyValue;
-        totalRealizedPL += (saleValue - buyValue);
-        totalQuantitySold += quantitySold;
-      });
-      
-      const profitPercentage = totalBuyValue > 0 ? ((totalRealizedPL / totalBuyValue) * 100) : 0;
-      
-      return {
-        totalBuyValue,
-        totalCurrentValue: totalSaleValue,
-        totalProfit: totalRealizedPL,
-        profitPercentage,
-        itemCount: totalQuantitySold 
-      };
-      
-    } else {
+      if (activeTab === 'Sold') {
+    // Use investments that have been sold (have realized profit/loss)
+    const soldInvestments = investments.filter(inv => 
+      parseFloat(inv.total_sold_quantity || 0) > 0
+    );
+    
+    const totalRealizedPL = soldInvestments.reduce((sum, inv) => 
+      sum + parseFloat(inv.realized_profit_loss || 0), 0
+    );
+    
+    const totalSaleValue = soldInvestments.reduce((sum, inv) => 
+      sum + parseFloat(inv.total_sale_value || 0), 0
+    );
+    
+    const totalBuyValue = soldInvestments.reduce((sum, inv) => {
+      const soldQuantity = parseFloat(inv.total_sold_quantity || 0);
+      const buyPrice = parseFloat(inv.buy_price || 0);
+      return sum + (soldQuantity * buyPrice);
+    }, 0);
+    
+    const profitPercentage = totalBuyValue > 0 ? ((totalRealizedPL / totalBuyValue) * 100) : 0;
+    
+    return {
+      totalBuyValue,
+      totalCurrentValue: totalSaleValue,
+      totalProfit: totalRealizedPL,
+      profitPercentage,
+      itemCount: soldInvestments.reduce((sum, inv) => 
+        sum + parseFloat(inv.total_sold_quantity || 0), 0
+      )
+    };
+  } else {
       // ACTIVE INVESTMENTS VIEW: Use server values when possible
       
       // If showing all investments and we have portfolio summary, use pre-calculated values
