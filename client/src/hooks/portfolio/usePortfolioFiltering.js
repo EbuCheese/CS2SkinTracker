@@ -3,6 +3,50 @@ import { useMemo, useCallback } from 'react';
 // Handles all data filtering, searching, and grouping logic for portfolio views.
 export const usePortfolioFiltering = (investments, soldItems, activeTab, searchQuery) => {
   
+  // group the active investments with same details
+  const groupActiveInvestments = useCallback((investments) => {
+  const groups = {};
+  
+  investments.forEach(item => {
+    // Extract just the date part (YYYY-MM-DD) to group by day
+    const dateOnly = item.created_at ? item.created_at.split('T')[0] : 'unknown-date';
+    const skinName = item.skin_name || '';
+    const condition = item.condition || '';
+    const variant = item.variant || '';
+    
+    // Create unique key combining all item characteristics + created_at date + prices
+    // This ensures only truly identical items bought on same day at same price are grouped
+    const groupKey = `${item.name}-${skinName}-${condition}-${variant}-${item.buy_price}-${item.current_price}-${dateOnly}`;
+    
+    if (groups[groupKey]) {
+      // Accumulate quantities and values for existing group
+      groups[groupKey].quantity += item.quantity;
+      // Recalculate unrealized P/L for the combined group
+      groups[groupKey].unrealized_profit_loss = 
+        (groups[groupKey].current_price - groups[groupKey].buy_price) * groups[groupKey].quantity;
+      groups[groupKey].investment_ids.push(item.id); // Track all investment IDs in group
+      
+      // Keep the earliest creation time as the representative timestamp
+      if (item.created_at) {
+        const existingDate = new Date(groups[groupKey].created_at || item.created_at);
+        const currentDate = new Date(item.created_at);
+        if (currentDate < existingDate) {
+          groups[groupKey].created_at = item.created_at;
+        }
+      }
+    } else {
+      // Create new group with first occurrence
+      groups[groupKey] = {
+        ...item,
+        investment_ids: [item.id], // Initialize with first investment ID
+      };
+    }
+  });
+  
+  // Convert groups object back to array for rendering
+  return Object.values(groups);
+}, []);
+
   // Groups sold items that are identical and sold on the same day.
   const groupSoldItems = useCallback((soldItems) => {
     const groups = {};
@@ -42,11 +86,11 @@ export const usePortfolioFiltering = (investments, soldItems, activeTab, searchQ
     return Object.values(groups);
   }, []);
 
-  
    // Filters investments to only include active ones (quantity > 0)
   const activeInvestments = useMemo(() => {
-    return investments.filter(item => item.quantity > 0);
-  }, [investments]);
+  const filtered = investments.filter(item => item.quantity > 0);
+  return groupActiveInvestments(filtered); // Apply grouping to active investments
+}, [investments, groupActiveInvestments]);
 
 
    // Groups sold items using the consolidation logic above

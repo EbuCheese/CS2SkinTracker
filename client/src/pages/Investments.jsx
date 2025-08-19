@@ -150,27 +150,35 @@ const handleAddItem = useCallback((newItem) => {
   }, []);
 
   const handleDeleteItem = async () => {
-    // Safety check - should not be called without an item selected  
-    if (!itemToDelete) return;
+  if (!itemToDelete) return;
+  
+  try {
+    // Handle grouped items - delete all investment IDs in the group
+    const investmentIds = itemToDelete.investment_ids || [itemToDelete.id];
     
-    try {
-      // Call database RPC function with user context for security
-      const { data, error } = await supabase.rpc('delete_investment_with_context', {
-        investment_id: itemToDelete.id,
+    // Delete all investments in the group
+    const deletePromises = investmentIds.map(investmentId => 
+      supabase.rpc('delete_investment_with_context', {
+        investment_id: investmentId,
         context_user_id: userSession.id
-      });
+      })
+    );
+    
+    const results = await Promise.all(deletePromises);
+    
+    // Check for any errors
+    const errors = results.filter(result => result.error);
+    if (errors.length > 0) {
+      console.error('Delete failed:', errors[0].error);
+      throw errors[0].error;
+    }
+    
+    // Remove item from local state for immediate UI update
+    setInvestments(prev => prev.filter(inv => !investmentIds.includes(inv.id)));
 
-      if (error) {
-        console.error('Delete failed:', error);
-        throw error;
-      }
-      
-      // Remove item from local state for immediate UI update
-      setInvestments(prev => prev.filter(inv => inv.id !== itemToDelete.id));
-
-      // show delete toast
-      const detailedName = buildDetailedItemName(itemToDelete);
-      toast.itemDeleted(detailedName);
+    // Show delete toast
+    const detailedName = buildDetailedItemName(itemToDelete);
+    toast.itemDeleted(detailedName);
 
       // Close the confirmation modal
       setItemToDelete(null);

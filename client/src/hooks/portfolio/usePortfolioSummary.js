@@ -11,7 +11,8 @@ export const usePortfolioSummary = (activeTab, investments, soldItems, currentIt
       let totalSaleValue = 0;
       let totalBuyValue = 0;
       let totalRealizedPL = 0;
-      
+      let totalQuantitySold = 0;
+
       soldItems.forEach(item => {
         const saleValue = parseFloat(item.total_sale_value || 0);
         const quantitySold = parseFloat(item.quantity_sold || 0);
@@ -20,7 +21,8 @@ export const usePortfolioSummary = (activeTab, investments, soldItems, currentIt
         
         totalSaleValue += saleValue;
         totalBuyValue += buyValue;
-        totalRealizedPL += (saleValue - buyValue); // More efficient than separate calculation
+        totalRealizedPL += (saleValue - buyValue);
+        totalQuantitySold += quantitySold;
       });
       
       const profitPercentage = totalBuyValue > 0 ? ((totalRealizedPL / totalBuyValue) * 100) : 0;
@@ -30,7 +32,7 @@ export const usePortfolioSummary = (activeTab, investments, soldItems, currentIt
         totalCurrentValue: totalSaleValue,
         totalProfit: totalRealizedPL,
         profitPercentage,
-        itemCount: groupedSoldItems.length
+        itemCount: totalQuantitySold 
       };
       
     } else {
@@ -55,14 +57,18 @@ export const usePortfolioSummary = (activeTab, investments, soldItems, currentIt
       // Calculate filtered view metrics manually
       const filteredValue = currentItems.reduce((sum, item) =>
         sum + (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0)), 0);
-      
+
       const filteredBuyValue = currentItems.reduce((sum, item) =>
         sum + (parseFloat(item.buy_price || 0) * parseFloat(item.quantity || 0)), 0);
-      
-      // Use pre-calculated unrealized profit from investments_summary view
-      const filteredProfit = currentItems.reduce((sum, item) =>
-        sum + (parseFloat(item.unrealized_profit_loss) || 0), 0);
-      
+
+      // Recalculate unrealized profit using current quantities (not pre-calculated values)
+      const filteredProfit = currentItems.reduce((sum, item) => {
+        const currentPrice = parseFloat(item.current_price || 0);
+        const buyPrice = parseFloat(item.buy_price || 0);
+        const quantity = parseFloat(item.quantity || 0);
+        return sum + ((currentPrice - buyPrice) * quantity);
+      }, 0);
+
       const filteredProfitPercentage = filteredBuyValue > 0 ?
         ((filteredProfit / filteredBuyValue) * 100) : 0;
         
@@ -71,7 +77,7 @@ export const usePortfolioSummary = (activeTab, investments, soldItems, currentIt
         totalCurrentValue: filteredValue,
         totalProfit: filteredProfit,
         profitPercentage: filteredProfitPercentage,
-        itemCount: currentItems.length
+        itemCount: currentItems.reduce((sum, item) => sum + parseFloat(item.quantity || 0), 0) // Sum quantities instead of counting items
       };
     }
   }, [activeTab, investments, soldItems, groupedSoldItems, currentItems, portfolioSummary]);
