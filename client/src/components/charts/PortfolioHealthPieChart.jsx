@@ -392,7 +392,7 @@ const colorAssignments = useMemo(() => {
     
     return (
       <div 
-        className="bg-gray-900/95 border-2 rounded-lg p-3 shadow-xl backdrop-blur-sm max-w-xs"
+        className="bg-gray-900/95 border-2 rounded-lg p-2 shadow-xl backdrop-blur-sm max-w-xs"
         style={{
           ...tooltipStyle,
           borderColor: sliceColor
@@ -554,7 +554,7 @@ const StickyTooltip = React.memo(() => {
   
   return (
     <div 
-      className="absolute bg-gray-900/95 border-2 rounded-lg p-3 shadow-xl backdrop-blur-sm z-50 pointer-events-auto"
+      className="absolute bg-gray-900/95 border-2 rounded-lg p-2 shadow-xl backdrop-blur-sm z-50 pointer-events-auto"
       style={getTooltipStyle()}
       onClick={(e) => e.stopPropagation()} // Prevent clicks inside tooltip from bubbling up
     >
@@ -604,22 +604,26 @@ const StickyTooltip = React.memo(() => {
                 {processedItems.map((item, sortedIndex) => (
                   <div 
                     key={data.isGrouped ? `${item.categoryName}-${item.originalIndex}` : item.originalIndex} 
-                    className="group flex items-start justify-between px-1 py-1.5 rounded-md hover:bg-gray-700/40 transition-colors"
+                    className="group flex items-start justify-between px-0.5 py-1.5 rounded-sm hover:bg-gray-700/40 transition-colors"
                   >
                     <div className="flex items-start space-x-2 flex-1 min-w-0">
-                      <div className="w-1.5 h-1.5 rounded-full bg-gray-400 mt-2 flex-shrink-0"></div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs text-gray-300 break-words leading-relaxed">
+                        <p className="text-xxs text-gray-300 break-words leading-relaxed">
                           {item.displayName}
                         </p>
                       </div>
                     </div>
-                    <div className="ml-2 flex items-center">
-                      <span className="text-xs text-gray-400 bg-gray-800/60 px-1.5 py-0.5 rounded">
-                        {formatPercentage(item.itemPercentage)}
-                      </span>
-                    </div>
+                    <div className="ml-1 flex items-center gap-0.5">
+                    {/* Quantity badge */}
+                    <span className="text-xs text-blue-300 bg-blue-900/40 px-1.5 py-0.5 rounded">
+                      {item.quantity}x
+                    </span>
+                    {/* Percentage badge */}
+                    <span className="text-xs text-gray-400 bg-gray-800/60 px-1.5 py-0.5 rounded">
+                      {formatPercentage(item.itemPercentage)}
+                    </span>
                   </div>
+                </div>
                 ))}
               </div>
             </div>
