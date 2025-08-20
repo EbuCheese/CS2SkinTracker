@@ -545,7 +545,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
             // Sold item display
             <>
               {/* Condition and Variant Display for Sold Items */}
-              <div className="flex items-center space-x-2 mt-1">
+              <div className={`flex items-center ${(variant && variant !== 'normal') ? 'space-x-2 mt-1' : ''}`}>
                 {(condition) && (
                   <p className="text-xs text-gray-500 truncate">{condition}</p>
                 )}
@@ -567,22 +567,16 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                 )}
               </div>
 
-              {/* Price comparison grid for sold items */}
-              <div className="mt-2 text-sm">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-gray-400 mb-0.5">Sold:</div>
-                    <div className="text-green-400">${item.price_per_unit?.toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-400 mb-0.5">Bought:</div>
-                    <div className="text-white">${item.buy_price_per_unit?.toFixed(2)}</div>
-                  </div>
-                </div>
+              <div>
+                <span className="text-gray-400 text-xs">Sale Date: </span>
+                <span className="text-white text-xs">
+                  {item.sale_date ? new Date(item.sale_date).toLocaleDateString() : 'Unknown'}
+                </span>
+              </div>
 
-                {/* Notes display with popup on click */}
+              {/* Notes display with popup on click */}
                 {item.notes && (
-                  <div className="mt-1">
+                  <div>
                     <button
                       onClick={() => showPopup({
                         type: 'note',
@@ -596,16 +590,25 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                       note: {item.notes}
                     </button>
                   </div>
-                )}
+                )}  
+
+              {/* Price comparison grid for sold items */}
+              <div className="mt-2 text-sm">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-gray-400 mb-0.5">Sold:</div>
+                    <div className="text-green-400">${item.price_per_unit?.toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 mb-0.5">Bought:</div>
+                    <div className="text-white">${item.buy_price_per_unit?.toFixed(2)}</div>
+                  </div>
+                </div>
 
                 {/* Additional sale details */}
                 <div className="mt-1">
                   <span className="text-gray-400">Quantity: </span>
                   <span className="text-white">{item.quantity_sold}</span>
-                </div>
-                <div className="mt-1">
-                  <span className="text-gray-400">Sale Date: </span>
-                  <span className="text-white">{new Date(item.sale_date).toLocaleDateString()}</span>
                 </div>
                 <div className="mt-1">
                   <span className="text-gray-400">Total Sale: </span>
@@ -616,7 +619,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
           ) : (
             <>
               {/* Condition and Variant Display for Active Items */}
-              <div className="flex items-center space-x-2 mt-1">
+              <div className={`flex items-center ${(variant && variant !== 'normal') ? 'space-x-2 mt-1' : ''}`}>
                 {(condition) && (
                   <p className="text-xs text-gray-500 truncate">{condition}</p>
                 )}
@@ -638,9 +641,17 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                 )}
               </div>
 
+              {/* Purchase Date for active items */}
+              <div>
+                <span className="text-gray-400 text-xs">Purchased: </span>
+                <span className="text-white text-xs">
+                  {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown'}
+                </span>
+              </div>
+
               {/* Notes display with popup on click */}
               {item.notes && (
-                <div className="mt-1">
+                <div>
                   <button
                     onClick={() => showPopup({
                       type: 'note',
@@ -688,24 +699,6 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                   )}
                 </div>
               </div>
-
-              {/* Sales summary section for partially sold items */}
-              {salesSummary.soldItems > 0 && (
-                <div className="mt-2 text-sm">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-gray-400 mb-0.5">Avg Sale:</div>
-                      <div className="text-green-400">${salesSummary.averageSalePrice.toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400 mb-0.5">Realized:</div>
-                      <div className={salesSummary.realizedProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
-                        {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toFixed(2)}
-                      </div>
-                  </div>
-                  </div>
-                </div>
-              )}
             </>
           )}
         </div>
@@ -725,6 +718,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
             <div className="text-xs text-gray-400 mt-1">
               <div>Realized: {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toFixed(2)}</div>
               <div>Unrealized: {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.unrealizedProfitLoss).toFixed(2)}</div>
+              <div>Avg Sale: ${salesSummary.averageSalePrice.toFixed(2)}</div>
             </div>
           )}
           
