@@ -1,43 +1,80 @@
 import { useMemo } from 'react';
 
-// Calculates portfolio summary metrics for the current filtered view.
-export const usePortfolioSummary = (activeTab, investments, soldItems, currentItems, groupedSoldItems, portfolioSummary = null) => {
+// Enhanced hook that handles optimistic updates for sold items properly
+export const usePortfolioSummary = (
+  activeTab, 
+  investments, 
+  soldItems, 
+  currentItems, 
+  groupedSoldItems, 
+  portfolioSummary = null,
+  optimisticSoldItems = [] 
+) => {
   const calculatedSummary = useMemo(() => {
-      if (activeTab === 'Sold') {
-    // Use investments that have been sold (have realized profit/loss)
-    const soldInvestments = investments.filter(inv => 
-      parseFloat(inv.total_sold_quantity || 0) > 0
-    );
-    
-    const totalRealizedPL = soldInvestments.reduce((sum, inv) => 
-      sum + parseFloat(inv.realized_profit_loss || 0), 0
-    );
-    
-    const totalSaleValue = soldInvestments.reduce((sum, inv) => 
-      sum + parseFloat(inv.total_sale_value || 0), 0
-    );
-    
-    const totalBuyValue = soldInvestments.reduce((sum, inv) => {
-      const soldQuantity = parseFloat(inv.total_sold_quantity || 0);
-      const buyPrice = parseFloat(inv.buy_price || 0);
-      return sum + (soldQuantity * buyPrice);
-    }, 0);
-    
-    const profitPercentage = totalBuyValue > 0 ? ((totalRealizedPL / totalBuyValue) * 100) : 0;
-    
-    return {
-      totalBuyValue,
-      totalCurrentValue: totalSaleValue,
-      totalProfit: totalRealizedPL,
-      profitPercentage,
-      itemCount: soldInvestments.reduce((sum, inv) => 
-        sum + parseFloat(inv.total_sold_quantity || 0), 0
-      )
-    };
-  } else {
-      // ACTIVE INVESTMENTS VIEW: Use server values when possible
+    if (activeTab === 'Sold') {
+      // Combine three sources of sold item data:
+      // 1. Investments with partial sales (still in investments array)
+      // 2. Items that were fully sold optimistically (no longer in investments)
+      // 3. Historical sold items from database
       
-      // If showing all investments and we have portfolio summary, use pre-calculated values
+      // Source 1: Investments with realized profit/loss (partial sales)
+      const partialSoldInvestments = investments.filter(inv =>
+        parseFloat(inv.total_sold_quantity || 0) > 0
+      );
+      
+      // Source 2: Optimistically fully sold items (passed as parameter)
+      const optimisticallyFullySold = optimisticSoldItems || [];
+      
+      // Calculate metrics from partial sales
+      const partialSalesMetrics = partialSoldInvestments.reduce((acc, inv) => {
+        const soldQuantity = parseFloat(inv.total_sold_quantity || 0);
+        const realizedPL = parseFloat(inv.realized_profit_loss || 0);
+        const saleValue = parseFloat(inv.total_sale_value || 0);
+        const buyPrice = parseFloat(inv.buy_price || 0);
+        const soldBuyValue = soldQuantity * buyPrice;
+        
+        return {
+          totalRealizedPL: acc.totalRealizedPL + realizedPL,
+          totalSaleValue: acc.totalSaleValue + saleValue,
+          totalBuyValue: acc.totalBuyValue + soldBuyValue,
+          soldQuantity: acc.soldQuantity + soldQuantity
+        };
+      }, { totalRealizedPL: 0, totalSaleValue: 0, totalBuyValue: 0, soldQuantity: 0 });
+      
+      // Calculate metrics from optimistic full sales
+      const optimisticSalesMetrics = optimisticallyFullySold.reduce((acc, soldItem) => {
+        const quantity = parseFloat(soldItem.quantity || 0);
+        const salePrice = parseFloat(soldItem.salePrice || 0);
+        const buyPrice = parseFloat(soldItem.buyPrice || 0);
+        const saleValue = quantity * salePrice;
+        const buyValue = quantity * buyPrice;
+        const profitLoss = (salePrice - buyPrice) * quantity;
+        
+        return {
+          totalRealizedPL: acc.totalRealizedPL + profitLoss,
+          totalSaleValue: acc.totalSaleValue + saleValue,
+          totalBuyValue: acc.totalBuyValue + buyValue,
+          soldQuantity: acc.soldQuantity + quantity
+        };
+      }, { totalRealizedPL: 0, totalSaleValue: 0, totalBuyValue: 0, soldQuantity: 0 });
+      
+      // Combine both sources
+      const totalRealizedPL = partialSalesMetrics.totalRealizedPL + optimisticSalesMetrics.totalRealizedPL;
+      const totalSaleValue = partialSalesMetrics.totalSaleValue + optimisticSalesMetrics.totalSaleValue;
+      const totalBuyValue = partialSalesMetrics.totalBuyValue + optimisticSalesMetrics.totalBuyValue;
+      const totalSoldQuantity = partialSalesMetrics.soldQuantity + optimisticSalesMetrics.soldQuantity;
+      
+      const profitPercentage = totalBuyValue > 0 ? ((totalRealizedPL / totalBuyValue) * 100) : 0;
+      
+      return {
+        totalBuyValue,
+        totalCurrentValue: totalSaleValue,
+        totalProfit: totalRealizedPL,
+        profitPercentage,
+        itemCount: totalSoldQuantity
+      };
+    } else {
+      // ACTIVE INVESTMENTS VIEW - existing logic remains the same
       if (currentItems.length === investments.length && portfolioSummary) {
         const currentPortfolioValue = parseFloat(portfolioSummary.current_portfolio_value || 0);
         const totalInvestment = parseFloat(portfolioSummary.total_investment || 0);
@@ -56,18 +93,14 @@ export const usePortfolioSummary = (activeTab, investments, soldItems, currentIt
       // Calculate filtered view metrics manually
       const filteredValue = currentItems.reduce((sum, item) =>
         sum + (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0)), 0);
-
       const filteredBuyValue = currentItems.reduce((sum, item) =>
         sum + (parseFloat(item.buy_price || 0) * parseFloat(item.quantity || 0)), 0);
-
-      // Recalculate unrealized profit using current quantities (not pre-calculated values)
       const filteredProfit = currentItems.reduce((sum, item) => {
         const currentPrice = parseFloat(item.current_price || 0);
         const buyPrice = parseFloat(item.buy_price || 0);
         const quantity = parseFloat(item.quantity || 0);
         return sum + ((currentPrice - buyPrice) * quantity);
       }, 0);
-
       const filteredProfitPercentage = filteredBuyValue > 0 ?
         ((filteredProfit / filteredBuyValue) * 100) : 0;
         
@@ -76,10 +109,10 @@ export const usePortfolioSummary = (activeTab, investments, soldItems, currentIt
         totalCurrentValue: filteredValue,
         totalProfit: filteredProfit,
         profitPercentage: filteredProfitPercentage,
-        itemCount: currentItems.reduce((sum, item) => sum + parseFloat(item.quantity || 0), 0) // Sum quantities instead of counting items
+        itemCount: currentItems.reduce((sum, item) => sum + parseFloat(item.quantity || 0), 0)
       };
     }
-  }, [activeTab, investments, soldItems, groupedSoldItems, currentItems, portfolioSummary]);
+  }, [activeTab, investments, soldItems, groupedSoldItems, currentItems, portfolioSummary, optimisticSoldItems]);
   
   return calculatedSummary;
 };

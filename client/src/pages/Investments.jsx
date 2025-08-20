@@ -18,6 +18,9 @@ const InvestmentsPage = ({ userSession }) => {
   const [itemToDelete, setItemToDelete] = useState(null);    // Item selected for deletion
   const [newItemIds, setNewItemIds] = useState(new Set());   // Recently added items (for animations)
 
+  // Track sales optimistically
+  const [optimisticSoldItems, setOptimisticSoldItems] = useState([]);
+
   // Investment data from hook
   const { investments, soldItems, portfolioSummary, loading, error, refetch, setInvestments, setSoldItems } = usePortfolioData(userSession);
 
@@ -28,7 +31,7 @@ const InvestmentsPage = ({ userSession }) => {
   
   // Financial summary calculations for current view
   const summary = usePortfolioSummary(
-    activeTab, investments, soldItems, currentItems, groupedSoldItems, portfolioSummary
+    activeTab, investments, soldItems, currentItems, groupedSoldItems, portfolioSummary, optimisticSoldItems
   );
   
   // Tab configuration and UI helpers
@@ -37,6 +40,13 @@ const InvestmentsPage = ({ userSession }) => {
   // lock scroll on add form or delete message  
   useScrollLock(showAddForm || !!itemToDelete);
   
+  // Clean up optimistic sold items when data is refreshed
+  useEffect(() => {
+    if (!loading && portfolioSummary) {
+      setOptimisticSoldItems([]);
+    }
+  }, [loading, portfolioSummary]);
+
   // ADD THIS HELPER FUNCTION
   const buildDetailedItemName = (item) => {
     let displayName = '';
@@ -82,17 +92,36 @@ const InvestmentsPage = ({ userSession }) => {
 
   // handle the removal of item form ui, selling or deleting
   const handleItemRemove = useCallback((itemId, shouldRefresh = false, soldItemData = null) => {
+    const removedItem = investments.find(inv => inv.id === itemId);
+    
+    // Remove from investments
     setInvestments(prev => prev.filter(inv => inv.id !== itemId));
+
+    // If this was a full sale, track it for sold tab calculations
+    if (soldItemData && removedItem) {
+      const optimisticSoldItem = {
+        id: itemId,
+        quantity: removedItem.quantity,
+        salePrice: soldItemData.price_per_unit,
+        buyPrice: removedItem.buy_price,
+        name: removedItem.name,
+        skinName: removedItem.skin_name,
+        condition: removedItem.condition,
+        variant: removedItem.variant,
+        saleDate: new Date().toISOString()
+      };
+      
+      setOptimisticSoldItems(prev => [...prev, optimisticSoldItem]);
+    }
 
     if (soldItemData) {
       setSoldItems(prev => [soldItemData, ...prev]);
     }
 
-    // Conditionally refresh when item might have moved to sold items
     if (shouldRefresh) {
       refetch();
     }
-  }, [setInvestments]);
+  }, [setInvestments, investments]);
 
   // set the item to delete
   const handleItemDelete = useCallback((itemToDelete) => {
@@ -150,38 +179,36 @@ const handleAddItem = useCallback((newItem) => {
   }, []);
 
   const handleDeleteItem = async () => {
-  if (!itemToDelete) return;
-  
-  try {
-    // Handle grouped items - delete all investment IDs in the group
-    const investmentIds = itemToDelete.investment_ids || [itemToDelete.id];
+    if (!itemToDelete) return;
     
-    // Delete all investments in the group
-    const deletePromises = investmentIds.map(investmentId => 
-      supabase.rpc('delete_investment_with_context', {
-        investment_id: investmentId,
-        context_user_id: userSession.id
-      })
-    );
-    
-    const results = await Promise.all(deletePromises);
-    
-    // Check for any errors
-    const errors = results.filter(result => result.error);
-    if (errors.length > 0) {
-      console.error('Delete failed:', errors[0].error);
-      throw errors[0].error;
-    }
-    
-    // Remove item from local state for immediate UI update
-    setInvestments(prev => prev.filter(inv => !investmentIds.includes(inv.id)));
+    try {
+      const investmentIds = itemToDelete.investment_ids || [itemToDelete.id];
+      
+      const deletePromises = investmentIds.map(investmentId => 
+        supabase.rpc('delete_investment_with_context', {
+          investment_id: investmentId,
+          context_user_id: userSession.id
+        })
+      );
+      
+      const results = await Promise.all(deletePromises);
+      const errors = results.filter(result => result.error);
+      
+      if (errors.length > 0) {
+        console.error('Delete failed:', errors[0].error);
+        throw errors[0].error;
+      }
+      
+      // Remove from investments
+      setInvestments(prev => prev.filter(inv => !investmentIds.includes(inv.id)));
+      
+      // ALSO remove from optimistic sold items if present
+      setOptimisticSoldItems(prev => prev.filter(item => !investmentIds.includes(item.id)));
 
-    // Show delete toast
-    const detailedName = buildDetailedItemName(itemToDelete);
-    toast.itemDeleted(detailedName);
-
-      // Close the confirmation modal
+      const detailedName = buildDetailedItemName(itemToDelete);
+      toast.itemDeleted(detailedName);
       setItemToDelete(null);
+      
     } catch (err) {
       console.error('Error deleting investment:', err);
       
