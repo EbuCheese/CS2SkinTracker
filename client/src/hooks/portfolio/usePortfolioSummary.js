@@ -8,7 +8,7 @@ export const usePortfolioSummary = (
   currentItems, 
   groupedSoldItems, 
   portfolioSummary = null,
-  optimisticSoldItems = [] 
+  optimisticSoldItems = [],
 ) => {
   const calculatedSummary = useMemo(() => {
     if (activeTab === 'Sold') {
