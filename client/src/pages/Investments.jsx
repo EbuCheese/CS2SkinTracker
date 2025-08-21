@@ -32,7 +32,7 @@ const InvestmentsPage = ({ userSession }) => {
   
   // Financial summary calculations for current view
   const summary = usePortfolioSummary(
-    activeTab, investments, soldItems, currentItems, groupedSoldItems, portfolioSummary, optimisticSoldItems, deletedSoldItems
+    activeTab, investments, soldItems, currentItems, groupedSoldItems, portfolioSummary, optimisticSoldItems
   );
   
   // Tab configuration and UI helpers
@@ -286,7 +286,8 @@ const handleAddItem = useCallback((newItem) => {
         
         // Success toast - treat all deletions the same way for user simplicity
         const detailedName = buildDetailedItemName(deletedSoldItem);
-        toast.saleRecordDeleted(detailedName);
+        const deletedQuantity = deletedSoldItem.quantity_sold || 1;
+        toast.saleRecordDeleted(detailedName, deletedQuantity);
         
       } catch (deleteError) {
         console.error('Delete failed, rolling back optimistic updates:', deleteError);
@@ -338,7 +339,8 @@ const handleAddItem = useCallback((newItem) => {
       setOptimisticSoldItems(prev => prev.filter(item => !investmentIds.includes(item.id)));
 
       const detailedName = buildDetailedItemName(itemToDelete);
-      toast.itemDeleted(detailedName);
+      const deletedQuantity = itemToDelete.quantity || 1;
+      toast.itemDeleted(detailedName, deletedQuantity);
       
       setItemToDelete(null);
     }
@@ -582,28 +584,53 @@ const handleAddItem = useCallback((newItem) => {
 
       {/* Delete Confirmation Modal */}
       {itemToDelete && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-gradient-to-br from-gray-900 to-slate-900 p-6 rounded-xl border border-red-500/20 max-w-sm w-full mx-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-gray-900 to-slate-900 p-6 rounded-xl border border-red-500/20 max-w-md w-full shadow-2xl">
             <div className="text-center">
               <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                 <X className="w-6 h-6 text-red-400" />
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">
+              
+              <h3 className="text-lg font-semibold text-white mb-3">
                 {activeTab === 'Sold' ? 'Delete Sale Record' : 'Delete Investment'}
               </h3>
-              <p className="text-gray-400 mb-6">
-                Are you sure you want to delete "{itemToDelete.item_name || itemToDelete.name}"? This action cannot be undone.
+              
+              {/* Item name with truncation and tooltip */}
+              <div className="mb-2">
+                <div className="text-sm text-gray-500 mb-1">Item:</div>
+                <div 
+                  className="text-orange-400 font-medium px-3 py-2 bg-gray-800/50 rounded-lg border border-gray-700/50 break-words text-sm leading-relaxed max-h-20 overflow-y-auto"
+                  title={buildDetailedItemName(itemToDelete)}
+                >
+                  {buildDetailedItemName(itemToDelete)}
+                </div>
+              </div>
+              
+              {/* Quantity display */}
+              <div className="mb-4">
+                <div className="text-xs text-gray-500 mb-1">Quantity:</div>
+                <div className="text-white font-semibold">
+                  {activeTab === 'Sold' 
+                    ? `${itemToDelete.quantity_sold || 1}x sold` 
+                    : `${itemToDelete.quantity || 1}x owned`
+                  }
+                </div>
+              </div>
+              
+              <p className="text-gray-400 mb-6 text-sm leading-relaxed">
+                This action cannot be undone. Are you sure you want to proceed?
               </p>
+              
               <div className="flex space-x-3">
                 <button
                   onClick={handleCancelDelete}
-                  className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-all duration-200 font-medium text-sm"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleDeleteItem}
-                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all duration-200 font-medium text-sm shadow-lg shadow-red-600/25"
                 >
                   Delete
                 </button>

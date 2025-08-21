@@ -61,7 +61,7 @@ export const ToastProvider = ({ children }) => {
         profitLoss: `${profitLoss >= 0 ? '+' : '-'}$${Math.abs(profitLoss).toFixed(2)} p/l`,
         quantity: `${quantity}x sold`
       },
-      duration: 6000,
+      duration: 5000,
       ...options
     });
 };
@@ -76,7 +76,7 @@ export const ToastProvider = ({ children }) => {
         profitLoss: `${profitLoss >= 0 ? '+' : '-'}$${Math.abs(profitLoss).toFixed(2)} p/l`,
         quantity: `${soldQty} of ${totalQty + soldQty} sold`
       },
-      duration: 6000,
+      duration: 5000,
       ...options
     });
   };
@@ -95,16 +95,31 @@ export const ToastProvider = ({ children }) => {
     });
   };
 
-  const itemDeleted = (itemName, options = {}) => {
-    return addToast({
-      type: 'delete',
-      title: 'Item Deleted',
-      message: itemName,
-      metadata: null, // No additional details needed for deletions
-      duration: 3500,
-      ...options
-    });
-  };
+  const itemDeleted = (itemName, quantity = null, options = {}) => {
+  return addToast({
+    type: 'delete',
+    title: 'Item Deleted',
+    message: itemName,
+    metadata: quantity ? {
+      quantity: `${quantity}x deleted`
+    } : null,
+    duration: 5000,
+    ...options
+  });
+};
+
+  const saleRecordDeleted = (itemName, quantity = null, options = {}) => {
+  return addToast({
+    type: 'delete', 
+    title: 'Sale Record Deleted',
+    message: itemName,
+    metadata: quantity ? {
+      quantity: `${quantity}x deleted`
+    } : null,
+    duration: 5000,
+    ...options
+  });
+};
 
   const itemUpdated = (itemName, options = {}) => {
     // Keep full name with variants for edit confirmations
@@ -113,19 +128,21 @@ export const ToastProvider = ({ children }) => {
       title: 'Item Updated',
       message: itemName, // Full name including variants
       metadata: null, // No metadata needed for updates
-      duration: 3000,
+      duration: 5000,
       ...options
     });
   };
 
-  // LEGACY METHODS (for backward compatibility)
-  const itemSold = (itemName, quantity, saleValue, options = {}) =>
-    addToast({
-      type: 'sale',
-      title: 'Sale Completed',
-      message: `Sold ${quantity}x "${itemName}" for $${saleValue.toFixed(2)}`,
+  const saleRecordUpdated = (itemName, options = {}) => {
+    return addToast({
+      type: 'success',
+      title: 'Sale Record Updated',
+      message: itemName,
+      metadata: null,
+      duration: 5000,
       ...options
     });
+  };
 
   // Context value with all toast functionality
   const contextValue = {
@@ -137,14 +154,13 @@ export const ToastProvider = ({ children }) => {
     error,
     warning,
     info,
-    // Enhanced methods
     fullSaleCompleted,
     partialSaleCompleted,
     itemAdded,
     itemDeleted,
+    saleRecordDeleted,
     itemUpdated,
-    // Legacy methods
-    itemSold
+    saleRecordUpdated,
   };
 
   return (
