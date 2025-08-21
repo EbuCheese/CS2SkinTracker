@@ -30,7 +30,7 @@ import { useToast } from '@/contexts/ToastContext';
   };
 
 // Main ItemCard Component - Displays individual investment items with interactive features
-const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, onRefresh, isNew = false, isSoldItem = false }) => {
+const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, onRefresh, isNew = false, isSoldItem = false, relatedInvestment = null }) => {
   // Add toast hook
   const toast = useToast();
 
@@ -39,6 +39,10 @@ const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, 
   const [soldPrice, setSoldPrice] = useState('');
   const [soldQuantity, setSoldQuantity] = useState(1);
   const [animationClass, setAnimationClass] = useState('');
+
+  // Edit form states
+  const [editForm, setEditForm] = useState(null);
+  const [soldEditForm, setSoldEditForm] = useState(null);
 
   // Consolidated popup state management - handles all modal dialogs
   const [popup, setPopup] = useState({
@@ -268,23 +272,37 @@ const validateSaleInput = useCallback((price, quantity) => {
 }, [profitMetrics.availableQuantity]);
 
 // Handles different field names between sold items and active investments
-const getEditFormDefaults = useCallback(() => ({
-  condition: displayValues.condition || '',
-  variant: displayValues.variant || 'normal',
-  quantity: isSoldItem ? item.quantity_sold : (item.quantity || 1),
-  buy_price: isSoldItem ? item.buy_price_per_unit : (item.buy_price || 0),
-  notes: item.notes || ''
-}), [displayValues.condition, displayValues.variant, isSoldItem, 
-    item.quantity_sold, item.quantity, item.buy_price_per_unit, item.buy_price, item.notes]);
+const getEditFormDefaults = useCallback(() => {
+  if (isSoldItem) {
+    // Only include editable fields for sold items
+    return {
+      quantity_sold: item.quantity_sold || 1,
+      price_per_unit: item.price_per_unit || 0,
+      notes: item.notes || ''
+    };
+  }
+  
+  // All fields editable for active investments
+  return {
+    condition: displayValues.condition || '',
+    variant: displayValues.variant || 'normal',
+    quantity: item.quantity || 1,
+    buy_price: item.buy_price || 0,
+    notes: item.notes || ''
+  };
+}, [isSoldItem, displayValues.condition, displayValues.variant, 
+    item.quantity_sold, item.price_per_unit, item.quantity, item.buy_price, item.notes]);
 
-// Edit form state management
-const [editForm, setEditForm] = useState(null);
 
 // Initialize edit form and open edit mode
 const handleStartEdit = useCallback(() => {
-  setEditForm(getEditFormDefaults());
+  if (isSoldItem) {
+    setSoldEditForm(getEditFormDefaults());
+  } else {
+    setEditForm(getEditFormDefaults());
+  }
   setMode(ITEM_MODES.EDITING);
-}, [getEditFormDefaults]);
+}, [isSoldItem, getEditFormDefaults]);
 
 // Initialize sell form and open sell mode
 const handleStartSell = useCallback(() => {
@@ -471,15 +489,96 @@ const handleEditFormSubmit = useCallback(async () => {
   });
 }, [handleAsyncOperation, editForm, item, userSession.id, onUpdate, toast, fullItemName, getErrorMessage]);
 
+const handleSoldEditFormSubmit = useCallback(async () => {
+  await handleAsyncOperation('EDIT_SOLD_SUBMIT', async () => {
+    // Validate input data
+    const quantity = parseInt(soldEditForm.quantity_sold);
+    const pricePerUnit = parseFloat(soldEditForm.price_per_unit);
+    
+    if (quantity < 1 || quantity > 9999) {
+      throw new Error('Quantity must be between 1 and 9999');
+    }
+    
+    if (pricePerUnit <= 0) {
+      throw new Error('Sale price must be greater than 0');
+    }
+
+    // Update through database RPC - only pass editable fields
+    const { data: result, error } = await supabase.rpc('update_investment_sale_with_context', {
+      p_sale_id: item.id,
+      p_quantity_sold: quantity,
+      p_price_per_unit: pricePerUnit,
+      p_item_condition: null, // Don't change condition
+      p_item_variant: null,   // Don't change variant
+      p_notes: soldEditForm.notes?.trim() || null,
+      p_user_id: userSession.id
+    });
+
+    if (error) throw error;
+    
+    // Calculate new values for optimistic update
+    const newTotalSaleValue = quantity * pricePerUnit;
+    const oldQuantity = item.quantity_sold;
+    const oldSaleValue = item.total_sale_value;
+    const quantityDiff = quantity - oldQuantity;
+    const saleValueDiff = newTotalSaleValue - oldSaleValue;
+    
+    // Optimistic update for sold item - only update allowed fields
+    const updatedItem = {
+      ...item,
+      quantity_sold: quantity,
+      price_per_unit: pricePerUnit,
+      total_sale_value: newTotalSaleValue,
+      notes: soldEditForm.notes?.trim() || null
+      // condition and variant remain unchanged
+    };
+
+    // Update related active investment if it exists
+    if (item.investment_id && relatedInvestment) {
+        const buyPrice = relatedInvestment.buy_price;
+        const oldProfitLoss = (item.price_per_unit - buyPrice) * oldQuantity;
+        const newProfitLoss = (pricePerUnit - buyPrice) * quantity;
+        const profitLossDiff = newProfitLoss - oldProfitLoss;
+        
+        const updatedInvestment = {
+          ...relatedInvestment,
+          total_sold_quantity: (relatedInvestment.total_sold_quantity || 0) + quantityDiff,
+          total_sale_value: (relatedInvestment.total_sale_value || 0) + saleValueDiff,
+          realized_profit_loss: (relatedInvestment.realized_profit_loss || 0) + profitLossDiff
+        };
+        
+        // Call onUpdate for the related investment (pass a flag to indicate this is a related update)
+        onUpdate(item.investment_id, updatedInvestment, false, null, true);
+    }
+
+    onUpdate(item.id, updatedItem, false);
+    setMode(ITEM_MODES.VIEW);
+    setSoldEditForm(null);
+
+    toast.saleRecordUpdated(fullItemName);
+
+  }).catch(err => {
+    toast.error(getErrorMessage(err));
+  });
+}, [handleAsyncOperation, soldEditForm, item, userSession.id, onUpdate, toast, fullItemName, getErrorMessage, relatedInvestment]);
+
 // Cancel edit form and reset to defaults
 const handleEditFormCancel = useCallback(() => {
   setEditForm(null);
+  setSoldEditForm(null);
   setMode(ITEM_MODES.VIEW);
 }, []);
 
 // Handle edit form field changes
 const handleEditFormChange = useCallback((field, value) => {
   setEditForm(prev => ({
+    ...prev,
+    [field]: value
+  }));
+}, []);
+
+const handleSoldEditFormChange = useCallback((field, value) => {
+  setSoldEditForm(prev => ({
     ...prev,
     [field]: value
   }));
@@ -722,7 +821,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
             </div>
           )}
           
-          {/* Action buttons - only shown for active investments, not sold items */}
+          {/* Action buttons for active items */}
           {!isSoldItem && (
             <div className="mt-2 space-y-1">
               {/* Edit Button */}
@@ -756,122 +855,181 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
               </button>
             </div>
           )}
+
+          {/* Action buttons for sold items */}
+          {isSoldItem && (
+            <div className="mt-2 space-y-1">
+              <button
+                onClick={handleStartEdit}
+                className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded hover:bg-blue-500/30 transition-colors block w-full flex items-center justify-center space-x-1"
+              >
+                <Edit2 className="w-3 h-3" />
+                <span>Edit Sale</span>
+              </button>
+              
+              <button
+                onClick={() => onDelete(item)} // Use the same pattern as active investments
+                className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded hover:bg-red-500/30 transition-colors block w-full"
+              >
+                Delete Sale
+              </button>
+            </div>
+          )}
         </div>
       </div>
       
-      {/* Edit form modal - comprehensive item details editing */}
-      {mode === ITEM_MODES.EDITING && !isSoldItem && (
-        <div className="mt-4 pt-4 border-t border-gray-600">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-medium text-white">Edit Item Details</h4>
-            <button
-              onClick={handleEditFormCancel}
-              className="text-gray-400 hover:text-white transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+      {/* Edit Form - restrict fields for sold items */}
+      {mode === ITEM_MODES.EDITING && (
+        <div className="space-y-3">
+          {isSoldItem ? (
+            // SOLD ITEM EDIT FORM - Only allow quantity and price changes
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Quantity Sold
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="9999"
+                    value={soldEditForm.quantity_sold}
+                    onChange={(e) => handleSoldEditFormChange('quantity_sold', e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Sale Price (each)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={soldEditForm.price_per_unit}
+                    onChange={(e) => handleSoldEditFormChange('price_per_unit', e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+              
+              {/* Notes field */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Notes (optional)
+                </label>
+                <textarea
+                  value={soldEditForm.notes}
+                  onChange={(e) => handleSoldEditFormChange('notes', e.target.value)}
+                  placeholder="Add notes about this sale..."
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none resize-none"
+                  rows="2"
+                />
+              </div>
+            </>
+          ) : (
+            // ACTIVE ITEM EDIT FORM - Allow all fields
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Condition
+                  </label>
+                  <select
+                    value={editForm.condition}
+                    onChange={(e) => handleEditFormChange('condition', e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                  >
+                    {CONDITION_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Variant
+                  </label>
+                  <select
+                    value={editForm.variant}
+                    onChange={(e) => handleEditFormChange('variant', e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                  >
+                    {VARIANT_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Quantity
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="9999"
+                    value={editForm.quantity}
+                    onChange={(e) => handleEditFormChange('quantity', e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Buy Price (each)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={editForm.buy_price}
+                    onChange={(e) => handleEditFormChange('buy_price', e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+              
+              {/* Notes field */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Notes (optional)
+                </label>
+                <textarea
+                  value={editForm.notes}
+                  onChange={(e) => handleEditFormChange('notes', e.target.value)}
+                  placeholder="Add notes about this investment..."
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none resize-none"
+                  rows="2"
+                />
+              </div>
+            </>
+          )}
           
-          {/* Two-column layout for form efficiency */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">
-                Condition
-              </label>
-              <select
-                value={editForm.condition}
-                onChange={(e) => handleEditFormChange('condition', e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
-              >
-                {CONDITION_OPTIONS.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">
-                Variant
-              </label>
-              <select
-                value={editForm.variant}
-                onChange={(e) => handleEditFormChange('variant', e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
-              >
-                {VARIANT_OPTIONS.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">
-                Quantity
-              </label>
-              <input
-                type="number"
-                min="1"
-                max="9999"
-                value={editForm.quantity}
-                onChange={(e) => handleEditFormChange('quantity', e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">
-                Buy Price ($)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={editForm.buy_price}
-                onChange={(e) => handleEditFormChange('buy_price', e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Notes field with character counter for user guidance */}
-          <div className="mt-3">
-            <label className="block text-xs font-medium text-gray-400 mb-1">
-              Notes (Optional)
-            </label>
-            <textarea
-              placeholder="Add any additional details (e.g., 95% fade, 0.16 float, special stickers, etc.)"
-              value={editForm.notes}
-              onChange={(e) => handleEditFormChange('notes', e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none resize-none"
-              rows={2}
-              maxLength={300}
-            />
-            <p className="text-gray-400 text-xs mt-1">{editForm.notes.length}/300 characters</p>
-          </div>
-
-          <div className="flex items-center justify-end space-x-2 mt-4">
+          {/* Form buttons remain the same */}
+          <div className="flex space-x-2">
+            <button
+              onClick={isSoldItem ? handleSoldEditFormSubmit : handleEditFormSubmit}
+              disabled={asyncState.isLoading}
+              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              {asyncState.isLoading ? 'Saving...' : 'Save Changes'}
+            </button>
             <button
               onClick={handleEditFormCancel}
-              className="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
+              disabled={asyncState.isLoading}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
             >
               Cancel
-            </button>
-            <button
-              onClick={handleEditFormSubmit}
-              disabled={asyncState.isLoading}
-              className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors disabled:opacity-50 flex items-center space-x-1"
-            >
-              {asyncState.isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-              <span>Save Changes</span>
             </button>
           </div>
         </div>
       )}
-      
+
       {/* Partial sale form - handles selling portions of investment positions */}
       {mode === ITEM_MODES.SELLING && !profitMetrics.isFullySold && !isSoldItem && (
         <div className="mt-3 pt-3 border-t border-gray-700">

@@ -18,8 +18,9 @@ const InvestmentsPage = ({ userSession }) => {
   const [itemToDelete, setItemToDelete] = useState(null);    // Item selected for deletion
   const [newItemIds, setNewItemIds] = useState(new Set());   // Recently added items (for animations)
 
-  // Track sales optimistically
+  // Track sale data optimistically
   const [optimisticSoldItems, setOptimisticSoldItems] = useState([]);
+  const [deletedSoldItems, setDeletedSoldItems] = useState([]);
 
   // Investment data from hook
   const { investments, soldItems, portfolioSummary, loading, error, refetch, setInvestments, setSoldItems } = usePortfolioData(userSession);
@@ -31,7 +32,7 @@ const InvestmentsPage = ({ userSession }) => {
   
   // Financial summary calculations for current view
   const summary = usePortfolioSummary(
-    activeTab, investments, soldItems, currentItems, groupedSoldItems, portfolioSummary, optimisticSoldItems
+    activeTab, investments, soldItems, currentItems, groupedSoldItems, portfolioSummary, optimisticSoldItems, deletedSoldItems
   );
   
   // Tab configuration and UI helpers
@@ -47,81 +48,110 @@ const InvestmentsPage = ({ userSession }) => {
     }
   }, [loading, portfolioSummary]);
 
+  // Clean up deleted sold items when data is refreshed
+  useEffect(() => {
+    if (!loading && portfolioSummary) {
+      setOptimisticSoldItems([]);
+      setDeletedSoldItems([]); // Add this line
+    }
+  }, [loading, portfolioSummary]);
+
   // ADD THIS HELPER FUNCTION
   const buildDetailedItemName = (item) => {
-    let displayName = '';
-    
-    // Add variant prefix
-    if (item.variant === 'souvenir') {
-      displayName += 'Souvenir ';
-    } else if (item.variant === 'stattrak') {
-      displayName += 'StatTrak™ ';
-    }
-    
-    // Add base name and skin name
-    if (item.skin_name) {
-      displayName += `${item.name || 'Custom'} ${item.skin_name}`;
-    } else {
-      displayName += item.name;
-    }
-    
-    // Add condition in parentheses if present
-    if (item.condition) {
-      displayName += ` (${item.condition})`;
-    }
-    
-    return displayName;
-  };
+  let displayName = '';
+  
+  // Handle different field names for sold items vs active investments
+  const variant = item.item_variant || item.variant;
+  const name = item.item_name || item.name;
+  const skinName = item.item_skin_name || item.skin_name;
+  const condition = item.item_condition || item.condition;
+  
+  // Add variant prefix
+  if (variant === 'souvenir') {
+    displayName += 'Souvenir ';
+  } else if (variant === 'stattrak') {
+    displayName += 'StatTrak™ ';
+  }
+  
+  // Add base name and skin name
+  if (skinName) {
+    displayName += `${name || 'Custom'} ${skinName}`;
+  } else {
+    displayName += name;
+  }
+  
+  // Add condition in parentheses if present
+  if (condition) {
+    displayName += ` (${condition})`;
+  }
+  
+  return displayName;
+};
 
   // STABLE CALLBACKS: Prevent unnecessary re-renders
-  const handleItemUpdate = useCallback((itemId, updates, shouldRefresh = false, soldItemData = null) => {
-    // update local state for immediate UI feedback
+  const handleItemUpdate = useCallback((itemId, updates, shouldRefresh = false, soldItemData = null, isRelatedUpdate = false) => {
+  if (activeTab === 'Sold' && !isRelatedUpdate) {
+    // Handle sold item updates
+    setSoldItems(prev => prev.map(sold => 
+      sold.id === itemId ? { ...sold, ...updates } : sold
+    ));
+  } else {
+    // Handle active investment updates (including related updates from sold tab)
     setInvestments(prev => prev.map(inv => 
       inv.id === itemId ? { ...inv, ...updates } : inv
     ));
+  }
 
-    if (soldItemData) {
-      setSoldItems(prev => [soldItemData, ...prev]);
-    }
+  if (soldItemData) {
+    setSoldItems(prev => [soldItemData, ...prev]);
+  }
 
-    // Conditionally refresh when server calculations are needed
-    if (shouldRefresh) {
-      refetch();
-    }
-  }, [setInvestments, refetch]);
+  // Only refresh if explicitly requested
+  if (shouldRefresh) {
+    refetch();
+  }
+}, [activeTab, setInvestments, setSoldItems, refetch]);
 
   // handle the removal of item form ui, selling or deleting
   const handleItemRemove = useCallback((itemId, shouldRefresh = false, soldItemData = null) => {
-    const removedItem = investments.find(inv => inv.id === itemId);
+  // Check if this is a sold item being removed (from sold tab)
+  if (activeTab === 'Sold') {
+    // Remove from sold items
+    setSoldItems(prev => prev.filter(sold => sold.id !== itemId));
+    return;
+  }
+  
+  // Original logic for active investments
+  const removedItem = investments.find(inv => inv.id === itemId);
+  
+  // Remove from investments
+  setInvestments(prev => prev.filter(inv => inv.id !== itemId));
+
+  // If this was a full sale, track it for sold tab calculations
+  if (soldItemData && removedItem) {
+    const optimisticSoldItem = {
+      id: itemId,
+      quantity: removedItem.quantity,
+      salePrice: soldItemData.price_per_unit,
+      buyPrice: removedItem.buy_price,
+      name: removedItem.name,
+      skinName: removedItem.skin_name,
+      condition: removedItem.condition,
+      variant: removedItem.variant,
+      saleDate: new Date().toISOString()
+    };
     
-    // Remove from investments
-    setInvestments(prev => prev.filter(inv => inv.id !== itemId));
+    setOptimisticSoldItems(prev => [...prev, optimisticSoldItem]);
+  }
 
-    // If this was a full sale, track it for sold tab calculations
-    if (soldItemData && removedItem) {
-      const optimisticSoldItem = {
-        id: itemId,
-        quantity: removedItem.quantity,
-        salePrice: soldItemData.price_per_unit,
-        buyPrice: removedItem.buy_price,
-        name: removedItem.name,
-        skinName: removedItem.skin_name,
-        condition: removedItem.condition,
-        variant: removedItem.variant,
-        saleDate: new Date().toISOString()
-      };
-      
-      setOptimisticSoldItems(prev => [...prev, optimisticSoldItem]);
-    }
+  if (soldItemData) {
+    setSoldItems(prev => [soldItemData, ...prev]);
+  }
 
-    if (soldItemData) {
-      setSoldItems(prev => [soldItemData, ...prev]);
-    }
-
-    if (shouldRefresh) {
-      refetch();
-    }
-  }, [setInvestments, investments]);
+  if (shouldRefresh) {
+    refetch();
+  }
+}, [activeTab, setSoldItems, setInvestments, investments, refetch]);
 
   // set the item to delete
   const handleItemDelete = useCallback((itemToDelete) => {
@@ -179,9 +209,111 @@ const handleAddItem = useCallback((newItem) => {
   }, []);
 
   const handleDeleteItem = async () => {
-    if (!itemToDelete) return;
-    
-    try {
+  if (!itemToDelete) return;
+  
+  try {
+    if (activeTab === 'Sold') {
+      // SOLD ITEM DELETION - Enhanced with proper group handling
+      
+      // Store references before deletion for rollback if needed
+      const deletedSoldItem = itemToDelete;
+      const relatedInvestmentId = deletedSoldItem.investment_id;
+      let originalRelatedInvestment = null;
+      
+      // Determine which sale IDs to delete (handle both individual and grouped items)
+      const saleIdsToDelete = deletedSoldItem.sale_ids || [deletedSoldItem.id];
+      
+      // Find related investment if it exists
+      if (relatedInvestmentId) {
+        originalRelatedInvestment = investments.find(inv => inv.id === relatedInvestmentId);
+      }
+      
+      setSoldItems(prev => prev.filter(sold => !saleIdsToDelete.includes(sold.id)));
+      setDeletedSoldItems(prev => [...prev, ...soldItems.filter(sold => saleIdsToDelete.includes(sold.id))]);
+      
+      // If there's a related investment, optimistically update it
+      if (originalRelatedInvestment) {
+        const quantityDeleted = deletedSoldItem.quantity_sold || 0;
+        const saleValueToRemove = deletedSoldItem.total_sale_value || (deletedSoldItem.quantity_sold * deletedSoldItem.price_per_unit);
+        
+        // Calculate the profit/loss that was realized from this specific sale (or group of sales)
+        const realizedPLFromThisSale = (deletedSoldItem.price_per_unit - deletedSoldItem.buy_price_per_unit) * deletedSoldItem.quantity_sold;
+        
+        // Calculate new values - DO NOT restore quantity to active investment
+        const newTotalSoldQuantity = Math.max(0, (originalRelatedInvestment.total_sold_quantity || 0) - quantityDeleted);
+        const newTotalSaleValue = Math.max(0, (originalRelatedInvestment.total_sale_value || 0) - saleValueToRemove);
+        const newRealizedPL = (originalRelatedInvestment.realized_profit_loss || 0) - realizedPLFromThisSale;
+        
+        console.log('Delete calculation:', {
+          deletedQuantity: quantityDeleted,
+          saleIdsToDelete,
+          oldTotalSold: originalRelatedInvestment.total_sold_quantity,
+          newTotalSold: newTotalSoldQuantity,
+          saleValueRemoved: saleValueToRemove,
+          realizedPLRemoved: realizedPLFromThisSale
+        });
+
+        const optimisticInvestmentUpdate = {
+          ...originalRelatedInvestment,
+          total_sold_quantity: newTotalSoldQuantity,
+          total_sale_value: newTotalSaleValue,
+          realized_profit_loss: newRealizedPL
+        };
+        
+        setInvestments(prev => prev.map(inv => 
+          inv.id === relatedInvestmentId ? optimisticInvestmentUpdate : inv
+        ));
+      }
+      
+      // Close modal immediately for better UX
+      setItemToDelete(null);
+      
+      try {
+        // Delete all sales in the group (if it's a grouped item)
+        const deletePromises = saleIdsToDelete.map(saleId => 
+          supabase.rpc('delete_investment_sale_with_context', {
+            p_sale_id: saleId,
+            p_user_id: userSession.id
+          })
+        );
+        
+        const results = await Promise.all(deletePromises);
+        const errors = results.filter(result => result.error);
+        
+        if (errors.length > 0) {
+          throw errors[0].error;
+        }
+        
+        // Success toast - treat all deletions the same way for user simplicity
+        const detailedName = buildDetailedItemName(deletedSoldItem);
+        toast.saleRecordDeleted(detailedName);
+        
+      } catch (deleteError) {
+        console.error('Delete failed, rolling back optimistic updates:', deleteError);
+        
+        // ROLLBACK - Restore deleted items and related investment
+        const deletedItems = soldItems.filter(sold => saleIdsToDelete.includes(sold.id));
+        setSoldItems(prev => [...deletedItems, ...prev]);
+        setDeletedSoldItems(prev => prev.filter(item => !saleIdsToDelete.includes(item.id)));
+        
+        if (originalRelatedInvestment) {
+          setInvestments(prev => prev.map(inv => 
+            inv.id === relatedInvestmentId ? originalRelatedInvestment : inv
+          ));
+        }
+        
+        // Error handling
+        if (deleteError.message.includes('Invalid user context')) {
+          toast.error('Authentication error: Please refresh the page and re-enter your beta key.');
+        } else if (deleteError.message.includes('not found or access denied')) {
+          toast.error('Access denied: You can only delete your own items.');
+        } else {
+          toast.error('Failed to delete sale record: ' + deleteError.message);
+        }
+      }
+      
+    } else {
+      // ACTIVE INVESTMENT DELETION (existing logic unchanged)
       const investmentIds = itemToDelete.investment_ids || [itemToDelete.id];
       
       const deletePromises = investmentIds.map(investmentId => 
@@ -202,26 +334,31 @@ const handleAddItem = useCallback((newItem) => {
       // Remove from investments
       setInvestments(prev => prev.filter(inv => !investmentIds.includes(inv.id)));
       
-      // ALSO remove from optimistic sold items if present
+      // Remove from optimistic sold items if present
       setOptimisticSoldItems(prev => prev.filter(item => !investmentIds.includes(item.id)));
 
       const detailedName = buildDetailedItemName(itemToDelete);
       toast.itemDeleted(detailedName);
+      
       setItemToDelete(null);
-      
-    } catch (err) {
-      console.error('Error deleting investment:', err);
-      
-      // Provide user-friendly toast error messages based on error type
+    }
+    
+  } catch (err) {
+    console.error('Error deleting item:', err);
+    
+    // Only handle errors for active investments here (sold item errors handled above)
+    if (activeTab !== 'Sold') {
       if (err.message.includes('Invalid user context')) {
         toast.error('Authentication error: Please refresh the page and re-enter your beta key.');
       } else if (err.message.includes('not found or access denied')) {
-        toast.error('Access denied: You can only delete your own investments.');
+        toast.error('Access denied: You can only delete your own items.');
       } else {
-        toast.error('Failed to delete investment: ' + err.message);
+        toast.error('Failed to delete item: ' + err.message);
       }
+      setItemToDelete(null);
     }
-  };
+  }
+};
 
   const retry = () => {
     if (userSession?.id) {
@@ -384,19 +521,26 @@ const handleAddItem = useCallback((newItem) => {
 
         {/* Items Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {currentItems.map((item) => (
-            <ItemCard 
-              key={activeTab === 'Sold' ? `sold-${item.id}` : item.id}
-              item={item} 
-              userSession={userSession}
-              isSoldItem={activeTab === 'Sold'}
-              onUpdate={handleItemUpdate}
-              onRemove={handleItemRemove}
-              onDelete={handleItemDelete}
-              isNew={newItemIds.has(item.id)}
-              onRefresh={handleRefreshData}
-            />
-          ))}
+          {currentItems.map((item) => {
+            const relatedInvestment = activeTab === 'Sold' && item.investment_id 
+              ? investments.find(inv => inv.id === item.investment_id) 
+              : null;
+              
+            return (
+              <ItemCard
+                key={item.id}
+                item={item}
+                userSession={userSession}
+                onUpdate={handleItemUpdate}
+                onDelete={handleItemDelete}
+                onRemove={handleItemRemove}
+                onRefresh={handleRefreshData}
+                isNew={newItemIds.has(item.id)}
+                isSoldItem={activeTab === 'Sold'}
+                relatedInvestment={relatedInvestment} // Pass specific investment
+              />
+            );
+          })}
         </div>
 
         {/* Empty State - Shows when no items match current filters */}
@@ -444,7 +588,9 @@ const handleAddItem = useCallback((newItem) => {
               <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                 <X className="w-6 h-6 text-red-400" />
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">Delete Investment</h3>
+              <h3 className="text-lg font-semibold text-white mb-2">
+                {activeTab === 'Sold' ? 'Delete Sale Record' : 'Delete Investment'}
+              </h3>
               <p className="text-gray-400 mb-6">
                 Are you sure you want to delete "{itemToDelete.item_name || itemToDelete.name}"? This action cannot be undone.
               </p>
