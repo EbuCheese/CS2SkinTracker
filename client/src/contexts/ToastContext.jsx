@@ -144,6 +144,23 @@ export const ToastProvider = ({ children }) => {
     });
   };
 
+  const saleReverted = (itemName, quantity, saleValueLost, wasNewInvestment, { wasOriginalDatePreserved = true, ...options } = {}) => {
+    return addToast({
+    type: 'revert',
+    title: wasNewInvestment ? 'Sale Reverted - New Investment' : 'Sale Reverted - Restored',
+    message: itemName,
+    metadata: {
+      action: `$${saleValueLost.toFixed(2)} sale removed`,
+      result: wasNewInvestment
+        ? `Created new investment${!wasOriginalDatePreserved ? ' (original date unavailable)' : ''}`
+        : 'Restored to existing investment',
+      quantity: `${quantity}x restored`
+    },
+    duration: 5000,
+    ...options
+  });
+  };
+
   // Context value with all toast functionality
   const contextValue = {
     toasts,
@@ -161,6 +178,7 @@ export const ToastProvider = ({ children }) => {
     saleRecordDeleted,
     itemUpdated,
     saleRecordUpdated,
+    saleReverted
   };
 
   return (
