@@ -142,11 +142,19 @@ const PopupManager = ({
               <p className="mb-2">{message}</p>
               {/* Data preview section with styled background */}
               <div className="bg-gray-700/50 p-3 rounded">
-                <div>Total sale value: ${data.totalSaleValue?.toFixed(2)}</div>
-                {/* Conditional styling based on profit/loss */}
-                <div className={data.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  Profit/Loss: {data.profitLoss >= 0 ? '+' : '-'}${Math.abs(data.profitLoss)?.toFixed(2)} ({data.percentage}%)
-                </div>
+                {data.revertValue !== undefined ? (
+                  // Revert operation - just show the sale value being removed
+                  <div>Sale value to remove: ${data.revertValue?.toFixed(2)}</div>
+                ) : (
+                  // Sale operation - show full breakdown
+                  <>
+                    <div>Total sale value: ${data.totalSaleValue?.toFixed(2)}</div>
+                    {/* Conditional styling based on profit/loss */}
+                    <div className={data.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
+                      Profit/Loss: {data.profitLoss >= 0 ? '+' : '-'}${Math.abs(data.profitLoss)?.toFixed(2)} ({data.percentage}%)
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           ) : (

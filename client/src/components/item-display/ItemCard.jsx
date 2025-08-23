@@ -319,7 +319,10 @@ const handleRevertSale = useCallback(async () => {
   showPopup({
     type: 'confirm',
     title: 'Revert Sale',
-    message: `Restore ${quantityToRestore}x "${fullItemName}" back to your inventory? This will remove $${saleValueToLose.toFixed(2)} in sale value.`,
+    message: `Revert the sale of ${quantityToRestore}x "${fullItemName}" back to your inventory?`,
+    data: {
+      revertValue: saleValueToLose
+    },
     onConfirm: () => handleAsyncOperation(
       'REVERT_SALE',
       handleConfirmedRevert
@@ -526,19 +529,7 @@ const handleConfirmedRevert = async () => {
       
       // Add the new investment to the UI immediately
       onUpdate(revertResult.new_investment_id, newInvestmentData, false, null, true); // true for new item
-      
-      // set as a new id
-      setNewItemIds(prev => new Set([...prev, revertResult.new_investment_id]));
-
-      // show slide in animation if quickly switched
-      setTimeout(() => {
-        setNewItemIds(prev => {
-          const updated = new Set(prev);
-          updated.delete(revertResult.new_investment_id);
-          return updated;
-        });
-      }, 700);
-
+    
       toast.saleReverted(
         fullItemName, 
         revertResult.quantity_restored, 
