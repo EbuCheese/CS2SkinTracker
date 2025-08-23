@@ -1,7 +1,7 @@
 // Toast.jsx - Enhanced version with recommended improvements
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle, XCircle, AlertCircle, X, Plus, Trash2, Info, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, X, Plus, Trash2, Info, DollarSign, TrendingUp, TrendingDown, CornerUpLeft } from 'lucide-react';
 
 import { useToast } from '@/contexts/ToastContext';
 
@@ -110,6 +110,17 @@ const Toast = ({ toast, onRemove }) => {
           progressColor: 'bg-slate-400',
           iconBg: 'bg-slate-500/25'
         };
+        case 'revert':
+  return {
+    bg: 'from-amber-900/90 via-orange-900/90 to-amber-900/90',
+    border: 'border-amber-500/40',
+    glow: 'shadow-amber-500/30',
+    icon: <CornerUpLeft className="w-5 h-5 text-amber-400" />,
+    titleColor: 'text-amber-100',
+    progressColor: 'bg-amber-400',
+    iconBg: 'bg-amber-500/25'
+  };
+
       case 'info':
         return {
           bg: 'from-purple-900/90 via-violet-900/90 to-purple-900/90',
@@ -223,7 +234,14 @@ const Toast = ({ toast, onRemove }) => {
               )}
             </div>
           )}
-          
+
+          {/* Result/action info for revert operations */}
+          {toast.metadata?.result && (
+            <span className="px-2.5 py-1 bg-gray-800/60 border border-gray-600/30 rounded-md text-gray-300 flex-shrink-0 font-medium text-xs">
+              {toast.metadata.result}
+            </span>
+          )}
+
           {/* Legacy metadata support (for backward compatibility) - also with border */}
           {!toast.metadata && toast.amount && (
             <div className="mt-2 text-xs text-gray-400">
