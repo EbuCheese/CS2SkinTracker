@@ -525,8 +525,20 @@ const handleConfirmedRevert = async () => {
       };
       
       // Add the new investment to the UI immediately
-      onUpdate(revertResult.new_investment_id, newInvestmentData, true); // true for new item
+      onUpdate(revertResult.new_investment_id, newInvestmentData, false, null, true); // true for new item
       
+      // set as a new id
+      setNewItemIds(prev => new Set([...prev, revertResult.new_investment_id]));
+
+      // show slide in animation if quickly switched
+      setTimeout(() => {
+        setNewItemIds(prev => {
+          const updated = new Set(prev);
+          updated.delete(revertResult.new_investment_id);
+          return updated;
+        });
+      }, 700);
+
       toast.saleReverted(
         fullItemName, 
         revertResult.quantity_restored, 
