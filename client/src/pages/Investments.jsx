@@ -96,10 +96,29 @@ const InvestmentsPage = ({ userSession }) => {
       sold.id === itemId ? { ...sold, ...updates } : sold
     ));
   } else {
-    // Handle active investment updates (including related updates from sold tab)
-    setInvestments(prev => prev.map(inv => 
-      inv.id === itemId ? { ...inv, ...updates } : inv
-    ));
+    // Check if this is a new investment being added 
+    const existingInvestment = investments.find(inv => inv.id === itemId);
+    
+    if (!existingInvestment) {
+      // This is a new investment - add it to the list
+      setInvestments(prev => [updates, ...prev]);
+      
+      // Add to newItemIds for animation
+      setNewItemIds(prev => new Set([...prev, itemId]));
+      
+      setTimeout(() => {
+        setNewItemIds(prev => {
+          const updated = new Set(prev);
+          updated.delete(itemId);
+          return updated;
+        });
+      }, 700);
+    } else {
+      // Update existing investment
+      setInvestments(prev => prev.map(inv => 
+        inv.id === itemId ? { ...inv, ...updates } : inv
+      ));
+    }
   }
 
   if (soldItemData) {
@@ -110,7 +129,7 @@ const InvestmentsPage = ({ userSession }) => {
   if (shouldRefresh) {
     refetch();
   }
-}, [activeTab, setInvestments, setSoldItems, refetch]);
+}, [activeTab, setInvestments, setSoldItems, refetch, investments]);
 
   // handle the removal of item form ui, selling or deleting
   const handleItemRemove = useCallback((itemId, shouldRefresh = false, soldItemData = null) => {

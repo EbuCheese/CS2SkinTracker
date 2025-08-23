@@ -255,7 +255,6 @@ const buildItemDisplayName = () => {
 
 const fullItemName = buildItemDisplayName();
 
-
 const validateSaleInput = useCallback((price, quantity) => {
   const priceNum = parseFloat(price);
   const quantityNum = parseInt(quantity);
@@ -293,7 +292,6 @@ const getEditFormDefaults = useCallback(() => {
 }, [isSoldItem, displayValues.condition, displayValues.variant, 
     item.quantity_sold, item.price_per_unit, item.quantity, item.buy_price, item.notes]);
 
-
 // Initialize edit form and open edit mode
 const handleStartEdit = useCallback(() => {
   if (isSoldItem) {
@@ -310,6 +308,26 @@ const handleStartSell = useCallback(() => {
   setSoldQuantity(Math.min(1, profitMetrics.availableQuantity));
   setSoldPrice('');
 }, [profitMetrics.availableQuantity]);
+
+// handle the reverted sale
+const handleRevertSale = useCallback(async () => {
+  if (!isSoldItem) return;
+  
+  const quantityToRestore = item.quantity_sold || 0;
+  const saleValueToLose = item.total_sale_value || 0;
+  
+  showPopup({
+    type: 'confirm',
+    title: 'Revert Sale',
+    message: `Restore ${quantityToRestore}x "${fullItemName}" back to your inventory? This will remove $${saleValueToLose.toFixed(2)} in sale value.`,
+    onConfirm: () => handleAsyncOperation(
+      'REVERT_SALE',
+      handleConfirmedRevert
+    ),
+    confirmText: 'Revert Sale',
+    cancelText: 'Cancel'
+  });
+}, [isSoldItem, item.quantity_sold, item.total_sale_value, fullItemName, handleAsyncOperation, showPopup]);
 
   // Handle slide-in animation for newly added items
   useEffect(() => {
@@ -400,7 +418,8 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
       buy_price_per_unit: item.buy_price,
       image_url: item.image_url || null,
       notes: null,
-      item_variant: item.variant || 'normal'
+      item_variant: item.variant || 'normal',
+      item_type: saleResult.item_type || item.type
     };
     
     if (isFullSale) {
@@ -433,6 +452,95 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
     
   } catch (err) {
     console.error('Error processing sale:', err);
+    toast.error(getErrorMessage(err));
+  } finally {
+    setAsyncState({ isLoading: false, operation: null, error: null });
+  }
+};
+
+// Handle the actual reverting of item back to investments
+const handleConfirmedRevert = async () => {
+  try {
+    closePopup();
+    setAsyncState({ isLoading: true, operation: 'REVERT_SALE', error: null });
+    
+    const { data: revertResult, error: revertError } = await supabase.rpc('revert_investment_sale', {
+      p_sale_id: item.id,
+      p_user_id: userSession.id
+    });
+    
+    if (revertError) throw new Error(`Revert failed: ${revertError.message}`);
+    
+    // Handle the two scenarios based on the simplified response
+    if (revertResult.type === 'quantity_restored') {
+      // Original investment exists - update it with restored quantity
+      const relatedInvestmentId = revertResult.investment_id;
+      const quantityRestored = revertResult.quantity_restored;
+      const saleValueLost = revertResult.sale_value_lost;
+      
+      if (relatedInvestment) {
+        // Calculate profit/loss changes
+        const buyPrice = relatedInvestment.buy_price || item.buy_price_per_unit;
+        const realizedPLRemoved = (item.price_per_unit - buyPrice) * quantityRestored;
+        
+        const updatedInvestment = {
+          ...relatedInvestment,
+          quantity: revertResult.new_investment_quantity,
+          total_sold_quantity: Math.max(0, (relatedInvestment.total_sold_quantity || 0) - quantityRestored),
+          total_sale_value: Math.max(0, (relatedInvestment.total_sale_value || 0) - saleValueLost),
+          realized_profit_loss: (relatedInvestment.realized_profit_loss || 0) - realizedPLRemoved,
+          unrealized_profit_loss: (relatedInvestment.current_price - buyPrice) * revertResult.new_investment_quantity
+        };
+        
+        // Update the related investment
+        onUpdate(relatedInvestmentId, updatedInvestment, false, null, true);
+      }
+      
+      toast.saleReverted(fullItemName, quantityRestored, saleValueLost, false);
+      
+    } else if (revertResult.type === 'investment_recreated') {
+      // Investment was deleted - new one was created
+      const wasOriginalDatePreserved = revertResult.original_created_at !== null;
+      
+      // Create the new investment data for immediate UI update
+      const newInvestmentData = {
+        id: revertResult.new_investment_id,
+        user_id: userSession.id,
+        type: item.item_type || 'liquid',
+        name: item.item_name,
+        skin_name: item.item_skin_name,
+        condition: item.item_condition,
+        variant: item.item_variant || 'normal',
+        buy_price: item.buy_price_per_unit,
+        current_price: item.buy_price_per_unit,
+        quantity: revertResult.quantity_restored,
+        image_url: item.image_url,
+        notes: item.notes,
+        created_at: revertResult.original_created_at || new Date().toISOString(),
+        total_sold_quantity: 0,
+        total_sale_value: 0,
+        realized_profit_loss: 0,
+        unrealized_profit_loss: 0,
+        original_quantity: revertResult.quantity_restored
+      };
+      
+      // Add the new investment to the UI immediately
+      onUpdate(revertResult.new_investment_id, newInvestmentData, true); // true for new item
+      
+      toast.saleReverted(
+        fullItemName, 
+        revertResult.quantity_restored, 
+        revertResult.sale_value_lost, 
+        true,
+        wasOriginalDatePreserved
+      );
+    }
+    
+    // Remove this sold item from the UI
+    onRemove(item.id, false);
+    
+  } catch (err) {
+    console.error('Error reverting sale:', err);
     toast.error(getErrorMessage(err));
   } finally {
     setAsyncState({ isLoading: false, operation: null, error: null });
@@ -858,22 +966,38 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
 
           {/* Action buttons for sold items */}
           {isSoldItem && (
-            <div className="mt-2 space-y-1">
-              <button
-                onClick={handleStartEdit}
-                className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded hover:bg-blue-500/30 transition-colors block w-full flex items-center justify-center space-x-1"
-              >
-                <Edit2 className="w-3 h-3" />
-                <span>Edit Sale</span>
-              </button>
-              
-              <button
-                onClick={() => onDelete(item)} // Use the same pattern as active investments
-                className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded hover:bg-red-500/30 transition-colors block w-full"
-              >
-                Delete Sale
-              </button>
-            </div>
+          <div className="mt-2 space-y-1">
+            <button
+              onClick={handleStartEdit}
+              disabled={asyncState.isLoading}
+              className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded hover:bg-blue-500/30 transition-colors block w-full flex items-center justify-center space-x-1 disabled:opacity-50"
+            >
+              <Edit2 className="w-3 h-3" />
+              <span>Edit Sale</span>
+            </button>
+            
+            <button
+              onClick={handleRevertSale}
+              disabled={asyncState.isLoading}
+              className="text-xs bg-amber-500/20 text-amber-400 px-2 py-1 rounded hover:bg-amber-500/30 transition-colors block w-full flex items-center justify-center space-x-1 disabled:opacity-50">
+              {asyncState.operation === 'REVERT_SALE' && asyncState.isLoading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                </svg>
+              )}
+              <span>Revert Sale</span>
+            </button>
+            
+            <button
+              onClick={() => onDelete(item)}
+              disabled={asyncState.isLoading}
+              className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded hover:bg-red-500/30 transition-colors block w-full disabled:opacity-50"
+            >
+              Delete Sale
+            </button>
+          </div>
           )}
         </div>
       </div>
