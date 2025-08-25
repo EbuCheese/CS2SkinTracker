@@ -420,14 +420,14 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
       item_condition: item.condition,
       buy_price_per_unit: item.buy_price,
       image_url: item.image_url || null,
-      notes: null,
+      notes: item.notes,
       item_variant: item.variant || 'normal',
       item_type: saleResult.item_type || item.type
     };
     
     if (isFullSale) {
       // FULL SALE
-      onRemove?.(item.id, false, soldItemData);
+      onRemove?.(item.id, false, soldItemData, false);
       
       // enhanced show full sale toast
       toast.fullSaleCompleted(fullItemName, quantity, totalSaleValue, profitLoss);
@@ -481,23 +481,37 @@ const handleConfirmedRevert = async () => {
       const quantityRestored = revertResult.quantity_restored;
       const saleValueLost = revertResult.sale_value_lost;
       
+      // Reconstruct investment data if relatedInvestment is null
+      let updatedInvestment;
+
       if (relatedInvestment) {
         // Calculate profit/loss changes
         const buyPrice = relatedInvestment.buy_price || item.buy_price_per_unit;
         const realizedPLRemoved = (item.price_per_unit - buyPrice) * quantityRestored;
         
-        const updatedInvestment = {
+        // Match the database function's note format exactly
+        const restorationNote = `Restored ${quantityRestored} units from sale reversion on ${new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}`;
+        
+        let updatedNotes;
+        if (relatedInvestment.notes && relatedInvestment.notes.trim() !== '') {
+          updatedNotes = relatedInvestment.notes + '\n' + restorationNote;
+        } else {
+          updatedNotes = restorationNote;
+        }
+
+        updatedInvestment = {
           ...relatedInvestment,
           quantity: revertResult.new_investment_quantity,
           total_sold_quantity: Math.max(0, (relatedInvestment.total_sold_quantity || 0) - quantityRestored),
           total_sale_value: Math.max(0, (relatedInvestment.total_sale_value || 0) - saleValueLost),
           realized_profit_loss: (relatedInvestment.realized_profit_loss || 0) - realizedPLRemoved,
-          unrealized_profit_loss: (relatedInvestment.current_price - buyPrice) * revertResult.new_investment_quantity
+          unrealized_profit_loss: (relatedInvestment.current_price - buyPrice) * revertResult.new_investment_quantity,
+          notes: updatedNotes
         };
         
         // Update the related investment
         onUpdate(relatedInvestmentId, updatedInvestment, false, null, true);
-      }
+      } 
       
       toast.saleReverted(fullItemName, quantityRestored, saleValueLost, false);
       
@@ -518,7 +532,7 @@ const handleConfirmedRevert = async () => {
         current_price: item.buy_price_per_unit,
         quantity: revertResult.quantity_restored,
         image_url: item.image_url,
-        notes: item.notes,
+        notes: item.notes ? `${item.notes}\nRecreated from sale reversion on ${new Date().toLocaleDateString()}` : `Recreated from sale reversion on ${new Date().toLocaleDateString()}`,
         created_at: revertResult.original_created_at || new Date().toISOString(),
         total_sold_quantity: 0,
         total_sale_value: 0,
@@ -528,7 +542,7 @@ const handleConfirmedRevert = async () => {
       };
       
       // Add the new investment to the UI immediately
-      onUpdate(revertResult.new_investment_id, newInvestmentData, false, null, true); // true for new item
+      onUpdate(revertResult.new_investment_id, newInvestmentData, false, null, true);
     
       toast.saleReverted(
         fullItemName, 
