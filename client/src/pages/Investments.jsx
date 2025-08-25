@@ -131,46 +131,74 @@ const InvestmentsPage = ({ userSession }) => {
   }
 }, [activeTab, setInvestments, setSoldItems, refetch, investments]);
 
-  // handle the removal of item form ui, selling or deleting
-  const handleItemRemove = useCallback((itemId, shouldRefresh = false, soldItemData = null) => {
-  // Check if this is a sold item being removed (from sold tab)
-  if (activeTab === 'Sold') {
-    // Remove from sold items
-    setSoldItems(prev => prev.filter(sold => sold.id !== itemId));
-    return;
-  }
-  
-  // Original logic for active investments
-  const removedItem = investments.find(inv => inv.id === itemId);
-  
-  // Remove from investments
-  setInvestments(prev => prev.filter(inv => inv.id !== itemId));
-
-  // If this was a full sale, track it for sold tab calculations
-  if (soldItemData && removedItem) {
-    const optimisticSoldItem = {
-      id: itemId,
-      quantity: removedItem.quantity,
-      salePrice: soldItemData.price_per_unit,
-      buyPrice: removedItem.buy_price,
-      name: removedItem.name,
-      skinName: removedItem.skin_name,
-      condition: removedItem.condition,
-      variant: removedItem.variant,
-      saleDate: new Date().toISOString()
-    };
+  // handle the removal of item from ui, selling or deleting
+  const handleItemRemove = useCallback((itemId, shouldRefresh = false, soldItemData = null, isActualDelete = false) => {
+    // Check if this is a sold item being removed (from sold tab)
+    if (activeTab === 'Sold') {
+      // Remove from sold items
+      setSoldItems(prev => prev.filter(sold => sold.id !== itemId));
+      return;
+    }
     
-    setOptimisticSoldItems(prev => [...prev, optimisticSoldItem]);
-  }
+    // Get the item being removed/sold
+    const removedItem = investments.find(inv => inv.id === itemId);
+    if (!removedItem) return;
+    
+    // Handle actual deletions vs. sales differently
+    if (isActualDelete) {
+      // For actual deletions, remove completely from state
+      setInvestments(prev => prev.filter(inv => inv.id !== itemId));
+    } else if (soldItemData) {
+      // For sales, update the investment to reflect the sale but keep it in state
+      const quantitySold = soldItemData.quantity || removedItem.quantity;
+      const totalSaleValue = soldItemData.total_sale_value || (soldItemData.price_per_unit * quantitySold);
+      const profitLoss = soldItemData.profit_loss || ((soldItemData.price_per_unit - removedItem.buy_price) * quantitySold);
+      
+      const updatedItem = {
+        ...removedItem,
+        quantity: Math.max(0, removedItem.quantity - quantitySold), // Should be 0 for full sales
+        total_sold_quantity: (removedItem.total_sold_quantity || 0) + quantitySold,
+        total_sale_value: (removedItem.total_sale_value || 0) + totalSaleValue,
+        realized_profit_loss: (removedItem.realized_profit_loss || 0) + profitLoss,
+        // Recalculate unrealized P/L for remaining quantity
+        unrealized_profit_loss: (removedItem.current_price - removedItem.buy_price) * Math.max(0, removedItem.quantity - quantitySold)
+      };
+      
+      // Update the investment in state instead of removing it
+      setInvestments(prev => prev.map(inv => 
+        inv.id === itemId ? updatedItem : inv
+      ));
+      
+      // Track optimistic sold item for sold tab calculations (if needed)
+      if (updatedItem.quantity === 0) {
+        const optimisticSoldItem = {
+          id: itemId,
+          quantity: quantitySold,
+          salePrice: soldItemData.price_per_unit,
+          buyPrice: removedItem.buy_price,
+          name: removedItem.name,
+          skinName: removedItem.skin_name,
+          condition: removedItem.condition,
+          variant: removedItem.variant,
+          saleDate: new Date().toISOString()
+        };
+        
+        setOptimisticSoldItems(prev => [...prev, optimisticSoldItem]);
+      }
+    } else {
+      // Fallback: remove from investments (for cases where soldItemData is not provided)
+      setInvestments(prev => prev.filter(inv => inv.id !== itemId));
+    }
 
-  if (soldItemData) {
-    setSoldItems(prev => [soldItemData, ...prev]);
-  }
+    // Add sold item to sold items list
+    if (soldItemData) {
+      setSoldItems(prev => [soldItemData, ...prev]);
+    }
 
-  if (shouldRefresh) {
-    refetch();
-  }
-}, [activeTab, setSoldItems, setInvestments, investments, refetch]);
+    if (shouldRefresh) {
+      refetch();
+    }
+  }, [activeTab, setSoldItems, setInvestments, investments, refetch]);
 
   // set the item to delete
   const handleItemDelete = useCallback((itemToDelete) => {
