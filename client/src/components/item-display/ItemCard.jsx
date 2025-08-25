@@ -898,9 +898,6 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                     <div className="text-gray-400 mb-0.5">Buy:</div>
                     <div className="text-white">
                       ${baseMetrics.buyPrice.toFixed(2)}
-                      {salesSummary.originalQuantity > 1 && (
-                        <span className="text-gray-400"> x{salesSummary.originalQuantity}</span>
-                      )}
                     </div>
                   </div>
                   <div>
