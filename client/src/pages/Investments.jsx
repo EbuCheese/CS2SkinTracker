@@ -32,7 +32,7 @@ const InvestmentsPage = ({ userSession }) => {
   
   // Financial summary calculations for current view
   const summary = usePortfolioSummary(
-    activeTab, investments, soldItems, currentItems, groupedSoldItems, portfolioSummary, optimisticSoldItems
+    activeTab, investments, soldItems, currentItems, groupedSoldItems, portfolioSummary, optimisticSoldItems, searchQuery
   );
   
   // Tab configuration and UI helpers
