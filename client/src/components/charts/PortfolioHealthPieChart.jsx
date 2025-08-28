@@ -25,24 +25,26 @@ const COLOR_PALETTES = {
     'Charms':   '#7C3AED',
     'Agents':   '#581C87'
   },
-  // Weapon palette WITHOUT any of the colors above
-  weapon: [
-    '#0EA5E9', '#65A30D', '#EA580C', '#9333EA', '#E11D48',
-    '#B91C1C', '#D97706', '#6366F1', '#D946EF', '#C2410C',
-    '#7C2D12', '#92400E', '#1E40AF', '#BE123C', '#0F766E',
-    '#166534', '#CA8A04', '#1E3A8A', '#6B21A8', '#9F1239',
-    '#134E4A', '#15803D', '#312E81', '#701A75', '#831843',
-    '#0F3460', '#064E3B', '#365314', '#422006', '#1E1B4B',
-    '#4C1D95', '#DB2777', '#0891B2', '#059669', '#7F1D1D',
-    '#0C4A6E', '#D97706', '#0284C7', '#0D9488', '#16A34A'
-  ]
 };
 
-// 1) A set of hand-picked, high-contrast colors
-const CONTRAST_COLORS = [
-  '#4e79a7', '#f28e2c', '#e15759', '#76b7b2',
-  '#59a14f', '#edc948', '#af7aa1', '#ff9da7'
-];
+// generate unique item colors
+const generateItemColors = (count = 50) => {
+  const colors = [];
+  const goldenRatio = 0.618033988749;
+  
+  for (let i = 0; i < count; i++) {
+    const hue = (i * goldenRatio * 360) % 360;
+    const saturation = 65 + (i % 4) * 8; // 65%, 73%, 81%, 89%
+    const lightness = 45 + (i % 3) * 10;  // 45%, 55%, 65%
+    colors.push(`hsl(${Math.round(hue)}, ${saturation}%, ${lightness}%)`);
+  }
+  return colors;
+};
+
+const ITEM_COLORS = generateItemColors(50);
+
+// Color assignment cache to ensure adjacent slices get distinct colors
+const colorAssignmentCache = new Map();
 
 // Memoized component for rendering individual distribution items in the list
 const DistributionItem = React.memo(({ 
@@ -65,7 +67,7 @@ const DistributionItem = React.memo(({
     <div className="flex items-center space-x-3">
       <div 
         className={`w-3 h-3 rounded-full ${item.isGrouped ? 'ring-1 ring-gray-500' : ''}`}
-        style={{ backgroundColor: getItemColor(item, startIndex + index) }}
+        style={{ backgroundColor: getItemColor(item) }}
       />
       <span className={`text-sm ${item.isGrouped ? 'text-gray-400' : 'text-gray-300'}`}>
         {item.name} {item.isGrouped && `(${item.items.length} items)`}
@@ -82,45 +84,6 @@ const DistributionItem = React.memo(({
     </div>
   </div>
 ));
-
-const generateUniqueColors = (() => {
-  const cache = new Map();
- 
-  // HSL-based color generation for infinite unique colors
-  const generateHSLColor = (index, total) => {
-    // Use golden ratio for optimal color distribution
-    const goldenRatio = 0.618033988749;
-    const hue = ((index * goldenRatio) % 1) * 360;
-   
-    // Vary saturation and lightness for more distinction
-    const saturation = 65 + (index % 3) * 15; // 65%, 80%, 95%
-    const lightness = 45 + (Math.floor(index / 3) % 3) * 10; // 45%, 55%, 65%
-   
-    return `hsl(${Math.round(hue)}, ${saturation}%, ${lightness}%)`;
-  };
- 
-  return (count, baseColors) => {
-    const cacheKey = `${count}-${baseColors?.length || 0}`;
-    if (cache.has(cacheKey)) {
-      return cache.get(cacheKey);
-    }
-   
-    const result = [];
-   
-    // Use base colors first (most carefully chosen)
-    for (let i = 0; i < Math.min(count, baseColors.length); i++) {
-      result.push(baseColors[i]);
-    }
-   
-    // Generate additional unique colors using HSL if needed
-    for (let i = baseColors.length; i < count; i++) {
-      result.push(generateHSLColor(i - baseColors.length, count - baseColors.length));
-    }
-   
-    cache.set(cacheKey, result);
-    return result;
-  };
-})();
 
 // Main Portfolio Health Pie Chart Component
 const PortfolioHealthPieChart = ({ portfolioHealth }) => {
@@ -234,85 +197,7 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   return processedData; // Reuse for chart view
 }, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, debouncedSearchTerm, viewMode, processedData]);
 
-// 2) Helper that will use the contrast palette first, then fallback to HSL
-const getColorByIndex = (index) => {
-  if (index < CONTRAST_COLORS.length) {
-    return CONTRAST_COLORS[index];
-  }
-  const generated = generateUniqueColors(index + 1, []); 
-  return generated[index];
-};
 
-// Modified colorAssignments that prioritizes contrast colors for top items
-const colorAssignments = useMemo(() => {
-  const assignments = new Map();
-  const currentData = viewMode === 'table' ? tableData : processedData;
-  
-  // Create a persistent assignment tracker that survives across renders
-  // This should ideally be stored outside the component or in a ref
-  const getStableColorForItem = (itemName, isType = false) => {
-    // Check predefined colors first
-    const predefinedColor = isType 
-      ? colors.type[itemName.toLowerCase()] 
-      : colors.item[itemName];
-    
-    if (predefinedColor) return predefinedColor;
-
-    // Create a deterministic hash that's stable regardless of when item was added
-    let hash = 0;
-    for (let i = 0; i < itemName.length; i++) {
-      hash = ((hash << 5) - hash) + itemName.charCodeAt(i);
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    
-    // Use the hash to determine if this item gets a contrast color or palette color
-    const hashForContrastAssignment = Math.abs(hash);
-    
-    // Use the complete dataset for priority calculation, not just visible items
-    // This ensures priority positions don't change when grouping toggles
-    const completeDataset = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown || [];
-    const allItems = completeDataset.filter(item => item.name !== 'Others');
-    
-    const itemsWithHashes = allItems.map(item => ({
-      name: item.name,
-      hash: (() => {
-        let h = 0;
-        for (let i = 0; i < item.name.length; i++) {
-          h = ((h << 5) - h) + item.name.charCodeAt(i);
-          h = h & h;
-        }
-        return Math.abs(h);
-      })()
-    }));
-    
-    // Sort by hash to get consistent priority order
-    itemsWithHashes.sort((a, b) => a.hash - b.hash);
-    
-    // Find this item's priority position in the complete dataset
-    const priorityIndex = itemsWithHashes.findIndex(item => item.name === itemName);
-    
-    // First 8 in priority order get contrast colors
-    if (priorityIndex !== -1 && priorityIndex < CONTRAST_COLORS.length) {
-      return CONTRAST_COLORS[priorityIndex];
-    }
-
-    // Remaining items use hash-based selection from weapon palette
-    const availableColors = COLOR_PALETTES.weapon.filter(color => !CONTRAST_COLORS.includes(color));
-    const colorIndex = hashForContrastAssignment % availableColors.length;
-    return availableColors[colorIndex];
-  };
-
-  // Assign colors to all items that appear in current data
-  currentData.forEach(item => {
-    if (item.name === 'Others' && item.isGrouped) {
-      assignments.set(item.name, '#64748B'); // Special color for Others group
-    } else {
-      assignments.set(item.name, getStableColorForItem(item.name, activeToggle !== 'item'));
-    }
-  });
-
-  return assignments;
-}, [activeToggle, processedData, tableData, viewMode, colors]);
 
   // Optimized percentage formatter with dynamic precision
   const formatPercentage = useMemo(() => (percentage) => {
@@ -349,17 +234,70 @@ const colorAssignments = useMemo(() => {
   }, [processedData]);
 
   // Color assignment function with fallback logic
-  const getItemColor = useCallback((item, index) => {
-  const assignedColor = colorAssignments.get(item.name);
-  
-  // If no assigned color and it's "Others", use specific gray
-  if (!assignedColor && item.isGrouped && item.name === 'Others') {
+  const getItemColor = useCallback((item, dataArray = processedData) => {
+  // Special handling for grouped "Others" items
+  if (item.name === 'Others' && item.isGrouped) {
     return '#64748B';
   }
   
-  // For all other cases, use assigned color or cyan fallback (NOT gray)
-  return assignedColor || '#06B6D4';
-}, [colorAssignments]);
+  // Use predefined colors for type view
+  if (activeToggle !== 'item') {
+    const predefinedColor = COLOR_PALETTES.type[item.name.toLowerCase()];
+    if (predefinedColor) return predefinedColor;
+  }
+  
+  // Use predefined colors for specific item categories
+  const predefinedItemColor = COLOR_PALETTES.item[item.name];
+  if (predefinedItemColor) return predefinedItemColor;
+  
+  // Get current item's index in the data array
+  const currentIndex = dataArray.findIndex(dataItem => dataItem.name === item.name);
+  
+  // Create a cache key that includes the data context
+  const cacheKey = `${item.name}-${currentIndex}-${dataArray.length}`;
+  
+  // Check if we already assigned a color for this configuration
+  if (colorAssignmentCache.has(cacheKey)) {
+    return colorAssignmentCache.get(cacheKey);
+  }
+  
+  // Get colors already used by adjacent slices
+  const usedColors = new Set();
+  const adjacentIndices = [currentIndex - 1, currentIndex + 1];
+  
+  adjacentIndices.forEach(adjIndex => {
+    if (adjIndex >= 0 && adjIndex < dataArray.length) {
+      const adjItem = dataArray[adjIndex];
+      const adjCacheKey = `${adjItem.name}-${adjIndex}-${dataArray.length}`;
+      if (colorAssignmentCache.has(adjCacheKey)) {
+        usedColors.add(colorAssignmentCache.get(adjCacheKey));
+      }
+    }
+  });
+  
+  // Find an available color that's not used by adjacent slices
+  let selectedColor;
+  let attempts = 0;
+  const maxAttempts = ITEM_COLORS.length * 2; // Prevent infinite loops
+  
+  do {
+    // Use hash-based selection with offset for different attempts
+    let hash = 0;
+    for (let i = 0; i < item.name.length; i++) {
+      hash = ((hash << 5) - hash) + item.name.charCodeAt(i);
+      hash = hash & hash;
+    }
+    
+    const colorIndex = (Math.abs(hash) + attempts * 7) % ITEM_COLORS.length;
+    selectedColor = ITEM_COLORS[colorIndex];
+    attempts++;
+  } while (usedColors.has(selectedColor) && attempts < maxAttempts);
+  
+  // Cache the selected color
+  colorAssignmentCache.set(cacheKey, selectedColor);
+  
+  return selectedColor;
+}, [activeToggle, processedData]);
 
   // Get current diversity metrics based on active toggle
   const currentScore = activeToggle === 'item' ? 
@@ -384,7 +322,7 @@ const colorAssignments = useMemo(() => {
     }
     
     // Get slice color for styling
-    const sliceColor = getItemColor(data, 0);
+    const sliceColor = getItemColor(data);
     
     // Adjust tooltip position to avoid overlap with sticky tooltips
     const tooltipStyle = data.isGrouped ? {} : {
@@ -493,7 +431,7 @@ const StickyTooltip = React.memo(() => {
   
   const data = stickyTooltip;
   const hasItemBreakdown = data.items && data.items.length > 0;
-  const sliceColor = getItemColor(data, 0);
+  const sliceColor = getItemColor(data);
   
   const processedItems = useMemo(() => {
   if (!hasItemBreakdown) return [];
@@ -782,7 +720,7 @@ const StickyTooltip = React.memo(() => {
                 <div className="flex items-center space-x-3">
                   <div 
                     className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: getItemColor(item, startIndex + index) }}
+                    style={{ backgroundColor: getItemColor(item, currentData) }}
                   />
                   <span className="text-gray-300">
                     {item.name}
@@ -952,7 +890,7 @@ const StickyTooltip = React.memo(() => {
                 {sortedProcessedData.map((entry, index) => (
                   <Cell 
                     key={`cell-${index}`} 
-                    fill={getItemColor(entry, index)}
+                    fill={getItemColor(entry, sortedProcessedData)}
                     stroke={selectedSlice === entry.name ? '#F59E0B' : (entry.percentage < 2 ? '#374151' : '#1f2937')}
                     strokeWidth={selectedSlice === entry.name ? 2 : (entry.percentage < 2 ? 0.5 : 1)}
                     opacity={selectedSlice && selectedSlice !== entry.name ? 0.6 : 1}
@@ -1039,7 +977,7 @@ const StickyTooltip = React.memo(() => {
                   startIndex={0}
                   isSelected={selectedSlice === item.name}
                   onClick={() => handleDistributionItemClick(item)}
-                  getItemColor={getItemColor}
+                  getItemColor={(item) => getItemColor(item, currentData)}
                   formatCurrency={formatCurrency}
                   formatPercentage={formatPercentage}
                 />
