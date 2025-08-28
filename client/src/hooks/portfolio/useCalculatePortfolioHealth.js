@@ -233,12 +233,29 @@ const aggregatePortfolioData = (investments) => {
       }
     }
     
-    // Process type groups
-    const type = formatDisplayName(itemType);
-    if (!typeGroups.has(type)) {
-      typeGroups.set(type, { name: type, count: 0, totalValue: 0, items: [] });
+    // NEW: Determine display type for grouping - separate liquid items
+    let displayType = formatDisplayName(itemType);
+    
+    // Override for liquid items to show specific categories (singular for Type view)
+    if (itemType === 'liquid' || (itemName && (inv.name.startsWith('★') || itemName.includes('glove') || itemName.includes('wrap')))) {
+      if (inv.name.startsWith('★')) {
+        // Check if it's gloves or knife
+        if (itemName.includes('gloves') || itemName.includes('wraps')) {
+          displayType = 'Glove';
+        } else {
+          displayType = 'Knife';
+        }
+      } else {
+        // Regular weapons
+        displayType = 'Weapon';
+      }
     }
-    const typeGroup = typeGroups.get(type);
+    
+    // Process type groups with new display type logic
+    if (!typeGroups.has(displayType)) {
+      typeGroups.set(displayType, { name: displayType, count: 0, totalValue: 0, items: [] });
+    }
+    const typeGroup = typeGroups.get(displayType);
     typeGroup.count += quantity;
     typeGroup.totalValue += value;
     typeGroup.items.push(inv);

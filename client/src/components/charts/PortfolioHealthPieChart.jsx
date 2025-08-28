@@ -5,14 +5,16 @@ import { ChartPie, Table, List } from 'lucide-react';
 // color palette  constant
 const COLOR_PALETTES = {
   type: {
-    liquid:  '#10B981',
-    craft:  '#F59E0B',
-    case:   '#3B82F6',
-    sticker:'#32F1FF',
-    agent:  '#8B5CF6',
-    keychain:'#EC4899',
-    graffiti:'#EF4444',
-    patch:  '#06B6D4'
+    weapon:  '#16A34A', // Green
+    knife:   '#E11D48', // Crimson Red
+    glove:   '#FACC15', // Bright Yellow
+    craft:    '#F97316', // Orange
+    case:     '#2563EB', // Blue
+    sticker:  '#06B6D4', // Cyan / Teal
+    agent:    '#9333EA', // Purple
+    keychain: '#EC4899', // Pink
+    graffiti: '#DC2626', // Deep Red
+    patch:    '#88ffd7ff', // Aqua Green
   },
   item: {
     'Knives':   '#14B8A6',
