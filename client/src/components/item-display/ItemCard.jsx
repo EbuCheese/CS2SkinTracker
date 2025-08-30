@@ -925,7 +925,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
         </div>
         
         {/* Right sidebar - P&L display and action buttons */}
-        <div className="text-right flex-shrink-0 self-start">
+        <div className="text-right flex-shrink-0 self-start w-26">
           <div className={`flex items-center space-x-1 ${
             profitMetrics.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'
           }`}>
