@@ -4,18 +4,22 @@
 
 ## 🌟 Features
 
-- 📈 **Investment Tracking**
-  - Add and manage your CS skin purchases and sales
+- 📈 **Investment Tracking & Insights**
+  - Add and manage your Counter-Strike skin purchases and sales
   - Automatic profit/loss calculations using real-time pricing
   - Visualize portfolio growth over time
+  - Know what items are moving with recent price changes
+  - View recently added and sold items in your portfolio
 
-- 💰 **Partial Sales Support**
-  - Record individual sales from multi-item purchases
+- 💰 **Comprehensive Investment Actions**
+  - Full control over investments (Edit Data, Add Notes, Mark Sold, Delete)
+  - Record sales for only the quantity you sell from multi-item purchases
   - Track remaining quantities and calculate net profits
+  - Reverse sales back to original investment
 
 - 🧩 **Portfolio Health & Diversity**
-  - Analyze your asset allocation (knives, rifles, stickers, etc.)
-  - Understand risk and diversification with calculated statistics and visual charts
+  - Analyze your asset allocation (knives, gloves, weapons, stickers, etc.)
+  - Understand risk, diversification, allocation and more with calculated statistics and visual charts
 
 - ⚡ **Quick Actions**
   - Add items or record sales in seconds via quick access modals
