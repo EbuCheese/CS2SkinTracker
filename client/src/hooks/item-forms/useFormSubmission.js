@@ -83,7 +83,6 @@ export const useFormSubmission = (supabase) => {
         condition: formData.condition?.trim() || null,
         variant: formData.variant || 'normal',
         buy_price: buyPrice,
-        current_price: currentPrice,
         quantity: quantity,
         image_url: formData.custom_image_url || formData.image_url || null,
         notes: formData.notes?.trim() || null
