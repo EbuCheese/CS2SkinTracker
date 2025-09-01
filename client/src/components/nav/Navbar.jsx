@@ -34,9 +34,8 @@ const Navbar = ({ userSession, onLogout }) => {
             {/* Logo Image Container */}
             <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-lg">
               <img 
-                src="/logoTEST10.png" 
+                src="/skinwatch_logo_rounded.png" 
                 alt="SkinWatch Logo" 
-                className="w-10 h-10 object-contain rounded-lg"
               />
             </div>
 

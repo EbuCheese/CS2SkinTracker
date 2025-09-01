@@ -8,9 +8,8 @@ const LoadingSpinner = ({ message = 'Loading...' }) => {
         {/* Logo with pulse animation */}
         <div className="w-12 h-12 flex items-center justify-center shadow-2xl mx-auto mb-6 animate-pulse">
           <img 
-                src="/logoTEST10.png" 
+                src="/skinwatch_logo_rounded.png" 
                 alt="SkinWatch Logo" 
-                className="w-12 h-12 object-contain rounded-lg"
               />
         </div>
         
