@@ -64,10 +64,6 @@ export const useFormSubmission = (supabase) => {
       // Parse and validate buy price
       const buyPrice = parseFloat(formData.buy_price);
       
-      // Generate realistic current price with 20% variation (±20%)
-      const priceVariation = (Math.random() * 0.4 - 0.2);
-      const currentPrice = Math.max(0.01, buyPrice * (1 + priceVariation));
-
       // Ensure quantity is at least 1
       const quantity = Math.max(1, parseInt(formData.quantity));
       
