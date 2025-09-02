@@ -5,7 +5,10 @@ import { CSDataProvider } from './contexts/CSDataContext';
 import { ToastProvider } from './contexts/ToastContext';
 import './index.css'
 import Home from './pages/Home'
+import PricesPage from './pages/Prices';
 import InvestmentsPage from './pages/Investments';
+import WatchlistPage from './pages/Watchlist';
+import CraftAnalysisPage from './pages/CraftAnalysis';
 import AccountPage from './pages/Account';
 import BetaKeyEntry from './pages/BetaKeyEntry';
 import QuickLogin from './pages/QuickLogin';
@@ -42,7 +45,10 @@ function App() {
             <Navbar userSession={userSession} onLogout={logout} />
             <Routes>
               <Route path="/" element={<Home userSession={userSession} />} />
+              <Route path="/prices" element={<PricesPage userSession={userSession} />} />
               <Route path="/investments" element={<InvestmentsPage userSession={userSession} />} />
+              <Route path="/watchlist" element={<WatchlistPage userSession={userSession} />} />
+              <Route path="/craft-analysis" element={<CraftAnalysisPage userSession={userSession} />} />
               <Route
                 path="/account"
                 element={
