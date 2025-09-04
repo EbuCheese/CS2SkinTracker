@@ -51,7 +51,7 @@ serve(async (req) => {
         console.log(`Fetched ${itemCount} items from ${marketplace.name}`)
         
         // Call your existing update_market_prices function
-        const { data, error } = await supabase.rpc('update_market_prices', {
+        const { data, error } = await supabase.rpc('bulk_update_market_prices', {
           marketplace_name: marketplace.name,
           price_data: priceData
         })
