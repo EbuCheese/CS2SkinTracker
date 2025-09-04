@@ -2,19 +2,45 @@ import { useMemo, useCallback } from 'react';
 
 // Centralized search function
 const createSearchFilter = (searchQuery) => {
-  if (!searchQuery) return () => true;
-  
-  const query = searchQuery.toLowerCase();
+  if (!searchQuery || searchQuery.length < 2) return () => true;
+
+  // Normalize query for consistent searching
+  const normalizedQuery = searchQuery.toLowerCase()
+    .replace(/[★]/g, 'star')
+    .replace(/[|]/g, ' ')
+    .replace(/[^\w\s\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Split into individual search terms (minimum 2 characters)
+  const queryWords = normalizedQuery.split(/\s+/).filter(w => w.length >= 2);
+
   return (item) => {
-    const itemName = item.item_name || item.name || '';
-    const skinName = item.item_skin_name || item.skin_name || '';
-    const condition = item.item_condition || item.condition || '';
-    const variant = item.item_variant || item.variant || '';
+    // Build searchable text from all item fields
+    const itemName = (item.item_name || item.name || '').toLowerCase();
+    const skinName = (item.item_skin_name || item.skin_name || '').toLowerCase();
+    const condition = (item.item_condition || item.condition || '').toLowerCase();
+    const variant = (item.item_variant || item.variant || '').toLowerCase();
     
-    return itemName.toLowerCase().includes(query) ||
-           skinName.toLowerCase().includes(query) ||
-           condition.toLowerCase().includes(query) ||
-           variant.toLowerCase().includes(query);
+    // Create comprehensive search tokens
+    const searchableText = `${itemName} ${skinName} ${condition} ${variant}`;
+    const searchTokens = searchableText
+      .replace(/[★]/g, 'star')
+      .replace(/[|]/g, ' ')
+      .replace(/[^\w\s\-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter(token => token.length >= 2);
+
+    // Check if all query words have matching tokens
+    return queryWords.every(queryWord => 
+      searchTokens.some(token => 
+        token === queryWord || // Exact match
+        token.includes(queryWord) || // Token contains query word
+        queryWord.includes(token) // Query word contains token
+      )
+    );
   };
 };
 
