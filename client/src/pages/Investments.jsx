@@ -508,14 +508,23 @@ const handleAddItem = useCallback((newItem) => {
         {/* Search Bar*/}
         <div className="mb-6 flex justify-center">
           <div className="relative max-w-md w-full">
-            <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" style={{ marginTop: '2px' }} />
             <input
               type="text"
               placeholder={searchPlaceholder}
               value={searchQuery}
               onChange={handleSearchChange}
-              className="w-full pl-10 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
+              className="w-full pl-10 pr-10 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-2.5 w-5 h-5 text-gray-400 hover:text-white transition-colors"
+                style={{ marginTop: '2px' }}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
 
