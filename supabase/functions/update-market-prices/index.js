@@ -1,94 +1,106 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    );
 
     const marketplaces = [
       { name: 'csfloat', url: 'https://prices.csgotrader.app/latest/csfloat.json' },
       { name: 'steam', url: 'https://prices.csgotrader.app/latest/steam.json' },
       { name: 'skinport', url: 'https://prices.csgotrader.app/latest/skinport.json' },
       { name: 'buff163', url: 'https://prices.csgotrader.app/latest/buff163.json' }
-    ]
+    ];
 
-    const results = []
-    console.log('Starting market price update...')
+    const BATCH_SIZE = 1500; 
+    const results = [];
+    console.log('Starting market price update...');
 
     for (const marketplace of marketplaces) {
-      const startTime = Date.now()
-      
+      const startTime = Date.now();
       try {
-        console.log(`Fetching ${marketplace.name} prices...`)
-        
+        console.log(`Fetching ${marketplace.name} prices...`);
+
         const response = await fetch(marketplace.url, {
           headers: {
             'User-Agent': 'InvestmentTracker/1.0',
             'Accept': 'application/json'
           },
-          signal: AbortSignal.timeout(30000) // 30 second timeout
-        })
-        
+          signal: AbortSignal.timeout(30000) // 30s fetch timeout
+        });
+
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        
-        const priceData = await response.json()
-        const itemCount = Object.keys(priceData).length
-        
-        console.log(`Fetched ${itemCount} items from ${marketplace.name}`)
-        
-        // Call your existing update_market_prices function
-        const { data, error } = await supabase.rpc('bulk_update_market_prices', {
-          marketplace_name: marketplace.name,
-          price_data: priceData
-        })
-        
-        if (error) {
-          console.error(`Database error for ${marketplace.name}:`, error)
-          throw error
+
+        const priceData = await response.json();
+        const itemKeys = Object.keys(priceData);
+        const totalItems = itemKeys.length;
+        console.log(`Fetched ${totalItems} items from ${marketplace.name}`);
+
+        let processedItems = 0;
+
+        // Process in batches
+        for (let i = 0; i < totalItems; i += BATCH_SIZE) {
+          const batchKeys = itemKeys.slice(i, i + BATCH_SIZE);
+          const batchData = {};
+          batchKeys.forEach(key => {
+            batchData[key] = priceData[key];
+          });
+
+          const { data, error } = await supabase.rpc('bulk_update_market_prices', {
+            marketplace_name: marketplace.name,
+            price_data: batchData
+          });
+
+          if (error) {
+            console.error(`Database error in batch ${Math.floor(i / BATCH_SIZE) + 1} for ${marketplace.name}:`, error);
+            throw error;
+          }
+
+          processedItems += batchKeys.length;
+          console.log(`Batch ${Math.floor(i / BATCH_SIZE) + 1} processed (${processedItems}/${totalItems})`);
         }
-        
-        const duration = Date.now() - startTime
-        console.log(`${marketplace.name} completed in ${duration}ms`)
-        
+
+        const duration = Date.now() - startTime;
+        console.log(`${marketplace.name} completed in ${duration}ms`);
+
         results.push({
           marketplace: marketplace.name,
           success: true,
           duration: duration,
-          items_fetched: itemCount,
-          ...data
-        })
-        
+          items_fetched: totalItems
+        });
+
       } catch (error) {
-        const duration = Date.now() - startTime
-        console.error(`Error updating ${marketplace.name}:`, error.message)
-        
+        const duration = Date.now() - startTime;
+        console.error(`Error updating ${marketplace.name}:`, error.message);
+
         results.push({
           marketplace: marketplace.name,
           success: false,
           duration: duration,
           error: error.message
-        })
+        });
       }
     }
 
-    const totalSuccess = results.filter(r => r.success).length
-    const totalItems = results.reduce((sum, r) => sum + (r.items_fetched || 0), 0)
+    const totalSuccess = results.filter(r => r.success).length;
+    const totalItemsProcessed = results.reduce((sum, r) => sum + (r.items_fetched || 0), 0);
 
-    console.log(`Update completed: ${totalSuccess}/${results.length} marketplaces successful`)
+    console.log(`Update completed: ${totalSuccess}/${results.length} marketplaces successful`);
 
     return new Response(
       JSON.stringify({
@@ -96,29 +108,19 @@ serve(async (req) => {
         timestamp: new Date().toISOString(),
         summary: {
           successful_marketplaces: totalSuccess,
-          total_marketplaces: results.length,
-          total_items_processed: totalItems
+          total_marketets: results.length,
+          total_items_processed: totalItemsProcessed
         },
         results
       }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: totalSuccess > 0 ? 200 : 500,
-      },
-    )
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: totalSuccess > 0 ? 200 : 500 }
+    );
 
   } catch (error) {
-    console.error('Fatal error:', error)
+    console.error('Fatal error:', error);
     return new Response(
-      JSON.stringify({ 
-        success: false,
-        error: error.message,
-        timestamp: new Date().toISOString()
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
-      },
-    )
+      JSON.stringify({ success: false, error: error.message, timestamp: new Date().toISOString() }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
   }
-})
+});
