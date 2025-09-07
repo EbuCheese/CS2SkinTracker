@@ -85,6 +85,35 @@ async function preprocessBatch(marketplace, batchData) {
   return deduplicatedData;
 }
 
+// Validate a batch of price data before sending to the DB
+function validatePriceData(data) {
+  if (!data || typeof data !== "object" || Object.keys(data).length === 0) {
+    return { valid: false, skippedKeys: Object.keys(data || {}) };
+  }
+
+  const skippedKeys = [];
+
+  const hasValidItem = Object.entries(data).some(([key, item]) => {
+    const valid =
+      item &&
+      typeof item === "object" &&
+      (
+        item.price ||
+        item.starting_at ||
+        item.highest_order ||
+        item.last_24h ||
+        item.last_7d ||
+        item.last_30d ||
+        item.last_90d
+      );
+
+    if (!valid) skippedKeys.push(key);
+    return valid;
+  });
+
+  return { valid: hasValidItem, skippedKeys };
+}
+
 async function updateMarketplace(supabase, marketplace, priceData) {
   const config = MARKETPLACE_CONFIGS[marketplace.name];
   const itemKeys = Object.keys(priceData);
@@ -115,6 +144,16 @@ async function updateMarketplace(supabase, marketplace, priceData) {
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), config.timeout);
+
+    // Validate batch
+    const { valid, skippedKeys } = validatePriceData(batchData);
+    if (!valid) {
+      console.warn(
+        `Skipping invalid/empty batch ${Math.floor(i / config.batchSize) + 1} for ${marketplace.name}`,
+        skippedKeys.length > 0 ? `Skipped keys: ${skippedKeys.join(", ")}` : ""
+      );
+      continue;
+    }
 
     try {
       const { data, error } = await supabase.rpc(
