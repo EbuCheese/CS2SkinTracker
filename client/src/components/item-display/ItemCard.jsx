@@ -712,10 +712,10 @@ const handleSoldEditFormChange = useCallback((field, value) => {
 const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
 
   return (
-    <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/30 transition-all duration-200 ${animationClass} ${profitMetrics.isFullySold ? 'opacity-75' : ''}`}>
+    <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-300 ${animationClass} ${profitMetrics.isFullySold ? 'opacity-75' : ''}`}>
       <div className="flex items-start space-x-4">
         {/* Image Container with Variant Badges */}
-        <div className="relative w-20 h-16 bg-gray-700 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center">
+        <div className="relative w-20 h-20 bg-gray-700/50 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-600/50">
           {item.image_url ? (
             <img 
               src={item.image_url} 
@@ -745,7 +745,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
           {/* Sold indicator overlay for fully sold items */}
           {profitMetrics.isFullySold && (
             <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
-              <span className="text-green-400 text-xs font-medium">SOLD</span>
+              <span className="text-green-400 text-xs font-semibold bg-green-600/30 px-0.5 py-0.5 rounded">SOLD</span>
             </div>
           )}
         </div>
@@ -925,7 +925,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
         </div>
         
         {/* Right sidebar - P&L display and action buttons */}
-        <div className="text-right flex-shrink-0 self-start w-26">
+        <div className="text-right flex-shrink-0 self-start w-28">
           <div className={`flex items-center space-x-1 ${
             profitMetrics.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'
           }`}>
@@ -949,7 +949,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
               {/* Edit Button */}
               <button
                 onClick={handleStartEdit}
-                className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded hover:bg-blue-500/30 transition-colors block w-full flex items-center justify-center space-x-1"
+                className="text-xs bg-blue-500/20 text-blue-400 px-3 py-1.5 rounded hover:bg-blue-500/30 transition-colors block w-full flex items-center justify-center space-x-1 transform hover:scale-103 active:scale-95 transition-transform"
               >
                 <Edit2 className="w-3 h-3" />
                 <span>Edit</span>
@@ -959,19 +959,19 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
               {!profitMetrics.isFullySold ? (
                 <button
                   onClick={handleStartSell}
-                  className="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded hover:bg-orange-500/30 transition-colors block w-full"
+                  className="text-xs bg-orange-500/20 text-orange-400 px-3 py-1.5 rounded hover:bg-orange-500/30 transition-colors block w-full transform hover:scale-103 active:scale-95 transition-transform"
                 >
                   {salesSummary.soldItems === 0 ? 'Mark Sold' : 'Sell More'}
                 </button>
               ) : (
-                <div className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded border border-green-500/30 text-center">
+                <div className="text-xs bg-green-500/20 text-green-400 px-3 py-1.5 rounded border border-green-500/30 text-center">
                   Fully Sold
                 </div>
               )}
               
               <button
                 onClick={() => onDelete(item)}
-                className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded hover:bg-red-500/30 transition-colors block w-full"
+                className="text-xs bg-red-500/20 text-red-400 px-3 py-1.5 rounded hover:bg-red-500/30 transition-colors block w-full transform hover:scale-103 active:scale-95 transition-transform"
               >
                 Delete
               </button>
@@ -984,7 +984,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
             <button
               onClick={handleStartEdit}
               disabled={asyncState.isLoading}
-              className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded hover:bg-blue-500/30 transition-colors block w-full flex items-center justify-center space-x-1 disabled:opacity-50"
+              className="text-xs bg-blue-500/20 text-blue-400 px-3 py-1.5 rounded hover:bg-blue-500/30 transition-colors block w-full flex items-center justify-center space-x-1 disabled:opacity-50 transform hover:scale-103 active:scale-95 transition-transform"
             >
               <Edit2 className="w-3 h-3" />
               <span>Edit Sale</span>
@@ -993,7 +993,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
             <button
               onClick={handleRevertSale}
               disabled={asyncState.isLoading}
-              className="text-xs bg-amber-500/20 text-amber-400 px-2 py-1 rounded hover:bg-amber-500/30 transition-colors block w-full flex items-center justify-center space-x-1 disabled:opacity-50">
+              className="text-xs bg-amber-500/20 text-amber-400 px-3 py-1.5 rounded hover:bg-amber-500/30 transition-colors block w-full flex items-center justify-center space-x-1 disabled:opacity-50 transform hover:scale-103 active:scale-95 transition-transform">
               {asyncState.operation === 'REVERT_SALE' && asyncState.isLoading ? (
                 <Loader2 className="w-3 h-3 animate-spin" />
               ) : (
@@ -1007,7 +1007,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
             <button
               onClick={() => onDelete(item)}
               disabled={asyncState.isLoading}
-              className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded hover:bg-red-500/30 transition-colors block w-full disabled:opacity-50"
+              className="text-xs bg-red-500/20 text-red-400 px-3 py-1.5 rounded hover:bg-red-500/30 transition-colors block w-full disabled:opacity-50 transform hover:scale-103 active:scale-95 transition-transform"
             >
               Delete Sale
             </button>
