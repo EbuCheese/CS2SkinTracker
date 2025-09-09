@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { TrendingUp, TrendingDown, Plus, Search, Eye, DollarSign, Activity, Star, Loader2 } from 'lucide-react';
+import { TrendingUp, Plus, DollarSign, Activity, Loader2 } from 'lucide-react';
 import { PortfolioPerformanceChart, PortfolioHealthPieChart } from '@/components/charts';
 import { RecentPriceChanges, RecentActivity } from '@/components/item-display';
 import { QuickAddItemForm, QuickSellModal } from '@/components/forms';
 import { supabase } from '@/supabaseClient';
-import { useScrollLock, useAdvancedDebounce, formatPrice, formatChartDate } from '@/hooks/util';
+import { formatPrice } from '@/hooks/util';
 import { useCalculatePortfolioHealth, useChartData, usePortfolioData, useQuickActions, useRecentActivity, usePortfolioSummary } from '@/hooks/portfolio';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -13,7 +13,7 @@ const InvestmentDashboard = ({ userSession }) => {
   // Add toast hook
   const toast = useToast();
 
-  const { investments, soldItems, portfolioSummary, loading, error, refetch, setInvestments, setSoldItems } = usePortfolioData(userSession);
+  const { investments, soldItems, portfolioSummary, loading, error, errorDetails, refetch, retry, setInvestments, setSoldItems } = usePortfolioData(userSession);
   
   // track optimistics updates
     const [optimisticUpdates, setOptimisticUpdates] = useState({
@@ -263,7 +263,47 @@ const portfolioMetrics = useMemo(() => {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center">
-        <div className="text-red-400">{error}</div>
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="text-red-400 text-lg mb-2">
+            {errorDetails?.type === 'NO_DATA' ? 'Getting Started' : 'Error'}
+          </div>
+          <div className="text-gray-400 mb-4">{error}</div>
+          
+          {/* Show different actions based on error type */}
+          {errorDetails?.action === 'add_first_item' ? (
+            <button
+              onClick={() => setShowQuickAdd(true)}
+              className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium flex items-center space-x-2 mx-auto shadow-lg"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Add Your First Investment</span>
+            </button>
+          ) : errorDetails?.action === 'refresh_session' ? (
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+            >
+              Refresh Page
+            </button>
+          ) : errorDetails?.action === 'verify_key' ? (
+            <div className="text-center">
+              <p className="text-sm text-gray-500 mb-3">Please verify your beta key is valid and active</p>
+              <button
+                onClick={retry}
+                className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={retry}
+              className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+            >
+              {errorDetails?.recoverable ? 'Retry' : 'Try Again'}
+            </button>
+          )}
+        </div>
       </div>
     );
   }

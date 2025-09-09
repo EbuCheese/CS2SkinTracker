@@ -23,7 +23,7 @@ const InvestmentsPage = ({ userSession }) => {
   const [deletedSoldItems, setDeletedSoldItems] = useState([]);
 
   // Investment data from hook
-  const { investments, soldItems, portfolioSummary, loading, error, refetch, setInvestments, setSoldItems } = usePortfolioData(userSession);
+  const { investments, soldItems, portfolioSummary, loading, error, errorDetails, refetch, retry, setInvestments, setSoldItems } = usePortfolioData(userSession);
 
   // Data filtering and search logic
   const { activeInvestments, groupedSoldItems, currentItems } = usePortfolioFiltering(
@@ -409,14 +409,6 @@ const handleAddItem = useCallback((newItem) => {
   }
 };
 
-  const retry = () => {
-    if (userSession?.id) {
-      refetch();
-    } else {
-      setError('No user session found. Please validate your beta key first.');
-    }
-  };
-
   // Loading state - show spinner while data is being fetched
   if (loading) {
     return (
@@ -433,15 +425,98 @@ const handleAddItem = useCallback((newItem) => {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-400 text-lg mb-2">Error</div>
-          <div className="text-gray-400 mb-4">{error}</div>
-          <button
-            onClick={retry}
-            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
-          >
-            Retry
-          </button>
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="text-red-400 text-lg mb-2">
+            {errorDetails?.type === 'NO_DATA' ? 'Getting Started' : 'Error'}
+          </div>
+          <div className="text-gray-400 mb-4 text-sm leading-relaxed">{error}</div>
+          
+          {/* Technical details for development */}
+          {process.env.NODE_ENV === 'development' && errorDetails?.technicalDetails && (
+            <details className="mb-4 text-xs text-gray-500 bg-gray-800/50 rounded p-2">
+              <summary className="cursor-pointer">Technical Details</summary>
+              <pre className="mt-2 text-left whitespace-pre-wrap break-all">
+                {errorDetails.technicalDetails}
+              </pre>
+            </details>
+          )}
+          
+          {/* Different action buttons based on error type */}
+          {errorDetails?.action === 'add_first_item' ? (
+            <button
+              onClick={handleShowAddForm}
+              className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium flex items-center space-x-2 mx-auto shadow-lg"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Add Your First Investment</span>
+            </button>
+          ) : errorDetails?.action === 'refresh_session' ? (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500">Your session has expired</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+              >
+                Refresh Page
+              </button>
+            </div>
+          ) : errorDetails?.action === 'verify_key' ? (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500">Please verify your beta key is valid and active</p>
+              <button
+                onClick={retry}
+                className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+              >
+                Verify & Retry
+              </button>
+            </div>
+          ) : errorDetails?.action === 'contact_support' ? (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500">This appears to be a data integrity issue</p>
+              <div className="flex space-x-2 justify-center">
+                <button
+                  onClick={retry}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  Try Again
+                </button>
+                <a
+                  href="mailto:support@ebucheese.com" 
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Contact Support
+                </a>
+              </div>
+            </div>
+          ) : errorDetails?.action === 'wait_retry' ? (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500">Rate limited - please wait a moment</p>
+              <button
+                onClick={retry}
+                className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors opacity-75 cursor-not-allowed"
+                disabled
+              >
+                Retrying automatically...
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={retry}
+              className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
+            >
+              {errorDetails?.recoverable !== false ? 'Retry' : 'Try Again'}
+            </button>
+          )}
+          
+          {/* Show refresh data button as fallback for some error types */}
+          {['AUTH_ERROR', 'NETWORK_ERROR', 'DATABASE_ERROR'].includes(errorDetails?.type) && (
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-2 px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors"
+            >
+              Refresh Page
+            </button>
+          )}
         </div>
       </div>
     );
