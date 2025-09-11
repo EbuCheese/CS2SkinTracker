@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Search, X, TrendingUp, TrendingDown, Loader2, Save, DollarSign, History } from 'lucide-react';
+import { Search, X, TrendingUp, TrendingDown, Loader2, Save, DollarSign, History, AlertTriangle } from 'lucide-react';
 import { useScrollLock } from '@/hooks/util';
 import { ImageWithLoading } from '@/components/ui';
 
@@ -25,41 +25,75 @@ const QuickSellModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Process investments - now leveraging the investment_summary view data
+  // Helper function to safely get current price with fallback
+  const getCurrentPrice = useCallback((item) => {
+    const price = item?.current_price;
+    return (price !== null && price !== undefined && !isNaN(price)) ? parseFloat(price) : null;
+  }, []);
+
+  const buildDisplayName = useCallback((item) => {
+  let displayName = '';
+  
+  // Add variant prefix
+  if (item.variant === 'souvenir') {
+    displayName += 'Souvenir ';
+  } else if (item.variant === 'stattrak') {
+    displayName += 'StatTrak™ ';
+  }
+  
+  // Add base name and skin name with pipe separator
+  if (item.skin_name) {
+    displayName += `${item.name || ''} | ${item.skin_name}`;
+  } else {
+    displayName += item.name;
+  }
+  
+  return displayName.trim();
+}, []);
+
+  // Process investments - now with null-safe price handling
   const availableItemsWithProfits = useMemo(() => {
     return investments
       .filter(item => item.quantity > 0)
       .map(item => {
-        // Use the pre-calculated unrealized_profit_loss from the view
-        const unrealizedPL = item.unrealized_profit_loss || 0;
+        const currentPrice = getCurrentPrice(item);
+        const buyPrice = parseFloat(item.buy_price) || 0;
         
-        // Calculate percentage based on current holdings investment
-        const currentInvestment = item.buy_price * item.quantity;
-        const unrealizedPercentage = currentInvestment > 0 ? 
-          ((unrealizedPL / currentInvestment) * 100) : 0;
+        // Calculate unrealized P&L only if we have valid price data
+        let unrealizedPL = 0;
+        let unrealizedPercentage = 0;
+        
+        if (currentPrice !== null) {
+          unrealizedPL = item.unrealized_profit_loss || ((currentPrice - buyPrice) * item.quantity);
+          const currentInvestment = buyPrice * item.quantity;
+          unrealizedPercentage = currentInvestment > 0 ? ((unrealizedPL / currentInvestment) * 100) : 0;
+        }
         
         // Calculate total profit/loss including realized gains
-        const totalPL = unrealizedPL + (item.realized_profit_loss || 0);
-        const totalInvestment = item.buy_price * (item.original_quantity || item.quantity);
-        const totalPercentage = totalInvestment > 0 ? 
-          ((totalPL / totalInvestment) * 100) : 0;
+        const realizedPL = parseFloat(item.realized_profit_loss) || 0;
+        const totalPL = unrealizedPL + realizedPL;
+        const totalInvestment = buyPrice * (item.original_quantity || item.quantity);
+        const totalPercentage = totalInvestment > 0 ? ((totalPL / totalInvestment) * 100) : 0;
         
         return {
           ...item,
+          currentPrice, // Store the safe current price
+          hasValidPrice: currentPrice !== null,
           unrealizedPL,
           unrealizedPercentage: Number(unrealizedPercentage.toFixed(1)),
           totalPL,
           totalPercentage: Number(totalPercentage.toFixed(1)),
-          // Add sales history indicator
           hasSalesHistory: (item.total_sold_quantity || 0) > 0,
-          averageSalePrice: item.average_sale_price || 0
+          averageSalePrice: parseFloat(item.average_sale_price) || 0
         };
       })
       .sort((a, b) => {
-        // Sort by total P&L percentage (best performers first)
+        // Sort items with valid prices first, then by total P&L percentage
+        if (a.hasValidPrice && !b.hasValidPrice) return -1;
+        if (!a.hasValidPrice && b.hasValidPrice) return 1;
         return b.totalPercentage - a.totalPercentage;
       });
-  }, [investments]);
+  }, [investments, getCurrentPrice]);
 
   // Filter items based on search query
   const filteredItems = useMemo(() => {
@@ -103,15 +137,23 @@ const QuickSellModal = ({
   useEffect(() => {
     if (selectedItem) {
       setSoldQuantity(Math.min(1, selectedItem.quantity));
-      // Always use current price as default, not historical average
-      setSoldPrice(selectedItem.current_price.toFixed(2));
+      // Use current price as default if available, otherwise leave empty for user input
+      if (selectedItem.hasValidPrice) {
+        setSoldPrice(selectedItem.currentPrice.toFixed(2));
+      } else {
+        setSoldPrice('');
+      }
     }
   }, [selectedItem]);
 
   const handleItemSelect = useCallback((item) => {
     setSelectedItem(item);
     setSoldQuantity(Math.min(1, item.quantity));
-    setSoldPrice(item.current_price.toFixed(2));
+    if (item.hasValidPrice) {
+      setSoldPrice(item.currentPrice.toFixed(2));
+    } else {
+      setSoldPrice('');
+    }
     setError('');
   }, []);
 
@@ -190,22 +232,23 @@ const QuickSellModal = ({
     }
   };
 
-  // Enhanced sale preview with more comprehensive data
+  // Enhanced sale preview with null-safe price handling
   const salePreview = useMemo(() => {
     if (!selectedItem || !soldPrice || !soldQuantity) return null;
     
     const pricePerUnit = parseFloat(soldPrice);
     const quantity = parseInt(soldQuantity);
+    const buyPrice = parseFloat(selectedItem.buy_price) || 0;
     
     if (isNaN(pricePerUnit) || isNaN(quantity)) return null;
     
     const totalSaleValue = pricePerUnit * quantity;
-    const profitLoss = (pricePerUnit - selectedItem.buy_price) * quantity;
-    const totalInvestment = selectedItem.buy_price * quantity;
+    const profitLoss = (pricePerUnit - buyPrice) * quantity;
+    const totalInvestment = buyPrice * quantity;
     const profitPercentage = totalInvestment > 0 ? ((profitLoss / totalInvestment) * 100) : 0;
     
-    // Compare with historical performance
-    const vsHistoricalAvg = selectedItem.hasSalesHistory 
+    // Compare with historical performance (only if available)
+    const vsHistoricalAvg = selectedItem.hasSalesHistory && selectedItem.averageSalePrice > 0
       ? pricePerUnit - selectedItem.averageSalePrice 
       : null;
     
@@ -277,15 +320,16 @@ const QuickSellModal = ({
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-white truncate">{item.name}</h3>
-                        {item.skin_name && (
-                          <p className="text-sm text-gray-400 truncate">{item.skin_name}</p>
-                        )}
+                        <h3 className="font-medium text-white truncate">{buildDisplayName(item)}</h3>
                         <div className="flex items-center space-x-2 mt-1">
-                          {item.condition && item.condition.toLowerCase() !== 'unknown' && (
-                            <span className="text-xs text-gray-400">{item.condition}</span>
-                          )}
-                          <span className="text-xs text-gray-400">Qty: {item.quantity}</span>
+                          <span className="text-xs text-gray-400">
+                            {item.condition && item.condition.toLowerCase() !== 'unknown' ? `${item.condition} ` : ''}
+                            
+                            {(item.condition && item.condition.toLowerCase() !== 'unknown') || 
+                            (item.variant === 'stattrak') || 
+                            (item.variant === 'souvenir') ? '• ' : ''}
+                            Qty: {item.quantity}
+                          </span>
                           {/* Sales history indicator */}
                           {item.hasSalesHistory && (
                             <div className="flex items-center space-x-1 text-xs text-blue-400">
@@ -298,20 +342,38 @@ const QuickSellModal = ({
 
                       <div className="text-right flex-shrink-0">
                         <div className="flex items-center space-x-2 mb-1">
-                          <div className="text-white font-medium">${item.current_price.toFixed(2)}</div>
-                          {/* Enhanced profit display showing total performance */}
-                          <div className={`text-xs flex items-center space-x-1 px-2 py-1 mt-1 rounded-full font-medium ${
-                            item.totalPL >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-                          }`}>
-                            {item.totalPL >= 0 ? 
-                              <TrendingUp className="w-3 h-3" /> : 
-                              <TrendingDown className="w-3 h-3" />
-                            }
-                            <span>{Math.abs(item.totalPercentage)}%</span>
+                          {/* Current price with null handling */}
+                          <div className="text-white font-medium">
+                            {item.hasValidPrice ? (
+                              `$${item.currentPrice.toFixed(2)}`
+                            ) : (
+                              <span className="text-gray-500 text-sm">No price data</span>
+                            )}
                           </div>
+                          
+                          {/* Profit display - only show if we have valid price data */}
+                          {item.hasValidPrice && (
+                            <div className={`text-xs flex items-center space-x-1 px-2 py-1 mt-1 rounded-full font-medium ${
+                              item.totalPL >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                            }`}>
+                              {item.totalPL >= 0 ? 
+                                <TrendingUp className="w-3 h-3" /> : 
+                                <TrendingDown className="w-3 h-3" />
+                              }
+                              <span>{Math.abs(item.totalPercentage)}%</span>
+                            </div>
+                          )}
+                          
+                          {/* Show warning icon for items without price data */}
+                          {!item.hasValidPrice && (
+                            <div className="flex items-center text-amber-400 mt-1">
+                              <AlertTriangle className="w-4 h-4" />
+                            </div>
+                          )}
                         </div>
+                        
                         {/* Show average sale price if available */}
-                        {item.hasSalesHistory && (
+                        {item.hasSalesHistory && item.averageSalePrice > 0 && (
                           <div className="text-xs text-gray-500">
                             Avg sale: ${item.averageSalePrice.toFixed(2)}
                           </div>
@@ -331,7 +393,7 @@ const QuickSellModal = ({
                 <span>← Back to search</span>
               </button>
 
-              {/* Enhanced item display with sales history */}
+              {/* Enhanced item display with null-safe price handling */}
               <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
                 <div className="flex items-center space-x-4">
                   <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
@@ -342,16 +404,13 @@ const QuickSellModal = ({
                     />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-medium text-white">{selectedItem.name}</h3>
-                    {selectedItem.skin_name && (
-                      <p className="text-sm text-gray-400">{selectedItem.skin_name}</p>
-                    )}
+                    <h3 className="font-medium text-white">{buildDisplayName(selectedItem)}</h3>
                     <div className="flex items-center space-x-3 mt-1 text-sm text-gray-400">
                       {selectedItem.condition && selectedItem.condition.toLowerCase() !== 'unknown' && (
                         <span>{selectedItem.condition}</span>
                       )}
                       <span>Available: {selectedItem.quantity}</span>
-                      {selectedItem.hasSalesHistory && (
+                      {selectedItem.hasSalesHistory && selectedItem.averageSalePrice > 0 && (
                         <span className="text-blue-400">
                           Previously sold {selectedItem.total_sold_quantity} @ avg ${selectedItem.averageSalePrice.toFixed(2)}
                         </span>
@@ -362,19 +421,32 @@ const QuickSellModal = ({
                     <div className="space-y-1">
                       <div>
                         <div className="text-xs text-gray-500">Current Price</div>
-                        <div className="text-white font-medium">${selectedItem.current_price.toFixed(2)}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500">Unreal P&L</div>
-                        <div className={`font-medium text-sm ${
-                          selectedItem.totalPL >= 0 ? 'text-green-400' : 'text-red-400'
-                        }`}>
-                          {selectedItem.totalPL >= 0 ? '+' : ''}${selectedItem.totalPL.toFixed(2)}
+                        <div className="text-white font-medium">
+                          {selectedItem.hasValidPrice ? (
+                            `$${selectedItem.currentPrice.toFixed(2)}`
+                          ) : (
+                            <span className="text-gray-500 text-sm flex items-center space-x-1">
+                              <AlertTriangle className="w-3 h-3 mt-0.5" />
+                              <span>No price data</span>
+                            </span>
+                          )}
                         </div>
                       </div>
+                      {selectedItem.hasValidPrice && (
+                        <div>
+                          <div className="text-xs text-gray-500">Unreal P&L</div>
+                          <div className={`font-medium text-sm ${
+                            selectedItem.totalPL >= 0 ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {selectedItem.totalPL >= 0 ? '+' : ''}${selectedItem.totalPL.toFixed(2)}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
+                
+                
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -395,7 +467,7 @@ const QuickSellModal = ({
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Sale price per item ($)
-                    {selectedItem.hasSalesHistory && (
+                    {selectedItem.hasSalesHistory && selectedItem.averageSalePrice > 0 && (
                       <span className="text-xs text-blue-400 ml-1">
                         (historical avg: ${selectedItem.averageSalePrice.toFixed(2)})
                       </span>
@@ -407,18 +479,21 @@ const QuickSellModal = ({
                     min="0.01"
                     value={soldPrice}
                     onChange={handlePriceChange}
+                    placeholder={selectedItem.hasValidPrice ? "" : "Enter sale price"}
                     className="w-full px-3 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-orange-500 focus:outline-none transition-colors duration-200"
                   />
                 </div>
               </div>
 
-              {/* Enhanced sale preview */}
+              {/* Enhanced sale preview with null-safe handling */}
               {salePreview && (
                 <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
                   <div className="grid grid-cols-3 gap-4 text-sm">
                     <div>
                       <span className="text-gray-400 block">Buy Price (each)</span>
-                      <span className="text-white font-medium">${selectedItem.buy_price.toFixed(2)}</span>
+                      <span className="text-white font-medium">
+                        ${(parseFloat(selectedItem.buy_price) || 0).toFixed(2)}
+                      </span>
                     </div>
                     <div>
                       <span className="text-gray-400 block">Sale Price (each)</span>
@@ -427,9 +502,10 @@ const QuickSellModal = ({
                     <div>
                       <span className="text-gray-400 block">Profit per Item</span>
                       <span className={`font-medium ${
-                        (parseFloat(soldPrice) - selectedItem.buy_price) >= 0 ? 'text-green-400' : 'text-red-400'
+                        (parseFloat(soldPrice) - (parseFloat(selectedItem.buy_price) || 0)) >= 0 ? 'text-green-400' : 'text-red-400'
                       }`}>
-                        {(parseFloat(soldPrice) - selectedItem.buy_price) >= 0 ? '+' : '-'}${Math.abs(parseFloat(soldPrice) - selectedItem.buy_price).toFixed(2)}
+                        {(parseFloat(soldPrice) - (parseFloat(selectedItem.buy_price) || 0)) >= 0 ? '+' : '-'}
+                        ${Math.abs(parseFloat(soldPrice) - (parseFloat(selectedItem.buy_price) || 0)).toFixed(2)}
                       </span>
                     </div>
                   </div>
