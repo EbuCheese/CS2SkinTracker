@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { TrendingUp, TrendingDown, Minus, Plus, Loader2, Edit2, Save, X } from 'lucide-react';
+import { TrendingUp, TrendingDown, Loader2, Edit2, Save, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 import { PopupManager } from '@/components/ui';
 import { useScrollLock } from '@/hooks/util';
@@ -902,7 +902,15 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                   </div>
                   <div>
                     <div className="text-gray-400 mb-0.5">Current:</div>
-                    <div className="text-white">${baseMetrics.currentPrice.toFixed(2)}</div>
+                    <div className="text-white">
+                      {(item.current_price !== null && item.current_price !== undefined && !isNaN(item.current_price)) 
+                        ? `$${baseMetrics.currentPrice.toFixed(2)}` 
+                        : <span className="text-gray-500 text-sm flex items-center space-x-1">
+                            <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                            <span>No data</span>
+                          </span>
+                      }
+                    </div>
                   </div>
                 </div>
               </div>
