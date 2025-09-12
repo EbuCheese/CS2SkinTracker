@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Activity, Plus, DollarSign } from 'lucide-react';
 import { ImageWithLoading } from '@/components/ui';
+import { useItemFormatting } from '@/hooks/util';
 
 const RecentActivity = ({ recentActivity, formatPrice }) => {
   const [visibleItemsWithoutScroll, setVisibleItemsWithoutScroll] = useState(3);
   const containerRef = useRef(null);
   const headerRef = useRef(null);
+
+  const { displayName, simpleDisplayName, subtitle } = useItemFormatting();
 
   // Calculate how many items would fit without scrolling (for optimistic display)
   const calculateVisibleItems = useCallback(() => {
@@ -42,35 +45,21 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
 
   // Memoize activity processing - process all 12 items for scrolling
   const processedActivities = useMemo(() => {
-    return recentActivity.map(activity => {
-      const condition = activity.item_condition || activity.condition;
-      const variant = activity.item_variant || activity.variant;
-      const quantity = activity.quantity_sold || activity.quantity || 1;
-      
-      const conditionText = condition && condition.toLowerCase() !== 'unknown' && condition.toLowerCase() !== ''
-        ? condition
-        : '';
-      
-      const variantText = variant && variant.toLowerCase() !== 'normal'
-        ? ` (${variant.toLowerCase() === 'stattrak' ? 'ST' : 
-              variant.toLowerCase() === 'souvenir' ? 'SV' : 
-              variant})`
-        : '';
-      
-      const parts = [];
-      if (conditionText) {
-        parts.push(`${conditionText}${variantText}`);
-      } else if (variantText) {
-        parts.push(variantText.trim());
-      }
-      parts.push(`Qty: ${quantity}`);
-      
-      return {
-        ...activity,
-        processedSubtitle: parts.join(' • ')
-      };
-    });
-  }, [recentActivity]);
+  return recentActivity.map(activity => ({
+    ...activity,
+    // Fix: Use the hook's subtitle function properly with correct field mapping
+    processedSubtitle: subtitle(activity, { 
+      quantityField: 'quantity_sold', // This field might not exist
+      conditionField: 'condition',     // Make sure this maps correctly
+      showQuantity: true
+    }),
+    // Fix: Use displayName from hook instead of building it manually
+    displayTitle: displayName(activity)
+  }));
+}, [recentActivity, subtitle, displayName]);
+
+// Debug: Add this to see what fields your activity objects actually have
+console.log('Activity object fields:', recentActivity[0] && Object.keys(recentActivity[0]));
 
   // Determine if we need scrolling based on optimistic calculation
   const needsScrolling = recentActivity.length > visibleItemsWithoutScroll;
@@ -147,7 +136,7 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
                       
                       <div className="min-w-0 flex-1">
                         <h3 className="font-medium text-white truncate text-base">
-                          {activity.title}
+                          {activity.displayTitle}
                         </h3>
                         {activity.processedSubtitle && (
                           <p className="text-gray-400 truncate text-sm">

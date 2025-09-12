@@ -1,11 +1,14 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { TrendingUp, TrendingDown, ListFilterPlus, ListFilter, ChartNoAxesColumn} from 'lucide-react';
 import { ImageWithLoading } from '@/components/ui';
+import { useItemFormatting } from '@/hooks/util';
 
 // Memoized sub-component for individual investment items
 const InvestmentItem = React.memo(({ 
   investment, 
-  formatPrice, 
+  formatPrice,
+  displayName,
+  subtitle
 }) => {
   return (
     <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-colors duration-200">
@@ -15,7 +18,7 @@ const InvestmentItem = React.memo(({
         <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 relative">
           <ImageWithLoading
             src={investment.image_url}
-            alt={`${investment.name} | ${investment.skin_name}`}
+            alt={displayName(investment)}
             customFallback={
               <span className="text-xs font-medium text-white">
                 {investment.name.substring(0, 2).toUpperCase()}
@@ -28,14 +31,11 @@ const InvestmentItem = React.memo(({
         <div className="min-w-0 flex-1">
           {/* Item name with optional skin name */}
           <h3 className="font-medium text-white truncate">
-            {investment.name}{investment.skin_name && ` (${investment.skin_name})`}
+            {displayName(investment)}
           </h3>
           {/* Condition, variant, and quantity information */}
           <p className="text-sm text-gray-400">
-            {investment.condition && investment.condition.toLowerCase() !== 'unknown' 
-              ? `${investment.condition}${investment.variant && investment.variant.toLowerCase() !== 'normal' ? ` (${investment.variant === 'stattrak' ? 'ST' : investment.variant === 'souvenir' ? 'SV' : investment.variant})` : ''} • Qty: ${investment.quantity}`
-              : `Qty: ${investment.quantity}`
-            }
+            {subtitle(investment)}
           </p>
         </div>
       </div>
@@ -150,6 +150,8 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
   const [showAll, setShowAll] = useState(false); // toggle state for top 10 vs all items
   const [sortOrder, setSortOrder] = useState('most'); // state for sorting by 'most' or 'least'
   
+  const { displayName, subtitle } = useItemFormatting();
+
   // Configuration constants
   const itemsPerPage = 5;
   const maxItemsToShow = showAll ? investments.length : 10;
@@ -329,6 +331,8 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
                   key={investment.id}
                   investment={investment}
                   formatPrice={formatPrice}
+                  displayName={displayName}
+                  subtitle={subtitle}
                 />
               ))}
             </div>

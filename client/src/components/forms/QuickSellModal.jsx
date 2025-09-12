@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, X, TrendingUp, TrendingDown, Loader2, Save, DollarSign, History, AlertTriangle } from 'lucide-react';
-import { useScrollLock } from '@/hooks/util';
+import { useScrollLock, useItemFormatting } from '@/hooks/util';
+import { useItemSearch } from '@/hooks/portfolio';
 import { ImageWithLoading } from '@/components/ui';
 
 const QuickSellModal = ({ 
@@ -25,31 +26,13 @@ const QuickSellModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const { displayName, subtitle } = useItemFormatting();
+
   // Helper function to safely get current price with fallback
   const getCurrentPrice = useCallback((item) => {
     const price = item?.current_price;
     return (price !== null && price !== undefined && !isNaN(price)) ? parseFloat(price) : null;
   }, []);
-
-  const buildDisplayName = useCallback((item) => {
-  let displayName = '';
-  
-  // Add variant prefix
-  if (item.variant === 'souvenir') {
-    displayName += 'Souvenir ';
-  } else if (item.variant === 'stattrak') {
-    displayName += 'StatTrak™ ';
-  }
-  
-  // Add base name and skin name with pipe separator
-  if (item.skin_name) {
-    displayName += `${item.name || ''} | ${item.skin_name}`;
-  } else {
-    displayName += item.name;
-  }
-  
-  return displayName.trim();
-}, []);
 
   // Process investments - now with null-safe price handling
   const availableItemsWithProfits = useMemo(() => {
@@ -95,22 +78,8 @@ const QuickSellModal = ({
       });
   }, [investments, getCurrentPrice]);
 
-  // Filter items based on search query
-  const filteredItems = useMemo(() => {
-    if (!searchQuery) return availableItemsWithProfits;
-    
-    const query = searchQuery.toLowerCase();
-    return availableItemsWithProfits.filter(item => {
-      const searchableText = [
-        item.name || '',
-        item.skin_name || '',
-        item.condition || '',
-        item.type || ''
-      ].join(' ').toLowerCase();
-      
-      return searchableText.includes(query);
-    });
-  }, [availableItemsWithProfits, searchQuery]);
+  // Use the new useItemSearch hook instead of manual filtering
+  const { filteredItems, hasActiveSearch } = useItemSearch(availableItemsWithProfits, searchQuery);
 
   // Event handlers (keeping your existing logic)
   const handleEscapeKey = useCallback((event) => {
@@ -232,7 +201,7 @@ const QuickSellModal = ({
     }
   };
 
-  // Enhanced sale preview with null-safe price handling
+  // Enhanced sale preview with null-safe handling
   const salePreview = useMemo(() => {
     if (!selectedItem || !soldPrice || !soldQuantity) return null;
     
@@ -290,18 +259,34 @@ const QuickSellModal = ({
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
-                  placeholder="Search items to sell..."
+                  placeholder="Search items to sell... (try weapon names, skins, conditions)"
                   value={searchQuery}
                   onChange={handleSearchChange}
                   className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors duration-200"
                 />
+                {/* Optional: Show search status */}
+                {hasActiveSearch && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-500">
+                    {filteredItems.length} results
+                  </div>
+                )}
               </div>
 
               <div className="space-y-3">
                 {filteredItems.length === 0 ? (
                   <div className="text-center py-12 text-gray-400">
                     <div className="bg-gray-800/50 rounded-lg p-8 border border-gray-700">
-                      {searchQuery ? 'No items found matching your search' : 'No items available to sell'}
+                      {hasActiveSearch ? (
+                        <>
+                          <div className="text-lg mb-2">No items found matching your search</div>
+                          <div className="text-sm text-gray-500">
+                            Try searching for weapon names (AK-47, AWP), skin names (Asiimov, Redline), 
+                            conditions (FN, MW, FT), or abbreviations (ST for StatTrak)
+                          </div>
+                        </>
+                      ) : (
+                        'No items available to sell'
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -320,15 +305,10 @@ const QuickSellModal = ({
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-white truncate">{buildDisplayName(item)}</h3>
+                        <h3 className="font-medium text-white truncate">{displayName(item)}</h3>
                         <div className="flex items-center space-x-2 mt-1">
                           <span className="text-xs text-gray-400">
-                            {item.condition && item.condition.toLowerCase() !== 'unknown' ? `${item.condition} ` : ''}
-                            
-                            {(item.condition && item.condition.toLowerCase() !== 'unknown') || 
-                            (item.variant === 'stattrak') || 
-                            (item.variant === 'souvenir') ? '• ' : ''}
-                            Qty: {item.quantity}
+                            {subtitle(item)}
                           </span>
                           {/* Sales history indicator */}
                           {item.hasSalesHistory && (
@@ -404,11 +384,9 @@ const QuickSellModal = ({
                     />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-medium text-white">{buildDisplayName(selectedItem)}</h3>
+                    <h3 className="font-medium text-white truncate">{displayName(selectedItem)}</h3>
                     <div className="flex items-center space-x-3 mt-1 text-sm text-gray-400">
-                      {selectedItem.condition && selectedItem.condition.toLowerCase() !== 'unknown' && (
-                        <span>{selectedItem.condition}</span>
-                      )}
+                      <span>{subtitle(selectedItem, { showQuantity: false })}</span>
                       <span>Available: {selectedItem.quantity}</span>
                       {selectedItem.hasSalesHistory && selectedItem.averageSalePrice > 0 && (
                         <span className="text-blue-400">

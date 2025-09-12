@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip} from 'recharts';
 import { ChartPie, Table, List } from 'lucide-react';
+import { useItemSearch } from '@/hooks/portfolio';
 
 // color palette  constant
 const COLOR_PALETTES = {
@@ -99,25 +100,14 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
 
   // Search states
   const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
 
   // Reset UI state when switching between major view modes
   useEffect(() => {
     setSelectedSlice(null);
     setStickyTooltip(null);
+    setSearchTerm(''); // Clear search when switching modes
   }, [activeToggle, viewMode, showSmallSlices]);
 
-  // Debounce search input to improve performance
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-    }, 300);
-    
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
-
-  // Color palettes for different visualization modes
-  const colors = COLOR_PALETTES;
 
   // Item name consolidation logic for grouping similar items
   const actualPortfolio = portfolioHealth;
@@ -126,25 +116,84 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   const consolidatedBreakdown = actualPortfolio.weaponBreakdown || [];
 
   // Main data processing pipeline with search filtering and small slice handling
-  const processedData = useMemo(() => {
-  // Select and filter data in one step
-  const rawData = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown;
-  const filteredData = rawData.filter(item =>
-    item.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
-  );
+  // Get raw items for search hook
+const rawItemsForSearch = useMemo(() => {
+  if (activeToggle === 'item') {
+    // Flatten all items from consolidatedBreakdown for searching
+    return consolidatedBreakdown.flatMap(category => 
+      (category.items || actualPortfolio.detailedItems?.[category.name] || [])
+        .map(item => ({
+          ...item,
+          categoryName: category.name,
+          categoryValue: category.value,
+          categoryPercentage: category.percentage,
+          categoryCount: category.count
+        }))
+    );
+  }
+  return actualPortfolio.typeBreakdown || [];
+}, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, actualPortfolio.detailedItems]);
 
-  // Early return for non-chart views or non-item views
+// Use the search hook
+const { filteredItems: searchFilteredItems, hasActiveSearch } = useItemSearch(rawItemsForSearch, searchTerm);
+
+// Main data processing pipeline with search filtering and small slice handling
+const processedData = useMemo(() => {
+  let baseData;
+  
+  if (activeToggle === 'item') {
+    if (hasActiveSearch) {
+      // Group filtered individual items back into categories
+      const categoryGroups = new Map();
+      
+      searchFilteredItems.forEach(item => {
+        const categoryName = item.categoryName;
+        if (!categoryGroups.has(categoryName)) {
+          categoryGroups.set(categoryName, {
+            name: categoryName,
+            items: [],
+            value: 0,
+            count: 0
+          });
+        }
+        
+        const category = categoryGroups.get(categoryName);
+        category.items.push(item);
+        category.value += (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
+        category.count += parseInt(item.quantity || 0);
+      });
+      
+      // Calculate percentages
+      const totalValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
+                        consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 0;
+      
+      baseData = Array.from(categoryGroups.values()).map(category => ({
+        ...category,
+        percentage: totalValue > 0 ? ((category.value / totalValue) * 100) : 0
+      }));
+    } else {
+      baseData = consolidatedBreakdown;
+    }
+  } else {
+    baseData = hasActiveSearch ? searchFilteredItems : actualPortfolio.typeBreakdown;
+  }
+
+  // Early return for non-chart views
   if (viewMode !== 'chart' || activeToggle !== 'item') {
-    return filteredData.sort((a, b) => b.percentage - a.percentage);
+    return baseData.sort((a, b) => b.percentage - a.percentage);
   }
 
   // Enhanced data with items - only for item view in chart mode
-  const enhancedData = filteredData.map(item => ({
+  const enhancedData = baseData.map(item => ({
     ...item,
     items: item.items || (actualPortfolio.detailedItems?.[item.name]) || []
   }));
 
-  // Small slice grouping - only when needed
+  // Small slice grouping - only when needed and not searching
+  if (hasActiveSearch) {
+    return enhancedData.sort((a, b) => b.percentage - a.percentage);
+  }
+
   const threshold = 2;
   const largeSlices = [];
   const smallSlices = [];
@@ -183,19 +232,54 @@ const PortfolioHealthPieChart = ({ portfolioHealth }) => {
   }
 
   return largeSlices.sort((a, b) => b.percentage - a.percentage);
-}, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, actualPortfolio.detailedItems, showSmallSlices, debouncedSearchTerm, viewMode]);
+}, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, actualPortfolio.detailedItems, showSmallSlices, searchFilteredItems, hasActiveSearch, viewMode]);
 
   // Table-specific data processing
   const tableData = useMemo(() => {
-  // Reuse processedData if it's already filtered and doesn't need small slice handling
-  if (viewMode === 'table') {
-    const rawData = activeToggle === 'item' ? consolidatedBreakdown : actualPortfolio.typeBreakdown;
-    return rawData
-      .filter(item => item.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()))
-      .sort((a, b) => b.percentage - a.percentage);
-  }
-  return processedData; // Reuse for chart view
-}, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, debouncedSearchTerm, viewMode, processedData]);
+    if (viewMode === 'table') {
+      let baseData;
+      
+      if (activeToggle === 'item') {
+        if (hasActiveSearch) {
+          // Group filtered individual items back into categories for table
+          const categoryGroups = new Map();
+          
+          searchFilteredItems.forEach(item => {
+            const categoryName = item.categoryName;
+            if (!categoryGroups.has(categoryName)) {
+              categoryGroups.set(categoryName, {
+                name: categoryName,
+                items: [],
+                value: 0,
+                count: 0
+              });
+            }
+            
+            const category = categoryGroups.get(categoryName);
+            category.items.push(item);
+            category.value += (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
+            category.count += parseInt(item.quantity || 0);
+          });
+          
+          // Calculate percentages
+          const totalValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
+                            consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 0;
+          
+          baseData = Array.from(categoryGroups.values()).map(category => ({
+            ...category,
+            percentage: totalValue > 0 ? ((category.value / totalValue) * 100) : 0
+          }));
+        } else {
+          baseData = consolidatedBreakdown;
+        }
+      } else {
+        baseData = hasActiveSearch ? searchFilteredItems : actualPortfolio.typeBreakdown;
+      }
+      
+      return baseData.sort((a, b) => b.percentage - a.percentage);
+    }
+    return processedData;
+  }, [activeToggle, consolidatedBreakdown, actualPortfolio.typeBreakdown, searchFilteredItems, hasActiveSearch, viewMode, processedData]);
 
 
 
@@ -796,7 +880,7 @@ const StickyTooltip = React.memo(() => {
         <div className="flex-1 max-w-xs">
           <input
             type="text"
-            placeholder={`Search ${activeToggle}s...`}
+            placeholder={hasActiveSearch ? `Searching ${activeToggle}s...` : `Search ${activeToggle}s...`}
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
@@ -961,8 +1045,8 @@ const StickyTooltip = React.memo(() => {
                 </div>
                 <h4 className="text-xl font-medium text-gray-400 mb-2">No {activeToggle === 'item' ? 'Items' : 'Types'} Found</h4>
                 <p className="text-gray-500 max-w-md">
-                  {debouncedSearchTerm
-                    ? `No ${activeToggle}s match your search "${debouncedSearchTerm}"`
+                  {hasActiveSearch
+                    ? `No ${activeToggle}s match your search "${searchTerm}"`
                     : `${activeToggle === 'item' ? 'Item' : 'Type'} distribution list will appear here when you add investments.`
                   }
                 </p>
