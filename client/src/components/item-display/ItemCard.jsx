@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { TrendingUp, TrendingDown, Loader2, Edit2, Save, AlertTriangle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Loader2, Edit2, Save, AlertTriangle, Info } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 import { PopupManager } from '@/components/ui';
 import { useScrollLock } from '@/hooks/util';
@@ -43,6 +43,14 @@ const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, 
   // Edit form states
   const [editForm, setEditForm] = useState(null);
   const [soldEditForm, setSoldEditForm] = useState(null);
+
+  // Price Override Management
+  const [priceOverrideMode, setPriceOverrideMode] = useState(
+  item.price_source === 'manual' ? 'custom' : 'marketplace'
+  );
+  const [customPrice, setCustomPrice] = useState(
+    item.market_price_override || item.current_price || 0
+  );
 
   // Consolidated popup state management - handles all modal dialogs
   const [popup, setPopup] = useState({
@@ -227,6 +235,101 @@ const displayValues = useMemo(() => ({
 // destructured
 const { name, skinName, condition, variant } = displayValues;
 
+// Marketplace display name helper
+const getMarketplaceDisplayName = (priceSource) => {
+  const marketplaceNames = {
+    'buff163': 'Buff163 Price Data',
+    'steam': 'Steam Price Data',
+    'skinport': 'Skinport Price Data',
+    'csfloat': 'CSFloat Price Data',
+    'manual': 'Custom Price Override',
+    'none': 'No Price Data'
+  };
+  return marketplaceNames[priceSource] || 'Unknown Price Source';
+};
+
+// helper to detect item with bid only pricing
+const isBidOnlyPrice = () => {
+  // Early return if no price data available
+  if (!item.available_prices || !item.price_source) return false;
+  
+  try {
+    const prices = typeof item.available_prices === 'string' 
+      ? JSON.parse(item.available_prices) 
+      : item.available_prices;
+    
+    if (!Array.isArray(prices) || prices.length === 0) return false;
+    
+    const currentMarketplace = item.price_source;
+    
+    // Skip bid detection for manual pricing
+    if (currentMarketplace === 'manual') return false;
+    
+    const currentPriceData = prices.find(p => p.marketplace === currentMarketplace);
+    
+    // Check for bid-only indicators in the available price data
+    return currentPriceData?.is_bid_price === true;
+  } catch (e) {
+    console.error('Error parsing available_prices:', e);
+    return false;
+  }
+};
+
+
+// price override handler
+const handlePriceOverrideSubmit = async () => {
+  try {
+    if (priceOverrideMode === 'custom') {
+      const price = parseFloat(customPrice);
+      if (isNaN(price) || price <= 0) {
+        toast.error('Please enter a valid custom price greater than 0');
+        return;
+      }
+      
+      const { error } = await supabase.rpc('set_investment_price_override', {
+        p_investment_id: item.id,
+        p_user_id: userSession.id,
+        p_override_price: price,
+        p_use_override: true
+      });
+      
+      if (error) throw error;
+      
+      const updatedItem = {
+        ...item,
+        market_price_override: price,
+        use_override: true,
+        current_price: price,
+        price_source: 'manual' // NEW: Update price_source to manual
+      };
+      
+      onUpdate(item.id, updatedItem);
+      toast.success(item.price_source === 'manual' ? 'Custom price updated successfully' : 'Custom price set successfully');
+      
+    } else {
+      // Switch back to marketplace data
+      const { error } = await supabase.rpc('set_investment_price_override', {
+        p_investment_id: item.id,
+        p_user_id: userSession.id,
+        p_override_price: null,
+        p_use_override: false
+      });
+      
+      if (error) throw error;
+      
+      // We need to refetch the item to get the correct marketplace price_source
+      // since we don't know what it will revert to
+      onRefresh?.(); // Trigger a data refresh to get updated price_source
+      
+      toast.success('Switched back to marketplace pricing');
+    }
+  } catch (err) {
+    console.error('Error updating price override:', err);
+    toast.error(getErrorMessage(err));
+  }
+};
+
+
 // With this comprehensive version that handles all item types:
 const buildItemDisplayName = () => {
   let displayName = '';
@@ -331,6 +434,19 @@ const handleRevertSale = useCallback(async () => {
     cancelText: 'Cancel'
   });
 }, [isSoldItem, item.quantity_sold, item.total_sale_value, fullItemName, handleAsyncOperation, showPopup]);
+
+  // Add this near the top of your component for debugging
+useEffect(() => {
+  console.log('Item data:', {
+    id: item.id,
+    name: item.name,
+    price_source: item.price_source,
+    available_prices: item.available_prices,
+    current_price: item.current_price,
+    use_override: item.use_override,
+    market_price_override: item.market_price_override
+  });
+}, [item]);
 
   // Handle slide-in animation for newly added items
   useEffect(() => {
@@ -901,17 +1017,39 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                     </div>
                   </div>
                   <div>
-                    <div className="text-gray-400 mb-0.5">Current:</div>
-                    <div className="text-white">
-                      {(item.current_price !== null && item.current_price !== undefined && !isNaN(item.current_price)) 
-                        ? `$${baseMetrics.currentPrice.toFixed(2)}` 
-                        : <span className="text-gray-500 text-sm flex items-center space-x-1">
-                            <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                            <span>No data</span>
-                          </span>
-                      }
-                    </div>
-                  </div>
+  <div className="text-gray-400 mb-0.5">Current:</div>
+  <div className="text-white">
+    {(item.current_price !== null && item.current_price !== undefined && !isNaN(item.current_price)) 
+      ? <div className="flex items-center space-x-1">
+          <span>${baseMetrics.currentPrice.toFixed(2)}</span>
+          {/* NEW: Manual price icon */}
+          {item.price_source === 'manual' && (
+            <div className="relative group">
+              <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                Custom price override
+              </div>
+            </div>
+          )}
+          {/* UPDATED: Bid price icon - only show for non-manual prices */}
+          {item.price_source !== 'manual' && isBidOnlyPrice() && (
+            <div className="relative group">
+              <AlertTriangle className="w-3 h-3 text-yellow-400" />
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                Bid-only price (buy order)
+              </div>
+            </div>
+          )}
+        </div>
+      : <span className="text-gray-500 text-sm flex items-center space-x-1">
+          <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+          <span>No data</span>
+        </span>
+    }
+  </div>
+</div>
                 </div>
               </div>
 
@@ -1137,6 +1275,73 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                     onChange={(e) => handleEditFormChange('buy_price', e.target.value)}
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Current Price Source
+                  </label>
+                  <select
+                    value={priceOverrideMode}
+                    onChange={(e) => {
+                      setPriceOverrideMode(e.target.value);
+                      if (e.target.value === 'marketplace') {
+                        // When switching back to marketplace, use a fallback price
+                        const fallbackPrice = item.use_override ? 0 : (item.current_price || 0);
+                        setCustomPrice(fallbackPrice);
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none mb-2"
+                  >
+                    <option value="marketplace">
+                      {/* Fixed: Check if price_source exists before using it */}
+                      {item.price_source === 'manual' 
+                        ? 'Switch to Marketplace Data'
+                        : getMarketplaceDisplayName(item.price_source || 'none')
+                      }
+                    </option>
+                    <option value="custom">Custom Price Override</option>
+                  </select>
+  
+                  {priceOverrideMode === 'custom' && (
+                    <div>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        value={customPrice}
+                        onChange={(e) => setCustomPrice(e.target.value)}
+                        placeholder="Enter custom price"
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                      />
+                      <button
+                        onClick={handlePriceOverrideSubmit}
+                        className="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
+                      >
+                        {item.price_source === 'manual' ? 'Update Custom Price' : 'Apply Custom Price'}
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* NEW: Updated condition for showing marketplace switch button */}
+                  {priceOverrideMode === 'marketplace' && item.price_source === 'manual' && (
+                    <button
+                      onClick={handlePriceOverrideSubmit}
+                      className="mt-2 px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-xs rounded transition-colors"
+                    >
+                      Switch to Marketplace Data
+                    </button>
+                  )}
+                  
+                  <div className="mt-2 text-xs text-gray-400">
+                    Current: ${(item.current_price || 0).toFixed(2)}
+                    {/* NEW: Show appropriate status indicator */}
+                    {item.price_source === 'manual' && (
+                      <span className="text-blue-400 ml-2">📝 Custom price</span>
+                    )}
+                    {item.price_source !== 'manual' && isBidOnlyPrice() && (
+                      <span className="text-yellow-400 ml-2">⚠ Bid-only price</span>
+                    )}
+                  </div>
                 </div>
               </div>
               
