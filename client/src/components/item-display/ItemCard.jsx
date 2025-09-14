@@ -44,14 +44,6 @@ const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, 
   const [editForm, setEditForm] = useState(null);
   const [soldEditForm, setSoldEditForm] = useState(null);
 
-  // Price Override Management
-  const [priceOverrideMode, setPriceOverrideMode] = useState(
-  item.price_source === 'manual' ? 'custom' : 'marketplace'
-  );
-  const [customPrice, setCustomPrice] = useState(
-    item.market_price_override || item.current_price || 0
-  );
-
   // Consolidated popup state management - handles all modal dialogs
   const [popup, setPopup] = useState({
     isOpen: false,
@@ -276,59 +268,26 @@ const isBidOnlyPrice = () => {
 };
 
 
-// price override handler
-const handlePriceOverrideSubmit = async () => {
+// helper to get all available marketplaces for item
+const getAvailableMarketplaces = () => {
+  if (!item.available_prices) return [];
+  
   try {
-    if (priceOverrideMode === 'custom') {
-      const price = parseFloat(customPrice);
-      if (isNaN(price) || price <= 0) {
-        toast.error('Please enter a valid custom price greater than 0');
-        return;
-      }
-      
-      const { error } = await supabase.rpc('set_investment_price_override', {
-        p_investment_id: item.id,
-        p_user_id: userSession.id,
-        p_override_price: price,
-        p_use_override: true
-      });
-      
-      if (error) throw error;
-      
-      const updatedItem = {
-        ...item,
-        market_price_override: price,
-        use_override: true,
-        current_price: price,
-        price_source: 'manual' // NEW: Update price_source to manual
-      };
-      
-      onUpdate(item.id, updatedItem);
-      toast.success(item.price_source === 'manual' ? 'Custom price updated successfully' : 'Custom price set successfully');
-      
-    } else {
-      // Switch back to marketplace data
-      const { error } = await supabase.rpc('set_investment_price_override', {
-        p_investment_id: item.id,
-        p_user_id: userSession.id,
-        p_override_price: null,
-        p_use_override: false
-      });
-      
-      if (error) throw error;
-      
-      // We need to refetch the item to get the correct marketplace price_source
-      // since we don't know what it will revert to
-      onRefresh?.(); // Trigger a data refresh to get updated price_source
-      
-      toast.success('Switched back to marketplace pricing');
-    }
-  } catch (err) {
-    console.error('Error updating price override:', err);
-    toast.error(getErrorMessage(err));
+    const prices = typeof item.available_prices === 'string' 
+      ? JSON.parse(item.available_prices) 
+      : item.available_prices;
+    
+    return prices.map(p => ({
+      marketplace: p.marketplace,
+      price: p.price,
+      last_updated: p.last_updated,
+      is_bid_price: p.is_bid_price
+    }));
+  } catch (e) {
+    console.error('Error parsing available prices:', e);
+    return [];
   }
 };
-
 
 // With this comprehensive version that handles all item types:
 const buildItemDisplayName = () => {
@@ -376,7 +335,6 @@ const validateSaleInput = useCallback((price, quantity) => {
 // Handles different field names between sold items and active investments
 const getEditFormDefaults = useCallback(() => {
   if (isSoldItem) {
-    // Only include editable fields for sold items
     return {
       quantity_sold: item.quantity_sold || 1,
       price_per_unit: item.price_per_unit || 0,
@@ -384,16 +342,22 @@ const getEditFormDefaults = useCallback(() => {
     };
   }
   
-  // All fields editable for active investments
+  // Use the actual marketplace being used, not "global"
+  const currentPriceSource = item.price_source === 'manual' ? 'manual' : 
+    (item.preferred_marketplace_override || item.price_source || 'csfloat');
+  
   return {
     condition: displayValues.condition || '',
     variant: displayValues.variant || 'normal',
     quantity: item.quantity || 1,
     buy_price: item.buy_price || 0,
-    notes: item.notes || ''
+    notes: item.notes || '',
+    price_source: currentPriceSource,
+    manual_price: item.market_price_override || item.current_price || 0
   };
 }, [isSoldItem, displayValues.condition, displayValues.variant, 
-    item.quantity_sold, item.price_per_unit, item.quantity, item.buy_price, item.notes]);
+    item.quantity_sold, item.price_per_unit, item.quantity, item.buy_price, item.notes,
+    item.price_source, item.preferred_marketplace_override, item.market_price_override, item.current_price]);
 
 // Initialize edit form and open edit mode
 const handleStartEdit = useCallback(() => {
@@ -434,19 +398,6 @@ const handleRevertSale = useCallback(async () => {
     cancelText: 'Cancel'
   });
 }, [isSoldItem, item.quantity_sold, item.total_sale_value, fullItemName, handleAsyncOperation, showPopup]);
-
-  // Add this near the top of your component for debugging
-useEffect(() => {
-  console.log('Item data:', {
-    id: item.id,
-    name: item.name,
-    price_source: item.price_source,
-    available_prices: item.available_prices,
-    current_price: item.current_price,
-    use_override: item.use_override,
-    market_price_override: item.market_price_override
-  });
-}, [item]);
 
   // Handle slide-in animation for newly added items
   useEffect(() => {
@@ -701,6 +652,53 @@ const handleEditFormSubmit = useCallback(async () => {
       throw new Error('Buy price must be greater than 0');
     }
 
+    // Handle price source changes
+    if (editForm.price_source === 'manual') {
+      // Manual price logic remains the same
+      const manualPriceValue = parseFloat(editForm.manual_price);
+      if (isNaN(manualPriceValue) || manualPriceValue <= 0) {
+        throw new Error('Manual price must be greater than 0');
+      }
+      
+      const { error: priceError } = await supabase.rpc('set_investment_price_override', {
+        p_investment_id: item.id,
+        p_user_id: userSession.id,
+        p_override_price: manualPriceValue,
+        p_use_override: true
+      });
+      
+      if (priceError) throw priceError;
+      
+    } else if (editForm.price_source !== item.price_source || item.preferred_marketplace_override) {
+      // User selected a specific marketplace different from current
+      const { error: marketplaceError } = await supabase.rpc('set_investment_marketplace_override', {
+        p_investment_id: item.id,
+        p_user_id: userSession.id,
+        p_marketplace: editForm.price_source
+      });
+      
+      if (marketplaceError) throw marketplaceError;
+      
+    } else {
+      // Clear any existing overrides to use true global preference
+      const { error: priceError } = await supabase.rpc('set_investment_price_override', {
+        p_investment_id: item.id,
+        p_user_id: userSession.id,
+        p_override_price: null,
+        p_use_override: false
+      });
+      
+      if (priceError) throw priceError;
+      
+      const { error: marketplaceError } = await supabase.rpc('set_investment_marketplace_override', {
+        p_investment_id: item.id,
+        p_user_id: userSession.id,
+        p_marketplace: null
+      });
+      
+      if (marketplaceError) throw marketplaceError;
+    }
+
     // Update through database RPC with user context
     const { error } = await supabase.rpc('update_investment_with_context', {
       investment_id: item.id,
@@ -710,25 +708,42 @@ const handleEditFormSubmit = useCallback(async () => {
 
     if (error) throw error;
     
-    // Optimistic update with recalculated metric
+    // For non-manual prices, refresh data to get updated marketplace pricing
     const updatedItem = {
-      ...item,
-      ...updateData,
-      unrealized_profit_loss: (item.current_price - updateData.buy_price) * updateData.quantity,
-      original_quantity: Math.max(item.original_quantity || item.quantity, updateData.quantity)
-    };
+  ...item,
+  ...updateData,
+  // Update pricing fields based on form selection
+  market_price_override: editForm.price_source === 'manual' ? parseFloat(editForm.manual_price) : null,
+  use_override: editForm.price_source === 'manual',
+  preferred_marketplace_override: editForm.price_source === 'global' ? null : 
+    (editForm.price_source === 'manual' ? item.preferred_marketplace_override : editForm.price_source),
+  
+  // Update current_price optimistically
+  current_price: editForm.price_source === 'manual' ? parseFloat(editForm.manual_price) :
+    (getAvailableMarketplaces().find(mp => mp.marketplace === editForm.price_source)?.price || item.current_price),
+  
+  // Update price_source for display
+  price_source: editForm.price_source === 'manual' ? 'manual' : 
+    (editForm.price_source === 'global' ? (item.price_source === 'manual' ? 'csfloat' : item.price_source) : editForm.price_source),
+  
+  unrealized_profit_loss: (
+    (editForm.price_source === 'manual' ? parseFloat(editForm.manual_price) :
+      (getAvailableMarketplaces().find(mp => mp.marketplace === editForm.price_source)?.price || item.current_price)
+    ) - updateData.buy_price
+  ) * updateData.quantity,
+  
+  original_quantity: Math.max(item.original_quantity || item.quantity, updateData.quantity)
+};
 
-    onUpdate(item.id, updatedItem, false);
+onUpdate(item.id, updatedItem, false);
+    
     setMode(ITEM_MODES.VIEW);
-
-    // enhanced Show success toast
     toast.itemUpdated(fullItemName);
 
   }).catch(err => {
-    // toast update error
     toast.error(getErrorMessage(err));
   });
-}, [handleAsyncOperation, editForm, item, userSession.id, onUpdate, toast, fullItemName, getErrorMessage]);
+}, [handleAsyncOperation, editForm, item, userSession.id, onUpdate, onRefresh, toast, fullItemName, getErrorMessage]);
 
 const handleSoldEditFormSubmit = useCallback(async () => {
   await handleAsyncOperation('EDIT_SOLD_SUBMIT', async () => {
@@ -1276,74 +1291,52 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                     className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Current Price Source
-                  </label>
-                  <select
-                    value={priceOverrideMode}
-                    onChange={(e) => {
-                      setPriceOverrideMode(e.target.value);
-                      if (e.target.value === 'marketplace') {
-                        // When switching back to marketplace, use a fallback price
-                        const fallbackPrice = item.use_override ? 0 : (item.current_price || 0);
-                        setCustomPrice(fallbackPrice);
-                      }
-                    }}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none mb-2"
-                  >
-                    <option value="marketplace">
-                      {/* Fixed: Check if price_source exists before using it */}
-                      {item.price_source === 'manual' 
-                        ? 'Switch to Marketplace Data'
-                        : getMarketplaceDisplayName(item.price_source || 'none')
-                      }
-                    </option>
-                    <option value="custom">Custom Price Override</option>
-                  </select>
-  
-                  {priceOverrideMode === 'custom' && (
-                    <div>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        value={customPrice}
-                        onChange={(e) => setCustomPrice(e.target.value)}
-                        placeholder="Enter custom price"
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                      />
-                      <button
-                        onClick={handlePriceOverrideSubmit}
-                        className="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
-                      >
-                        {item.price_source === 'manual' ? 'Update Custom Price' : 'Apply Custom Price'}
-                      </button>
-                    </div>
-                  )}
-                  
-                  {/* NEW: Updated condition for showing marketplace switch button */}
-                  {priceOverrideMode === 'marketplace' && item.price_source === 'manual' && (
-                    <button
-                      onClick={handlePriceOverrideSubmit}
-                      className="mt-2 px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-xs rounded transition-colors"
+              </div>    
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Price Source
+                    </label>
+                    <select
+                      value={editForm.price_source}
+                      onChange={(e) => handleEditFormChange('price_source', e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
                     >
-                      Switch to Marketplace Data
-                    </button>
-                  )}
+                      {/* Remove the "Global Preference" option entirely */}
+                      {getAvailableMarketplaces().map(mp => (
+                        <option key={mp.marketplace} value={mp.marketplace}>
+                          {mp.marketplace.toUpperCase()}
+                          {mp.is_bid_price ? ' (Bid)' : ''}
+                        </option>
+                      ))}
+                      <option value="manual">Set Manual Price</option>
+                    </select>
+                  </div>
                   
-                  <div className="mt-2 text-xs text-gray-400">
-                    Current: ${(item.current_price || 0).toFixed(2)}
-                    {/* NEW: Show appropriate status indicator */}
-                    {item.price_source === 'manual' && (
-                      <span className="text-blue-400 ml-2">📝 Custom price</span>
-                    )}
-                    {item.price_source !== 'manual' && isBidOnlyPrice() && (
-                      <span className="text-yellow-400 ml-2">⚠ Bid-only price</span>
-                    )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Current Price
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={editForm.price_source === 'manual' ? editForm.manual_price : 
+                        (getAvailableMarketplaces().find(mp => mp.marketplace === editForm.price_source)?.price?.toFixed(2) || 
+                        item.current_price?.toFixed(2) || '')}
+                      onChange={(e) => handleEditFormChange('manual_price', e.target.value)}
+                      disabled={editForm.price_source !== 'manual'}
+                      className={`w-full px-3 py-2 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none ${
+                        editForm.price_source !== 'manual' 
+                          ? 'bg-gray-600 cursor-not-allowed opacity-75' 
+                          : 'bg-gray-700'
+                      }`}
+                      placeholder={editForm.price_source !== 'manual' ? 'Managed automatically' : 'Enter manual price'}
+                    />
                   </div>
                 </div>
-              </div>
+              
               
               {/* Notes field */}
               <div>
