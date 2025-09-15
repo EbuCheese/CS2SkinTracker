@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { User, LogOut, Shield, Calendar, Key, IdCardLanyard, AlertTriangle, X, Eye, EyeOff, Copy, Check } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { User, LogOut, Shield, Calendar, Key, IdCardLanyard, AlertTriangle, Settings, Globe, Store, Save, Eye, EyeOff, Copy, Check, CircleAlert } from 'lucide-react';
+import { supabase } from '@/supabaseClient';
+import { MarketplacePriorityManager } from '@/components/forms';
 
 const AccountPage = ({ userSession, onLogout, onRevoke }) => {
   // State management for loading states and UI controls
@@ -9,8 +11,83 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
   const [showFields, setShowFields] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
 
+  // State management for user settings
+  const [settings, setSettings] = useState({
+  timezone: 'UTC',
+  marketplacePriority: ['csfloat', 'steam', 'buff163', 'skinport']
+  });
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsChanged, setSettingsChanged] = useState(false);
+
   // Retrieve beta key from localStorage with fallback
   const betaKey = localStorage.getItem('beta_key') || 'N/A';
+
+  // load user settings from db
+  const loadUserSettings = useCallback(async () => {
+  try {
+    const { data, error } = await supabase
+      .rpc('get_user_settings', { 
+        p_user_id: userSession.id
+      });
+    
+    console.log('Get settings result:', { data, error });
+    
+    if (data?.success) {
+      // Reconstruct marketplacePriority from preferred + fallbacks
+      const preferred = data.preferred_marketplace || 'csfloat';
+      const fallbacks = data.fallback_marketplaces || ['steam', 'buff163', 'skinport'];
+      const marketplacePriority = [preferred, ...fallbacks];
+      
+      setSettings({
+        marketplacePriority: marketplacePriority,
+        timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+      });
+    }
+  } catch (error) {
+    console.error('Failed to load settings:', error);
+  }
+}, [userSession.id]);
+
+// Load settings on component mount
+  useEffect(() => {
+    loadUserSettings();
+  }, [loadUserSettings]);
+
+// save settings to db
+const handleSaveSettings = async () => {
+  setSettingsLoading(true);
+  try {
+    // Split marketplacePriority into preferred + fallbacks for API
+    const preferred = settings.marketplacePriority[0];
+    const fallbacks = settings.marketplacePriority.slice(1);
+    
+    const { data, error } = await supabase
+      .rpc('update_user_settings', {
+        p_user_id: userSession.id,
+        p_preferred_marketplace: preferred,
+        p_timezone: settings.timezone,
+        p_fallback_marketplaces: fallbacks
+      });
+    
+    console.log('Update result:', { data, error });
+    
+    if (error) {
+      console.error('Supabase error:', error);
+    } else if (data?.success) {
+      setSettingsChanged(false);
+    }
+  } catch (error) {
+    console.error('Failed to save settings:', error);
+  } finally {
+    setSettingsLoading(false);
+  }
+};
+
+// handle changing settings
+const handleSettingChange = (key, value) => {
+  setSettings(prev => ({ ...prev, [key]: value }));
+  setSettingsChanged(true);
+};
 
   // Handles user logout with optional beta key clearing
   const handleLogout = async (clearBetaKey = false) => {
@@ -112,7 +189,7 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
         {/* Card Header with Toggle Visibility Button */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
-              <Shield className="w-6 h-6 text-orange-500" />
+              <Shield className="w-6 h-6 text-orange-500 mt-0.5" />
               <h2 className="text-xl font-semibold text-white">Beta Account Information</h2>
             </div>
             {/* Toggle button for showing/hiding sensitive fields */}
@@ -186,12 +263,90 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
           </div>
         </div>
 
+        {/* User Settings Card */}
+        <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 p-6 mb-6 shadow-xl">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-3">
+              <Settings className="w-6 h-6 text-blue-500 mt-0.5" />
+              <h2 className="text-xl font-semibold text-white">User Settings</h2>
+            </div>
+            {settingsChanged && (
+              <button
+                onClick={handleSaveSettings}
+                disabled={settingsLoading}
+                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${
+                  settingsLoading
+                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-blue-500/25'
+                }`}
+              >
+                {settingsLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Save</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+  
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 gap-6">
+              {/* Preferred Marketplace Setting */}
+              <div className="border-t border-gray-700/50 pt-6">
+                <MarketplacePriorityManager
+                  marketplacePriority={settings.marketplacePriority}
+                  onChange={(newPriority) => handleSettingChange('marketplacePriority', newPriority)}
+                />
+              </div>
+
+              {/* Timezone Setting */}
+              <div>
+                <div className="flex items-center space-x-2 mb-2">
+                  <Globe className="w-5 h-5 text-blue-400" />
+                  <label className="block text-sm font-medium text-gray-300">
+                    Timezone
+                  </label>
+                </div>
+                <select
+                  value={settings.timezone}
+                  onChange={(e) => handleSettingChange('timezone', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                >
+                  <option value="UTC">UTC</option>
+                  <option value="America/New_York">Eastern Time</option>
+                  <option value="America/Chicago">Central Time</option>
+                  <option value="America/Denver">Mountain Time</option>
+                  <option value="America/Los_Angeles">Pacific Time</option>
+                  <option value="Europe/London">London</option>
+                  <option value="Europe/Berlin">Berlin</option>
+                  <option value="Asia/Tokyo">Tokyo</option>
+                  <option value="Asia/Shanghai">Shanghai</option>
+                  <option value="Australia/Sydney">Sydney</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Default timezone for timestamps, chart data, sale records, etc.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Account Actions Card */}
         <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 p-6 shadow-xl">
-          <h2 className="text-xl font-semibold text-white mb-6">Account Actions</h2>
-          
+        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center space-x-3">
+          <CircleAlert className="w-6 h-6 text-yellow-500 mt-0.5" />
+          <h2 className="text-xl font-semibold text-white">Account Actions</h2>
+        </div>
+        </div>  
+        
           <div className="space-y-4">
-
             {/* Quick Sign Out */}
             <div className="p-4 bg-orange-900/20 border border-orange-500/30 rounded-lg">
               <div className="flex items-center justify-between">
