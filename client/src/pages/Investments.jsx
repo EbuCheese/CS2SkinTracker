@@ -18,6 +18,9 @@ const InvestmentsPage = ({ userSession }) => {
   const [itemToDelete, setItemToDelete] = useState(null);    // Item selected for deletion
   const [newItemIds, setNewItemIds] = useState(new Set());   // Recently added items (for animations)
 
+  // Loading states
+  const [priceLoadingIds, setPriceLoadingIds] = useState(new Set());
+
   // Track sale data optimistically
   const [optimisticSoldItems, setOptimisticSoldItems] = useState([]);
   const [deletedSoldItems, setDeletedSoldItems] = useState([]);
@@ -51,6 +54,7 @@ const InvestmentsPage = ({ userSession }) => {
   // Clean up deleted sold items when data is refreshed
   useEffect(() => {
     if (!loading && portfolioSummary) {
+      setPriceLoadingIds(new Set());
       setOptimisticSoldItems([]);
       setDeletedSoldItems([]); // Add this line
     }
@@ -224,7 +228,12 @@ const handleAddItem = useCallback((newItem) => {
   
   setInvestments(prev => [itemWithMetrics, ...prev]);
   setNewItemIds(prev => new Set([...prev, newItem.id]));
-    
+  setPriceLoadingIds(prev => new Set([...prev, newItem.id]));
+
+  setTimeout(() => {
+    refetch();
+  }, 1000);
+
   setTimeout(() => {
     setNewItemIds(prev => {
       const updated = new Set(prev);
@@ -232,7 +241,17 @@ const handleAddItem = useCallback((newItem) => {
       return updated;
     });
   }, 700);
-}, [setInvestments]);
+
+  // Remove price loading when data is available OR after timeout
+  setTimeout(() => {
+    setPriceLoadingIds(prev => {
+      const updated = new Set(prev);
+      updated.delete(newItem.id);
+      return updated;
+    });
+  }, 5000); // Reasonable timeout
+}, [setInvestments, refetch]);
+
 
   // STABLE CALLBACKS: Tab and form handlers
   const handleTabChange = useCallback((tab) => {
@@ -410,16 +429,16 @@ const handleAddItem = useCallback((newItem) => {
 };
 
   // Loading state - show spinner while data is being fetched
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center">
-        <div className="flex items-center space-x-2 text-white">
-          <Loader2 className="w-8 h-8 animate-spin" />
-          <span>Loading Investments...</span>
-        </div>
+  if (loading && investments.length === 0 && soldItems.length === 0) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 flex items-center justify-center">
+      <div className="flex items-center space-x-2 text-white">
+        <Loader2 className="w-8 h-8 animate-spin" />
+        <span>Loading Investments...</span>
       </div>
-    );
-  }
+    </div>
+  );
+} 
 
   // Error state - show error message with retry option
   if (error) {
@@ -669,6 +688,7 @@ const handleAddItem = useCallback((newItem) => {
                 onRemove={handleItemRemove}
                 onRefresh={handleRefreshData}
                 isNew={newItemIds.has(item.id)}
+                isPriceLoading={priceLoadingIds.has(item.id)}
                 isSoldItem={activeTab === 'Sold'}
                 relatedInvestment={relatedInvestment} // Pass specific investment
               />
