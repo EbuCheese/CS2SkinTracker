@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, LogOut, Shield, Calendar, Key, IdCardLanyard, AlertTriangle, Settings, Globe, Store, Save, Eye, EyeOff, Copy, Check, CircleAlert } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
+import { useToast } from '@/contexts/ToastContext';
 import { MarketplacePriorityManager } from '@/components/forms';
 
 const AccountPage = ({ userSession, onLogout, onRevoke }) => {
@@ -10,6 +11,9 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
   const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
   const [showFields, setShowFields] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
+
+  // toast hook
+  const toast = useToast();
 
   // State management for user settings
   const [settings, setSettings] = useState({
@@ -73,11 +77,16 @@ const handleSaveSettings = async () => {
     
     if (error) {
       console.error('Supabase error:', error);
+      toast.error('Failed to save settings. Please try again.', 'Settings Error');
     } else if (data?.success) {
       setSettingsChanged(false);
+      toast.success('Your settings have been saved successfully.', 'Settings Saved');
+    } else {
+      toast.error('Settings could not be saved. Please try again.', 'Save Failed');
     }
   } catch (error) {
     console.error('Failed to save settings:', error);
+    toast.error('An unexpected error occurred while saving settings.', 'Settings Error');
   } finally {
     setSettingsLoading(false);
   }
