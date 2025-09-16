@@ -30,7 +30,7 @@ import { useToast } from '@/contexts/ToastContext';
   };
 
 // Main ItemCard Component - Displays individual investment items with interactive features
-const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, onRefresh, isNew = false, isSoldItem = false, relatedInvestment = null }) => {
+const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, onRefresh, isNew = false, isPriceLoading = false, isSoldItem = false, relatedInvestment = null }) => {
   // Add toast hook
   const toast = useToast();
 
@@ -227,17 +227,11 @@ const displayValues = useMemo(() => ({
 // destructured
 const { name, skinName, condition, variant } = displayValues;
 
-// Marketplace display name helper
-const getMarketplaceDisplayName = (priceSource) => {
-  const marketplaceNames = {
-    'buff163': 'Buff163 Price Data',
-    'steam': 'Steam Price Data',
-    'skinport': 'Skinport Price Data',
-    'csfloat': 'CSFloat Price Data',
-    'manual': 'Custom Price Override',
-    'none': 'No Price Data'
-  };
-  return marketplaceNames[priceSource] || 'Unknown Price Source';
+// helper to check for valid price
+const hasValidPriceData = (item) => {
+  return item.current_price !== null && 
+         item.current_price !== undefined && 
+         !isNaN(item.current_price);
 };
 
 // helper to detect item with bid only pricing
@@ -266,7 +260,6 @@ const isBidOnlyPrice = () => {
     return false;
   }
 };
-
 
 // helper to get all available marketplaces for item
 const getAvailableMarketplaces = () => {
@@ -1032,39 +1025,59 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                     </div>
                   </div>
                   <div>
-  <div className="text-gray-400 mb-0.5">Current:</div>
-  <div className="text-white">
-    {(item.current_price !== null && item.current_price !== undefined && !isNaN(item.current_price)) 
-      ? <div className="flex items-center space-x-1">
-          <span>${baseMetrics.currentPrice.toFixed(2)}</span>
-          {/* NEW: Manual price icon */}
-          {item.price_source === 'manual' && (
-            <div className="relative group">
-              <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
-              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                Custom price override
-              </div>
-            </div>
-          )}
-          {/* UPDATED: Bid price icon - only show for non-manual prices */}
-          {item.price_source !== 'manual' && isBidOnlyPrice() && (
-            <div className="relative group">
-              <AlertTriangle className="w-3 h-3 text-yellow-400" />
-              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                Bid-only price (buy order)
-              </div>
-            </div>
-          )}
-        </div>
-      : <span className="text-gray-500 text-sm flex items-center space-x-1">
-          <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-          <span>No data</span>
-        </span>
-    }
-  </div>
-</div>
+                    <div className="text-gray-400 mb-0.5">Current:</div>
+                    <div className="text-white">
+                      {hasValidPriceData(item) ? ( 
+                        <div className="flex items-center space-x-1">
+                            <span>${baseMetrics.currentPrice.toFixed(2)}</span>
+                            {/* Price loading indicator for recently added items */} 
+                            {isNew && (
+                              <div className="relative group">
+                                <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                                  Loading current price...
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Manual price icon */}
+                            {item.price_source === 'manual' && (
+                              <div className="relative group">
+                                <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                                  Custom price override
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Bid price icon - only show for non-manual prices and exclude new items */}
+                            {item.price_source !== 'manual' && !isNew && isBidOnlyPrice() && (
+                              <div className="relative group">
+                                <AlertTriangle className="w-3 h-3 text-yellow-400" />
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                                  Bid-only price (buy order)
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : ( <span className="text-gray-500 text-sm flex items-center space-x-1">
+                            {isPriceLoading ? (
+                              <>
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <span>Loading...</span>
+                              </>
+                            ) : (
+                              <>
+                                <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                                <span>No data</span>
+                              </>
+                            )}
+                          </span>
+                        )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
