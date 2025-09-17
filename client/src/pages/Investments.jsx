@@ -16,10 +16,9 @@ const InvestmentsPage = ({ userSession }) => {
   const [searchQuery, setSearchQuery] = useState('');        // User's search input
   const [showAddForm, setShowAddForm] = useState(false);     // Add item modal visibility
   const [itemToDelete, setItemToDelete] = useState(null);    // Item selected for deletion
-  const [newItemIds, setNewItemIds] = useState(new Set());   // Recently added items (for animations)
 
-  // Loading states
-  const [priceLoadingIds, setPriceLoadingIds] = useState(new Set());
+  // unified item id state
+  const [itemStates, setItemStates] = useState(new Map());
 
   // Track sale data optimistically
   const [optimisticSoldItems, setOptimisticSoldItems] = useState([]);
@@ -54,13 +53,13 @@ const InvestmentsPage = ({ userSession }) => {
   // Clean up deleted sold items when data is refreshed
   useEffect(() => {
     if (!loading && portfolioSummary) {
-      setPriceLoadingIds(new Set());
+      setItemStates(new Map());
       setOptimisticSoldItems([]);
       setDeletedSoldItems([]); // Add this line
     }
   }, [loading, portfolioSummary]);
 
-  // ADD THIS HELPER FUNCTION
+  // helper for building item name
   const buildDetailedItemName = (item) => {
   let displayName = '';
   
@@ -91,6 +90,16 @@ const InvestmentsPage = ({ userSession }) => {
   
   return displayName;
 };
+
+// Helper function to update item state
+const updateItemState = useCallback((itemId, updates) => {
+  setItemStates(prev => {
+    const newMap = new Map(prev);
+    const current = newMap.get(itemId) || { isNew: false, isPriceLoading: false };
+    newMap.set(itemId, { ...current, ...updates });
+    return newMap;
+  });
+}, []);
 
   // STABLE CALLBACKS: Prevent unnecessary re-renders
   const handleItemUpdate = useCallback((itemId, updates, shouldRefresh = false, soldItemData = null, isRelatedUpdate = false) => {
@@ -227,30 +236,22 @@ const handleAddItem = useCallback((newItem) => {
   };
   
   setInvestments(prev => [itemWithMetrics, ...prev]);
-  setNewItemIds(prev => new Set([...prev, newItem.id]));
-  setPriceLoadingIds(prev => new Set([...prev, newItem.id]));
+  updateItemState(newItem.id, { isNew: true, isPriceLoading: true });
 
   setTimeout(() => {
     refetch();
   }, 1000);
 
+  // Remove new flag after animation
   setTimeout(() => {
-    setNewItemIds(prev => {
-      const updated = new Set(prev);
-      updated.delete(newItem.id);
-      return updated;
-    });
+    updateItemState(newItem.id, { isNew: false });
   }, 700);
 
   // Remove price loading when data is available OR after timeout
   setTimeout(() => {
-    setPriceLoadingIds(prev => {
-      const updated = new Set(prev);
-      updated.delete(newItem.id);
-      return updated;
-    });
-  }, 5000); // Reasonable timeout
-}, [setInvestments, refetch]);
+    updateItemState(newItem.id, { isPriceLoading: false });
+  }, 5000);
+}, [setInvestments, updateItemState]);
 
 
   // STABLE CALLBACKS: Tab and form handlers
@@ -674,6 +675,7 @@ const handleAddItem = useCallback((newItem) => {
         {/* Items Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {currentItems.map((item) => {
+            const itemState = itemStates.get(item.id) || { isNew: false, isPriceLoading: false }
             const relatedInvestment = activeTab === 'Sold' && item.investment_id 
               ? investments.find(inv => inv.id === item.investment_id) 
               : null;
@@ -687,8 +689,8 @@ const handleAddItem = useCallback((newItem) => {
                 onDelete={handleItemDelete}
                 onRemove={handleItemRemove}
                 onRefresh={handleRefreshData}
-                isNew={newItemIds.has(item.id)}
-                isPriceLoading={priceLoadingIds.has(item.id)}
+                isNew={itemState.isNew}
+                isPriceLoading={itemState.isPriceLoading}
                 isSoldItem={activeTab === 'Sold'}
                 relatedInvestment={relatedInvestment} // Pass specific investment
               />
