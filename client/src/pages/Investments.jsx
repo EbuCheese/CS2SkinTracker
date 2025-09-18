@@ -4,7 +4,7 @@ import { supabase } from '@/supabaseClient';
 import { ItemCard } from '@/components/item-display';
 import { AddItemForm } from '@/components/forms'
 import { useScrollLock } from '@/hooks/util';
-import { usePortfolioData, usePortfolioFiltering, usePortfolioSummary, usePortfolioTabs  } from '@/hooks/portfolio';
+import { usePortfolioData, usePortfolioFiltering, usePortfolioSummary, usePortfolioTabs, useSingleItemPrice } from '@/hooks/portfolio';
 import { useToast } from '@/contexts/ToastContext';
 
 const InvestmentsPage = ({ userSession }) => {
@@ -26,6 +26,9 @@ const InvestmentsPage = ({ userSession }) => {
 
   // Investment data from hook
   const { investments, soldItems, portfolioSummary, loading, error, errorDetails, refetch, retry, setInvestments, setSoldItems } = usePortfolioData(userSession);
+
+  // Single price data hook
+  const { refreshSingleItemPrice } = useSingleItemPrice();
 
   // Data filtering and search logic
   const { activeInvestments, groupedSoldItems, currentItems } = usePortfolioFiltering(
@@ -239,7 +242,23 @@ const handleAddItem = useCallback((newItem) => {
   updateItemState(newItem.id, { isNew: true, isPriceLoading: true });
 
   setTimeout(() => {
-    refetch();
+    refreshSingleItemPrice(
+      newItem.id,
+      userSession,
+      // Success callback - update only this item
+      (itemId, updatedItemData) => {
+        setInvestments(prev => prev.map(inv =>
+          inv.id === itemId ? updatedItemData : inv
+        ));
+        updateItemState(itemId, { isPriceLoading: false });
+      },
+      // Error callback - still stop loading indicator
+      (itemId, error) => {
+        console.error('Failed to refresh price for new item:', error);
+        updateItemState(itemId, { isPriceLoading: false });
+        toast.warning('Price data will be available on next refresh');
+      }
+    );
   }, 1000);
 
   // Remove new flag after animation
@@ -251,7 +270,7 @@ const handleAddItem = useCallback((newItem) => {
   setTimeout(() => {
     updateItemState(newItem.id, { isPriceLoading: false });
   }, 5000);
-}, [setInvestments, updateItemState]);
+}, [setInvestments, updateItemState, refreshSingleItemPrice, userSession]);
 
 
   // STABLE CALLBACKS: Tab and form handlers
