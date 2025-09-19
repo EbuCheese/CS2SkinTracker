@@ -24,6 +24,14 @@ const InvestmentsPage = ({ userSession }) => {
   const [optimisticSoldItems, setOptimisticSoldItems] = useState([]);
   const [deletedSoldItems, setDeletedSoldItems] = useState([]);
 
+  const [optimisticUpdates, setOptimisticUpdates] = useState({
+    totalInvested: 0,
+    totalCurrentValue: 0,
+    currentHoldingsValue: 0,
+    totalRealizedPL: 0,
+    totalUnrealizedPL: 0
+  });
+
   // Investment data from hook
   const { investments, soldItems, portfolioSummary, loading, error, errorDetails, refetch, retry, setInvestments, setSoldItems } = usePortfolioData(userSession);
 
@@ -52,6 +60,18 @@ const InvestmentsPage = ({ userSession }) => {
       setOptimisticSoldItems([]);
     }
   }, [loading, portfolioSummary]);
+
+  useEffect(() => {
+  if (!loading && portfolioSummary) {
+    setOptimisticUpdates({
+      totalInvested: 0,
+      totalCurrentValue: 0,
+      currentHoldingsValue: 0,
+      totalRealizedPL: 0,
+      totalUnrealizedPL: 0
+    });
+  }
+}, [loading, portfolioSummary]);
 
   // Clean up deleted sold items when data is refreshed
   useEffect(() => {
@@ -149,72 +169,97 @@ const updateItemState = useCallback((itemId, updates) => {
 
   // handle the removal of item from ui, selling or deleting
   const handleItemRemove = useCallback((itemId, shouldRefresh = false, soldItemData = null, isActualDelete = false) => {
-    // Check if this is a sold item being removed (from sold tab)
-    if (activeTab === 'Sold') {
-      // Remove from sold items
-      setSoldItems(prev => prev.filter(sold => sold.id !== itemId));
-      return;
-    }
+  // Handle sold item removal (from sold tab)
+  if (activeTab === 'Sold') {
+    setSoldItems(prev => prev.filter(sold => sold.id !== itemId));
+    return;
+  }
+  
+  // Get the item being removed/sold
+  const removedItem = investments.find(inv => inv.id === itemId);
+  if (!removedItem) return;
+  
+  // Handle actual deletions (delete button pressed)
+  if (isActualDelete) {
+    // For actual deletions, remove completely from state
+    setInvestments(prev => prev.filter(inv => inv.id !== itemId));
+    return;
+  }
+  
+  // Handle sales transactions
+  if (soldItemData) {
+    const quantitySold = soldItemData.quantity || removedItem.quantity;
+    const salePrice = soldItemData.price_per_unit;
+    const buyPrice = removedItem.buy_price;
+    const currentPrice = removedItem.current_price || buyPrice; // Fallback to buy price if no market price
+    const remainingQuantity = Math.max(0, removedItem.quantity - quantitySold);
     
-    // Get the item being removed/sold
-    const removedItem = investments.find(inv => inv.id === itemId);
-    if (!removedItem) return;
+    // Calculate transaction values
+    const saleProceeds = quantitySold * salePrice;
+    const realizedProfit = (salePrice - buyPrice) * quantitySold;
+    const holdingsValueDecrease = currentPrice * quantitySold;
+    const unrealizedPLDecrease = (currentPrice - buyPrice) * quantitySold;
     
-    // Handle actual deletions vs. sales differently
-    if (isActualDelete) {
-      // For actual deletions, remove completely from state
-      setInvestments(prev => prev.filter(inv => inv.id !== itemId));
-    } else if (soldItemData) {
-      // For sales, update the investment to reflect the sale but keep it in state
-      const quantitySold = soldItemData.quantity || removedItem.quantity;
-      const totalSaleValue = soldItemData.total_sale_value || (soldItemData.price_per_unit * quantitySold);
-      const profitLoss = soldItemData.profit_loss || ((soldItemData.price_per_unit - removedItem.buy_price) * quantitySold);
+    // Update the investment record to reflect the sale
+    const updatedItem = {
+      ...removedItem,
+      quantity: remainingQuantity,
+      // Track cumulative sale data
+      total_sold_quantity: (removedItem.total_sold_quantity || 0) + quantitySold,
+      total_sale_value: (removedItem.total_sale_value || 0) + saleProceeds,
+      realized_profit_loss: (removedItem.realized_profit_loss || 0) + realizedProfit,
+      // Recalculate unrealized P&L for remaining quantity
+      unrealized_profit_loss: remainingQuantity > 0 ? 
+        (currentPrice - buyPrice) * remainingQuantity : 0
+    };
+    
+    // Update investments state
+    setInvestments(prev => prev.map(inv => 
+      inv.id === itemId ? updatedItem : inv
+    ));
+    
+    // Add to sold items list
+    setSoldItems(prev => [soldItemData, ...prev]);
+    
+    // CRITICAL: Apply optimistic updates with correct accounting
+    // A sale is a CONVERSION from holdings to cash, not an addition to investments
+    setOptimisticUpdates(prev => ({
+      // Total invested NEVER changes from sales - only from new purchases
+      totalInvested: prev.totalInvested || 0,
       
-      const updatedItem = {
-        ...removedItem,
-        quantity: Math.max(0, removedItem.quantity - quantitySold), // Should be 0 for full sales
-        total_sold_quantity: (removedItem.total_sold_quantity || 0) + quantitySold,
-        total_sale_value: (removedItem.total_sale_value || 0) + totalSaleValue,
-        realized_profit_loss: (removedItem.realized_profit_loss || 0) + profitLoss,
-        // Recalculate unrealized P/L for remaining quantity
-        unrealized_profit_loss: (removedItem.current_price - removedItem.buy_price) * Math.max(0, removedItem.quantity - quantitySold)
-      };
+      // Remove holdings value that was sold
+      currentHoldingsValue: (prev.currentHoldingsValue || 0) - holdingsValueDecrease,
       
-      // Update the investment in state instead of removing it
-      setInvestments(prev => prev.map(inv => 
-        inv.id === itemId ? updatedItem : inv
-      ));
+      // Total current value = holdings decrease + cash increase
+      // Net change = sale proceeds - holdings value = profit/loss
+      totalCurrentValue: (prev.totalCurrentValue || 0) - holdingsValueDecrease + saleProceeds,
       
-      // Track optimistic sold item for sold tab calculations (if needed)
-      if (updatedItem.quantity === 0) {
-        const optimisticSoldItem = {
-          id: itemId,
-          quantity: quantitySold,
-          salePrice: soldItemData.price_per_unit,
-          buyPrice: removedItem.buy_price,
-          name: removedItem.name,
-          skinName: removedItem.skin_name,
-          condition: removedItem.condition,
-          variant: removedItem.variant,
-          saleDate: new Date().toISOString()
-        };
-        
-        setOptimisticSoldItems(prev => [...prev, optimisticSoldItem]);
-      }
+      // Add the realized profit/loss from this sale
+      totalRealizedPL: (prev.totalRealizedPL || 0) + realizedProfit,
+      
+      // Remove unrealized P&L that just became realized
+      totalUnrealizedPL: (prev.totalUnrealizedPL || 0) - unrealizedPLDecrease
+    }));
+    
+    // Show success toast
+    const detailedName = buildDetailedItemName(removedItem);
+    const isFullSale = remainingQuantity === 0;
+    
+    if (isFullSale) {
+      toast.fullSaleCompleted(detailedName, quantitySold, saleProceeds, realizedProfit);
     } else {
-      // Fallback: remove from investments (for cases where soldItemData is not provided)
-      setInvestments(prev => prev.filter(inv => inv.id !== itemId));
+      toast.partialSaleCompleted(detailedName, quantitySold, remainingQuantity, saleProceeds, realizedProfit);
     }
+  } else {
+    // Fallback: remove from investments (for cases where soldItemData is not provided)
+    setInvestments(prev => prev.filter(inv => inv.id !== itemId));
+  }
 
-    // Add sold item to sold items list
-    if (soldItemData) {
-      setSoldItems(prev => [soldItemData, ...prev]);
-    }
-
-    if (shouldRefresh) {
-      refetch();
-    }
-  }, [activeTab, setSoldItems, setInvestments, investments, refetch]);
+  // Refresh data if requested
+  if (shouldRefresh) {
+    refetch();
+  }
+}, [activeTab, setSoldItems, setInvestments, investments, refetch, buildDetailedItemName, toast]);
 
   // set the item to delete
   const handleItemDelete = useCallback((itemToDelete) => {
@@ -711,7 +756,10 @@ const handleAddItem = useCallback((newItem) => {
                 isNew={itemState.isNew}
                 isPriceLoading={itemState.isPriceLoading}
                 isSoldItem={activeTab === 'Sold'}
-                relatedInvestment={relatedInvestment} // Pass specific investment
+                relatedInvestment={relatedInvestment}
+                refreshSingleItemPrice={refreshSingleItemPrice}
+                updateItemState={updateItemState}
+                setInvestments={setInvestments}
               />
             );
           })}

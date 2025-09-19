@@ -30,7 +30,21 @@ import { useToast } from '@/contexts/ToastContext';
   };
 
 // Main ItemCard Component - Displays individual investment items with interactive features
-const ItemCard = React.memo(({ item, userSession, onUpdate, onDelete, onRemove, onRefresh, isNew = false, isPriceLoading = false, isSoldItem = false, relatedInvestment = null }) => {
+const ItemCard = React.memo(({ 
+  item, 
+  userSession, 
+  onUpdate, 
+  onDelete, 
+  onRemove, 
+  onRefresh, 
+  isNew = false, 
+  isPriceLoading = false, 
+  isSoldItem = false, 
+  relatedInvestment = null, 
+  refreshSingleItemPrice,
+  updateItemState,
+  setInvestments 
+}) => {  
   // Add toast hook
   const toast = useToast();
 
@@ -613,6 +627,39 @@ const handleConfirmedRevert = async () => {
       );
     }
     
+    let investmentIdToRefresh = null;
+    
+    if (revertResult.type === 'quantity_restored') {
+      investmentIdToRefresh = revertResult.investment_id;
+    } else if (revertResult.type === 'investment_recreated') {
+      investmentIdToRefresh = revertResult.new_investment_id;
+    }
+    
+    // refresh the single price of the reverted item
+    if (investmentIdToRefresh) {
+      updateItemState(investmentIdToRefresh, { isPriceLoading: true });
+      
+      setTimeout(() => {
+        refreshSingleItemPrice(
+          investmentIdToRefresh,
+          userSession,
+          // Success callback
+          (itemId, refreshedItemData) => {
+            setInvestments(prev => prev.map(inv =>
+              inv.id === itemId ? refreshedItemData : inv
+            ));
+            updateItemState(itemId, { isPriceLoading: false });
+          },
+          // Error callback
+          (itemId, error) => {
+            console.error('Failed to refresh price after reversion:', error);
+            updateItemState(itemId, { isPriceLoading: false });
+            toast.warning('Price data will be updated on next refresh');
+          }
+        );
+      }, 1000);
+    }
+
     // Remove this sold item from the UI
     onRemove(item.id, false);
     
@@ -701,42 +748,74 @@ const handleEditFormSubmit = useCallback(async () => {
 
     if (error) throw error;
     
+    // After successful database update, check if item identity changed
+    const itemIdentityChanged = 
+      editForm.condition !== item.condition ||
+      editForm.variant !== item.variant ||
+      editForm.name !== item.name ||
+      editForm.skin_name !== item.skin_name;
+
     // For non-manual prices, refresh data to get updated marketplace pricing
     const updatedItem = {
-  ...item,
-  ...updateData,
-  // Update pricing fields based on form selection
-  market_price_override: editForm.price_source === 'manual' ? parseFloat(editForm.manual_price) : null,
-  use_override: editForm.price_source === 'manual',
-  preferred_marketplace_override: editForm.price_source === 'global' ? null : 
-    (editForm.price_source === 'manual' ? item.preferred_marketplace_override : editForm.price_source),
-  
-  // Update current_price optimistically
-  current_price: editForm.price_source === 'manual' ? parseFloat(editForm.manual_price) :
-    (getAvailableMarketplaces().find(mp => mp.marketplace === editForm.price_source)?.price || item.current_price),
-  
-  // Update price_source for display
-  price_source: editForm.price_source === 'manual' ? 'manual' : 
-    (editForm.price_source === 'global' ? (item.price_source === 'manual' ? 'csfloat' : item.price_source) : editForm.price_source),
-  
-  unrealized_profit_loss: (
-    (editForm.price_source === 'manual' ? parseFloat(editForm.manual_price) :
-      (getAvailableMarketplaces().find(mp => mp.marketplace === editForm.price_source)?.price || item.current_price)
-    ) - updateData.buy_price
-  ) * updateData.quantity,
-  
-  original_quantity: Math.max(item.original_quantity || item.quantity, updateData.quantity)
+      ...item,
+      ...updateData,
+      // Update pricing fields based on form selection
+      market_price_override: editForm.price_source === 'manual' ? parseFloat(editForm.manual_price) : null,
+      use_override: editForm.price_source === 'manual',
+      preferred_marketplace_override: editForm.price_source === 'global' ? null : 
+        (editForm.price_source === 'manual' ? item.preferred_marketplace_override : editForm.price_source),
+      
+      // Update current_price optimistically
+      current_price: editForm.price_source === 'manual' ? parseFloat(editForm.manual_price) :
+        (getAvailableMarketplaces().find(mp => mp.marketplace === editForm.price_source)?.price || item.current_price),
+      
+      // Update price_source for display
+      price_source: editForm.price_source === 'manual' ? 'manual' : 
+        (editForm.price_source === 'global' ? (item.price_source === 'manual' ? 'csfloat' : item.price_source) : editForm.price_source),
+      
+      unrealized_profit_loss: (
+        (editForm.price_source === 'manual' ? parseFloat(editForm.manual_price) :
+          (getAvailableMarketplaces().find(mp => mp.marketplace === editForm.price_source)?.price || item.current_price)
+        ) - updateData.buy_price
+      ) * updateData.quantity,
+      
+      original_quantity: Math.max(item.original_quantity || item.quantity, updateData.quantity)
 };
 
 onUpdate(item.id, updatedItem, false);
-    
+
+    // Refresh price if item identity changed
+    if (itemIdentityChanged) {
+      updateItemState(item.id, { isPriceLoading: true });
+      
+      setTimeout(() => {
+        refreshSingleItemPrice(
+          item.id,
+          userSession,
+          // Success callback
+          (itemId, refreshedItemData) => {
+            setInvestments(prev => prev.map(inv =>
+              inv.id === itemId ? refreshedItemData : inv
+            ));
+            updateItemState(itemId, { isPriceLoading: false });
+          },
+          // Error callback
+          (itemId, error) => {
+            console.error('Failed to refresh price after edit:', error);
+            updateItemState(itemId, { isPriceLoading: false });
+            toast.warning('Price data will be updated on next refresh');
+          }
+        );
+      }, 1000);
+    }
+
     setMode(ITEM_MODES.VIEW);
     toast.itemUpdated(fullItemName);
 
   }).catch(err => {
     toast.error(getErrorMessage(err));
   });
-}, [handleAsyncOperation, editForm, item, userSession.id, onUpdate, onRefresh, toast, fullItemName, getErrorMessage]);
+}, [handleAsyncOperation, editForm, item, userSession.id, onUpdate, onRefresh, toast, fullItemName, refreshSingleItemPrice, updateItemState, setInvestments, getErrorMessage]);
 
 const handleSoldEditFormSubmit = useCallback(async () => {
   await handleAsyncOperation('EDIT_SOLD_SUBMIT', async () => {
@@ -1031,11 +1110,11 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                         <div className="flex items-center space-x-1">
                             <span>${baseMetrics.currentPrice.toFixed(2)}</span>
                             {/* Price loading indicator for recently added items */} 
-                            {isNew && (
+                            {isPriceLoading && (
                               <div className="relative group">
                                 <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
                                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                  Loading current price...
+                                  {isNew ? 'Loading current price...' : 'Refreshing price...'}
                                 </div>
                               </div>
                             )}
