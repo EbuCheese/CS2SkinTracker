@@ -8,7 +8,7 @@ export const usePortfolioSummary = (
   groupedSoldItems, 
   portfolioSummary = null,
   optimisticSoldItems = [],
-  searchQuery = ''
+  searchQuery = '',
 ) => {
     const calculatedSummary = useMemo(() => {
   if (activeTab === 'Sold') {
@@ -106,14 +106,16 @@ export const usePortfolioSummary = (
   } else {
     // ACTIVE INVESTMENTS VIEW 
     if (currentItems.length === investments.length && portfolioSummary) {
-      const currentPortfolioValue = parseFloat(portfolioSummary.current_portfolio_value || 0);
+      const currentHoldingsValue = parseFloat(portfolioSummary.current_holdings_value || 0);
+      const totalPortfolioValue = parseFloat(portfolioSummary.total_portfolio_value || 0);
       const totalInvestment = parseFloat(portfolioSummary.total_investment || 0);
       const totalUnrealizedPL = parseFloat(portfolioSummary.total_unrealized_pl || 0);
       const profitPercentage = parseFloat(portfolioSummary.profit_percentage || 0);
       
       return {
         totalBuyValue: totalInvestment,
-        totalCurrentValue: currentPortfolioValue,
+        currentHoldingsValue: currentHoldingsValue,
+        totalCurrentValue: totalPortfolioValue,
         totalProfit: totalUnrealizedPL,
         profitPercentage,
         itemCount: parseInt(portfolioSummary.total_items || 0)
@@ -121,16 +123,32 @@ export const usePortfolioSummary = (
     }
     
     // Calculate filtered view metrics manually
-    const filteredValue = currentItems.reduce((sum, item) =>
-      sum + (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0)), 0);
-    const filteredBuyValue = currentItems.reduce((sum, item) =>
-      sum + (parseFloat(item.buy_price || 0) * parseFloat(item.quantity || 0)), 0);
-    const filteredProfit = currentItems.reduce((sum, item) => {
+    const filteredValue = currentItems.reduce((sum, item) => {
+      // Handle null/undefined current_price properly
       const currentPrice = parseFloat(item.current_price || 0);
       const buyPrice = parseFloat(item.buy_price || 0);
       const quantity = parseFloat(item.quantity || 0);
-      return sum + ((currentPrice - buyPrice) * quantity);
+      
+      // Use current price if available and > 0, otherwise fall back to buy price
+      const valuePrice = (currentPrice && currentPrice > 0) ? currentPrice : buyPrice;
+      return sum + (valuePrice * quantity);
     }, 0);
+
+  const filteredBuyValue = currentItems.reduce((sum, item) =>
+    sum + (parseFloat(item.buy_price || 0) * parseFloat(item.quantity || 0)), 0);
+
+  const filteredProfit = currentItems.reduce((sum, item) => {
+    const currentPrice = parseFloat(item.current_price || 0);
+    const buyPrice = parseFloat(item.buy_price || 0);
+    const quantity = parseFloat(item.quantity || 0);
+    
+    // CORRECTED: Only calculate unrealized P&L if we have a valid current price
+    if (currentPrice && currentPrice > 0 && quantity > 0) {
+      return sum + ((currentPrice - buyPrice) * quantity);
+    }
+    return sum; // No unrealized P&L if no current price
+  }, 0);
+
     const filteredProfitPercentage = filteredBuyValue > 0 ?
       ((filteredProfit / filteredBuyValue) * 100) : 0;
       
