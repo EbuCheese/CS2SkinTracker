@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { TrendingUp, TrendingDown, ListFilterPlus, ListFilter, ChartNoAxesColumn} from 'lucide-react';
+import { TrendingUp, TrendingDown, ListFilterPlus, ListFilter, ChartNoAxesColumn, Loader2} from 'lucide-react';
 import { ImageWithLoading } from '@/components/ui';
 import { useItemFormatting } from '@/hooks/util';
 
@@ -8,11 +8,12 @@ const InvestmentItem = React.memo(({
   investment, 
   formatPrice,
   displayName,
-  subtitle
+  subtitle,
+  isNew = false,
+  isPriceLoading = false
 }) => {
   return (
-    <div className="flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-colors duration-200">
-      {/* Left side: Image and item details */}
+    <div className={`flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-colors duration-200 ${isNew ? 'animate-slide-in-from-top' : ''}`}>      {/* Left side: Image and item details */}
       <div className="flex items-center space-x-4">
         {/* Image container with loading states */}
         <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 relative">
@@ -43,25 +44,48 @@ const InvestmentItem = React.memo(({
       {/* Right side: Price information and trend indicator */}
       <div className="text-right flex-shrink-0">
         <div className="flex items-center space-x-2">
-          {/* Current price */}
-          <span className="text-white font-medium">
-            {formatPrice(investment.current_price)}
-          </span>
-          {/* Trend indicator with percentage change */}
-          <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${
-            investment.trend === 'up' 
-              ? 'bg-green-500/20 text-green-400' 
-              : 'bg-red-500/20 text-red-400'
-          }`}>
-            {/* Trend icon */}
-            {investment.trend === 'up' ? (
-              <TrendingUp className="w-3 h-3" />
+          {/* Current price with loading indicator */}
+          <span className="text-white font-medium flex items-center space-x-1">
+            {isPriceLoading ? (
+              <span className="text-gray-400 text-sm">Loading...</span>
             ) : (
-              <TrendingDown className="w-3 h-3" />
+              <span>{formatPrice(investment.current_price)}</span>
             )}
-            {/* Percentage change (always show absolute value) */}
-            <span>{Math.abs(investment.changePercent).toFixed(1)}%</span>
-          </div>
+            {/* Price loading indicator for recently added items */}
+            {isPriceLoading && (
+              <div className="relative group">
+                <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                  Loading current price...
+                </div>
+              </div>
+            )}
+          </span>
+          
+          {/* Trend indicator with percentage change - only show if not loading and valid data */}
+          {!isPriceLoading && !isNaN(investment.changePercent) && (
+            <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${
+              investment.trend === 'up'
+                ? 'bg-green-500/20 text-green-400'
+                : 'bg-red-500/20 text-red-400'
+            }`}>
+              {/* Trend icon */}
+              {investment.trend === 'up' ? (
+                <TrendingUp className="w-3 h-3" />
+              ) : (
+                <TrendingDown className="w-3 h-3" />
+              )}
+              {/* Percentage change (always show absolute value) */}
+              <span>{Math.abs(investment.changePercent).toFixed(1)}%</span>
+            </div>
+          )}
+          
+          {/* Loading indicator for trend when price is loading */}
+          {isPriceLoading && (
+            <div className="flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-500/20 text-gray-400">
+              <span>---%</span>
+            </div>
+          )}
         </div>
         {/* Original purchase price */}
         <p className="text-sm text-gray-400">
@@ -145,7 +169,7 @@ const PaginationControls = React.memo(({
 });
 
 // Main component that displays recent price changes for investments
-const RecentPriceChanges = React.memo(({ investments = [] }) => {
+const RecentPriceChanges = React.memo(({ investments = [], itemStates = new Map() }) => {
   const [currentPage, setCurrentPage] = useState(0); // pagination state
   const [showAll, setShowAll] = useState(false); // toggle state for top 10 vs all items
   const [sortOrder, setSortOrder] = useState('most'); // state for sorting by 'most' or 'least'
@@ -171,42 +195,43 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
 
   // Get recent price changes with sorting - optimized for early exit on filtering
   const priceChanges = useMemo(() => {
-    // Early exit if no investments
-    if (!investments.length) return [];
+  if (!investments.length) return [];
+  
+  const changes = [];
+  
+  for (let i = 0; i < investments.length; i++) {
+    const inv = investments[i];
+    const quantity = parseFloat(inv.quantity);
     
-    const changes = [];
+    // Skip items with quantity <= 0
+    if (quantity <= 0) continue;
     
-    // Process each investment in a single pass for efficiency
-    for (let i = 0; i < investments.length; i++) {
-      const inv = investments[i];
-      const quantity = parseFloat(inv.quantity);
-      
-      // Skip items with quantity <= 0 early
-      if (quantity <= 0) continue;
-      
-      // Calculate price change metrics
-      const currentPrice = parseFloat(inv.current_price);
-      const buyPrice = parseFloat(inv.buy_price);
-      const changePercent = ((currentPrice - buyPrice) / buyPrice) * 100;
-      
-      // Add calculated fields to investment data
-      changes.push({
-        ...inv,
-        changePercent,
-        changeAmount: currentPrice - buyPrice,
-        trend: changePercent >= 0 ? 'up' : 'down'
-      });
+    // Skip items without valid current price data
+    const currentPrice = parseFloat(inv.current_price);
+    const buyPrice = parseFloat(inv.buy_price);
+    
+    if (!currentPrice || currentPrice <= 0 || !buyPrice || buyPrice <= 0) {
+      continue; // Skip items without valid price data
     }
     
-    // Sort by absolute change percentage (largest changes first/last based on sortOrder)
-    changes.sort((a, b) => {
-      const comparison = Math.abs(b.changePercent) - Math.abs(a.changePercent);
-      return sortOrder === 'most' ? comparison : -comparison;
-    });
+    const changePercent = ((currentPrice - buyPrice) / buyPrice) * 100;
     
-    // Apply item limit based on showAll state
-    return changes.slice(0, maxItemsToShow);
-  }, [investments, maxItemsToShow, sortOrder]);
+    changes.push({
+      ...inv,
+      changePercent,
+      changeAmount: currentPrice - buyPrice,
+      trend: changePercent >= 0 ? 'up' : 'down'
+    });
+  }
+  
+  // Sort by absolute change percentage
+  changes.sort((a, b) => {
+    const comparison = Math.abs(b.changePercent) - Math.abs(a.changePercent);
+    return sortOrder === 'most' ? comparison : -comparison;
+  });
+  
+  return changes.slice(0, maxItemsToShow);
+}, [investments, maxItemsToShow, sortOrder]);
 
   // Calculate pagination data separately to avoid recalculating when only page changes
   // Determines total pages needed and items to show on current page
@@ -326,15 +351,20 @@ const RecentPriceChanges = React.memo(({ investments = [] }) => {
           <>
             {/* Investment items list */}
             <div className="space-y-4 flex-grow">
-              {currentPageItems.map((investment) => (
-                <InvestmentItem 
-                  key={investment.id}
-                  investment={investment}
-                  formatPrice={formatPrice}
-                  displayName={displayName}
-                  subtitle={subtitle}
-                />
-              ))}
+              {currentPageItems.map((investment) => {
+                const itemState = itemStates.get(investment.id) || { isNew: false, isPriceLoading: false };
+                return (
+                  <InvestmentItem 
+                    key={investment.id}
+                    investment={investment}
+                    formatPrice={formatPrice}
+                    displayName={displayName}
+                    subtitle={subtitle}
+                    isNew={itemState.isNew}
+                    isPriceLoading={itemState.isPriceLoading}
+                  />
+                );
+              })}
             </div>
 
             {/* Pagination controls - pinned to bottom of container */}
