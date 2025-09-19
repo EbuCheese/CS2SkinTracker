@@ -5,7 +5,7 @@ import { RecentPriceChanges, RecentActivity } from '@/components/item-display';
 import { QuickAddItemForm, QuickSellModal } from '@/components/forms';
 import { supabase } from '@/supabaseClient';
 import { formatPrice } from '@/hooks/util';
-import { useCalculatePortfolioHealth, useChartData, usePortfolioData, useQuickActions, useRecentActivity, usePortfolioSummary } from '@/hooks/portfolio';
+import { useCalculatePortfolioHealth, useChartData, usePortfolioData, useQuickActions, useRecentActivity, usePortfolioSummary, useSingleItemPrice } from '@/hooks/portfolio';
 import { useToast } from '@/contexts/ToastContext';
 
 // Main InvestmentDashboard component
@@ -15,10 +15,14 @@ const InvestmentDashboard = ({ userSession }) => {
 
   const { investments, soldItems, portfolioSummary, loading, error, errorDetails, refetch, retry, setInvestments, setSoldItems } = usePortfolioData(userSession);
   
+  // single price data hook
+  const { refreshSingleItemPrice } = useSingleItemPrice();
+
   // track optimistics updates
-    const [optimisticUpdates, setOptimisticUpdates] = useState({
+  const [optimisticUpdates, setOptimisticUpdates] = useState({
     totalInvested: 0,
     totalCurrentValue: 0,
+    currentHoldingsValue: 0,
     totalRealizedPL: 0,
     totalUnrealizedPL: 0
   });
@@ -32,6 +36,9 @@ const InvestmentDashboard = ({ userSession }) => {
   const [showQuickSell, setShowQuickSell] = useState(false);
   const quickActions = useQuickActions(setShowQuickAdd, setShowQuickSell);
 
+  // track the new added item states
+  const [itemStates, setItemStates] = useState(new Map());
+
   // Calculate portfolio health metrics using custom hook
   const portfolioHealth = useCalculatePortfolioHealth(investments);
   
@@ -41,6 +48,7 @@ const InvestmentDashboard = ({ userSession }) => {
       setOptimisticUpdates({
         totalInvested: 0,
         totalCurrentValue: 0,
+        currentHoldingsValue: 0,
         totalRealizedPL: 0,
         totalUnrealizedPL: 0
       });
@@ -58,15 +66,15 @@ const InvestmentDashboard = ({ userSession }) => {
       sum + (parseFloat(inv.unrealized_profit_loss) || 0), 0);
     
     return {
-      totalRealizedPL: totalRealizedPL + optimisticUpdates.totalRealizedPL,
-      totalUnrealizedPL: totalUnrealizedPL + optimisticUpdates.totalUnrealizedPL,
-      totalProfitLoss: totalRealizedPL + totalUnrealizedPL + optimisticUpdates.totalRealizedPL + optimisticUpdates.totalUnrealizedPL
+      totalRealizedPL: totalRealizedPL + (optimisticUpdates.totalRealizedPL || 0),
+      totalUnrealizedPL: totalUnrealizedPL + (optimisticUpdates.totalUnrealizedPL || 0),
+      totalProfitLoss: totalRealizedPL + totalUnrealizedPL + (optimisticUpdates.totalRealizedPL || 0) + (optimisticUpdates.totalUnrealizedPL || 0)
     };
   }
 
-  // Use pre-calculated values from database + optimistic updates
-  const totalRealizedPL = parseFloat(portfolioSummary.total_realized_pl || 0) + optimisticUpdates.totalRealizedPL;
-  const totalUnrealizedPL = parseFloat(portfolioSummary.total_unrealized_pl || 0) + optimisticUpdates.totalUnrealizedPL;
+  // Use pre-calculated values from database + optimistic updates with null-safe operations
+  const totalRealizedPL = (parseFloat(portfolioSummary.total_realized_pl) || 0) + (optimisticUpdates.totalRealizedPL || 0);
+  const totalUnrealizedPL = (parseFloat(portfolioSummary.total_unrealized_pl) || 0) + (optimisticUpdates.totalUnrealizedPL || 0);
   
   return {
     totalRealizedPL,
@@ -87,10 +95,16 @@ const basePortfolioMetrics = usePortfolioSummary(
 
 // Use the same portfolio summary logic as the Investments page
 const portfolioMetrics = useMemo(() => {
-  // Apply optimistic updates
-  const updatedTotalCurrentValue = basePortfolioMetrics.totalCurrentValue + optimisticUpdates.totalCurrentValue;
-  const updatedTotalInvested = basePortfolioMetrics.totalInvested + optimisticUpdates.totalInvested;
-  const updatedTotalProfitLoss = separatedPL.totalProfitLoss;
+  // Apply optimistic updates with null-safe operations
+  const safeBaseCurrentValue = basePortfolioMetrics.totalCurrentValue || 0;
+  const safeBaseInvested = basePortfolioMetrics.totalInvested || 0;
+  const safeOptimisticCurrentValue = optimisticUpdates.totalCurrentValue || 0;
+  const safeOptimisticInvested = optimisticUpdates.totalInvested || 0;
+  
+  const updatedTotalCurrentValue = safeBaseCurrentValue + safeOptimisticCurrentValue;
+  const updatedCurrentHoldingsValue = (basePortfolioMetrics.currentHoldingsValue || 0) + (optimisticUpdates.currentHoldingsValue || 0);
+  const updatedTotalInvested = safeBaseInvested + safeOptimisticInvested;
+  const updatedTotalProfitLoss = separatedPL.totalProfitLoss || 0;
   
   // Check if we have optimistic updates that would affect the percentage
   const hasOptimisticUpdates = optimisticUpdates.totalInvested !== 0 || 
@@ -100,24 +114,24 @@ const portfolioMetrics = useMemo(() => {
 
   const updatedProfitPercentage = hasOptimisticUpdates ? 
     (() => {
-      // For percentage calculation, the denominator should be the UPDATED total investment
-      // This includes both original investments AND new purchases (optimistic updates)
+      // Use total_investment from portfolioSummary for percentage calculation
       const totalInvestmentForPercentage = portfolioSummary ? 
-        parseFloat(portfolioSummary.total_investment || 0) + optimisticUpdates.totalInvested : // DB + optimistic additions
-        basePortfolioMetrics.totalInvested; // Already includes optimistic updates
+        (parseFloat(portfolioSummary.total_investment || 0) + safeOptimisticInvested) :
+        updatedTotalInvested;
       
       return totalInvestmentForPercentage > 0 
         ? (updatedTotalProfitLoss / totalInvestmentForPercentage) * 100 
         : 0;
     })() : 
-    basePortfolioMetrics.profitPercentage; // Use pre-calculated DB value
+    (basePortfolioMetrics.profitPercentage || 0);
 
   return {
     ...basePortfolioMetrics,
     totalCurrentValue: updatedTotalCurrentValue,
+    currentHoldingsValue: updatedCurrentHoldingsValue,
     totalInvested: updatedTotalInvested,
     totalProfit: updatedTotalProfitLoss,
-    profitPercentage: updatedProfitPercentage
+    profitPercentage: isNaN(updatedProfitPercentage) ? 0 : updatedProfitPercentage
   };
 }, [basePortfolioMetrics, optimisticUpdates, separatedPL, portfolioSummary]);
 
@@ -147,14 +161,38 @@ const portfolioMetrics = useMemo(() => {
     return displayName;
   }, []);
 
+  // Helper for updating the item state
+  const updateItemState = useCallback((itemId, updates) => {
+  setItemStates(prev => {
+    const newMap = new Map(prev);
+    const current = newMap.get(itemId) || { isNew: false, isPriceLoading: false };
+    newMap.set(itemId, { ...current, ...updates });
+    return newMap;
+  });
+}, []);
+
   // Handles adding a new item
   const handleAddItem = useCallback((newItem) => {
+  const safeBuyPrice = parseFloat(newItem.buy_price) || 0;
+  const safeQuantity = parseInt(newItem.quantity) || 0;
+
+  // Handle current_price like db
+  const rawCurrentPrice = parseFloat(newItem.current_price);
+  const safeCurrentPrice = (rawCurrentPrice && rawCurrentPrice > 0) ? rawCurrentPrice : null;
+
+  const unrealizedPL = (safeCurrentPrice && safeCurrentPrice > 0 && safeQuantity > 0) 
+    ? (safeCurrentPrice - safeBuyPrice) * safeQuantity 
+    : 0;
+
   // Calculate initial metrics manually
   const itemWithMetrics = {
     ...newItem,
-    unrealized_profit_loss: (newItem.current_price - newItem.buy_price) * newItem.quantity,
+    current_price: safeCurrentPrice,
+    buy_price: safeBuyPrice,
+    quantity: safeQuantity,
+    unrealized_profit_loss: unrealizedPL,
     realized_profit_loss: 0,
-    original_quantity: newItem.quantity,
+    original_quantity: safeQuantity,
     total_sold_quantity: 0,
     total_sale_value: 0
   };
@@ -162,92 +200,137 @@ const portfolioMetrics = useMemo(() => {
   // Add to investments list optimistically
   setInvestments(prev => [itemWithMetrics, ...prev]);
   
+  // Set initial states for new item
+  updateItemState(newItem.id, { isNew: true, isPriceLoading: true });
+
   // Update optimistic portfolio summary
-  const totalInvestedIncrease = newItem.buy_price * newItem.quantity;
-  const totalCurrentValueIncrease = newItem.current_price * newItem.quantity;
-  const unrealizedPLIncrease = itemWithMetrics.unrealized_profit_loss;
+  const totalInvestedIncrease = safeBuyPrice * safeQuantity;
+  const totalCurrentValueIncrease = safeCurrentPrice ? safeCurrentPrice * safeQuantity : safeBuyPrice * safeQuantity;
   
   setOptimisticUpdates(prev => ({
-    totalInvested: prev.totalInvested + totalInvestedIncrease,
-    totalCurrentValue: prev.totalCurrentValue + totalCurrentValueIncrease,
-    totalRealizedPL: prev.totalRealizedPL, // No change
-    totalUnrealizedPL: prev.totalUnrealizedPL + unrealizedPLIncrease
+    totalInvested: (prev.totalInvested || 0) + totalInvestedIncrease,
+    totalCurrentValue: (prev.totalCurrentValue || 0) + totalCurrentValueIncrease,
+    currentHoldingsValue: (prev.currentHoldingsValue || 0) + totalCurrentValueIncrease, 
+    totalRealizedPL: prev.totalRealizedPL || 0,
+    totalUnrealizedPL: (prev.totalUnrealizedPL || 0) + unrealizedPL
   }));
   
-  console.log('New item added with optimistic updates:', itemWithMetrics);
-}, [setInvestments]);
+  // Refresh price data after a short delay
+  setTimeout(() => {
+  refreshSingleItemPrice(
+    newItem.id,
+    userSession,
+    // SUCCESS CALLBACK - Add optimistic update recalculation
+    (itemId, updatedItemData) => {
+      setInvestments(prev => prev.map(inv =>
+        inv.id === itemId ? updatedItemData : inv
+      ));
+      updateItemState(itemId, { isPriceLoading: false });
+      
+      // RECALCULATE optimistic updates with new price
+      const oldPrice = safeBuyPrice; // What we used initially
+      const newPrice = updatedItemData.current_price || oldPrice;
+      const priceDifference = (newPrice - oldPrice) * safeQuantity;
+      
+      setOptimisticUpdates(prev => ({
+        ...prev,
+        currentHoldingsValue: (prev.currentHoldingsValue || 0) + priceDifference,
+        totalCurrentValue: (prev.totalCurrentValue || 0) + priceDifference,
+        totalUnrealizedPL: (prev.totalUnrealizedPL || 0) + priceDifference
+      }));
+    },
+      // Error callback - still stop loading indicator
+      (itemId, error) => {
+        console.error('Failed to refresh price for new item:', error);
+        updateItemState(itemId, { isPriceLoading: false });
+        toast.warning('Price data will be available on next refresh');
+      }
+    );
+  }, 1000);
+
+  // Remove new flag after animation
+  setTimeout(() => {
+    updateItemState(newItem.id, { isNew: false });
+  }, 700);
+
+  // Remove price loading when data is available OR after timeout
+  setTimeout(() => {
+    updateItemState(newItem.id, { isPriceLoading: false });
+  }, 5000);
+}, [setInvestments, updateItemState, refreshSingleItemPrice, userSession, toast]);
 
   // Handles completion of a sale transaction
   const handleSaleComplete = useCallback((investmentId, quantitySold, salePrice, remainingQuantity) => {
-    const soldItem = investments.find(inv => inv.id === investmentId);
-    if (!soldItem) return;
+      const soldItem = investments.find(inv => inv.id === investmentId);
+      if (!soldItem) return;
 
-    // Calculate profit/loss for this sale
-    const saleValue = salePrice * quantitySold;
-    const saleProfitLoss = (salePrice - soldItem.buy_price) * quantitySold;
-    const isFullSale = remainingQuantity === 0;
-    
-    // Calculate optimistic updates
-    const totalInvestedDecrease = isFullSale ? soldItem.buy_price * soldItem.quantity : 0;
-    const totalCurrentValueDecrease = soldItem.current_price * quantitySold;
-    const realizedPLIncrease = saleProfitLoss;
-    const unrealizedPLDecrease = (soldItem.current_price - soldItem.buy_price) * quantitySold;
+      // Calculate profit/loss for this sale
+      const saleValue = salePrice * quantitySold;
+      const saleProfitLoss = (salePrice - soldItem.buy_price) * quantitySold;
+      const isFullSale = remainingQuantity === 0;
+      
+      // Calculate optimistic updates - CORRECTED
+      const totalCurrentValueDecrease = soldItem.current_price ? soldItem.current_price * quantitySold : soldItem.buy_price * quantitySold;
+      const realizedPLIncrease = saleProfitLoss;
+      const unrealizedPLDecrease = soldItem.current_price ? (soldItem.current_price - soldItem.buy_price) * quantitySold : 0;
 
-    // Create sold item data
-    const soldItemData = {
-      id: `temp_${Date.now()}`,
-      investment_id: investmentId,
-      user_id: userSession.id,
-      quantity_sold: quantitySold,
-      price_per_unit: salePrice,
-      total_sale_value: saleValue,
-      sale_date: new Date().toISOString(),
-      item_name: soldItem.name,
-      item_skin_name: soldItem.skin_name,
-      item_condition: soldItem.condition,
-      buy_price_per_unit: soldItem.buy_price,
-      image_url: soldItem.image_url || null,
-      notes: null,
-      item_variant: soldItem.variant || 'normal'
-    };
+      // Create sold item data
+      const soldItemData = {
+        id: `temp_${Date.now()}`,
+        investment_id: investmentId,
+        user_id: userSession.id,
+        quantity_sold: quantitySold,
+        price_per_unit: salePrice,
+        total_sale_value: saleValue,
+        sale_date: new Date().toISOString(),
+        item_name: soldItem.name,
+        item_skin_name: soldItem.skin_name,
+        item_condition: soldItem.condition,
+        buy_price_per_unit: soldItem.buy_price,
+        image_url: soldItem.image_url || null,
+        notes: null,
+        item_variant: soldItem.variant || 'normal'
+      };
 
-    // Update investments list optimistically
-    setInvestments(prev => {
-      return prev.map(inv => {
-        if (inv.id !== investmentId) return inv;
+      // Update investments list optimistically
+      setInvestments(prev => {
+        return prev.map(inv => {
+          if (inv.id !== investmentId) return inv;
 
-        return {
-          ...inv,
-          quantity: remainingQuantity,
-          is_fully_sold: remainingQuantity === 0, // Mark as fully sold instead of removing
-          total_sold_quantity: (inv.total_sold_quantity || 0) + quantitySold,
-          total_sale_value: (inv.total_sale_value || 0) + saleValue,
-          realized_profit_loss: (inv.realized_profit_loss || 0) + saleProfitLoss,
-          unrealized_profit_loss: remainingQuantity > 0 ? (inv.current_price - inv.buy_price) * remainingQuantity : 0
-        };
+          return {
+            ...inv,
+            quantity: remainingQuantity,
+            is_fully_sold: remainingQuantity === 0,
+            total_sold_quantity: (inv.total_sold_quantity || 0) + quantitySold,
+            total_sale_value: (inv.total_sale_value || 0) + saleValue,
+            realized_profit_loss: (inv.realized_profit_loss || 0) + saleProfitLoss,
+            unrealized_profit_loss: remainingQuantity > 0 ? 
+              (inv.current_price && inv.current_price > 0 ? (inv.current_price - inv.buy_price) * remainingQuantity : 0) : 0
+          };
+        });
       });
-    });
 
-    // Add to sold items
-    setSoldItems(prev => [soldItemData, ...prev]);
-    
-    // Update optimistic portfolio summary
-    setOptimisticUpdates(prev => ({
-      totalInvested: prev.totalInvested,
-      totalCurrentValue: prev.totalCurrentValue - totalCurrentValueDecrease,
-      totalRealizedPL: prev.totalRealizedPL + realizedPLIncrease,
-      totalUnrealizedPL: prev.totalUnrealizedPL - unrealizedPLDecrease
-    }));
+      // Add to sold items
+      setSoldItems(prev => [soldItemData, ...prev]);
+      
+      // Update optimistic portfolio summary
+      setOptimisticUpdates(prev => ({
+        totalInvested: prev.totalInvested,
+        totalCurrentValue: prev.totalCurrentValue - totalCurrentValueDecrease + saleValue, // Keep for total portfolio value
+        currentHoldingsValue: (prev.currentHoldingsValue || 0) - totalCurrentValueDecrease, // Add this for holdings only
+        totalRealizedPL: prev.totalRealizedPL + realizedPLIncrease,
+        totalUnrealizedPL: prev.totalUnrealizedPL - unrealizedPLDecrease
+      }));
 
-    // Show toast
-    const detailedName = buildDetailedItemName(soldItem);
-    if (isFullSale) {
-      toast.fullSaleCompleted(detailedName, quantitySold, saleValue, saleProfitLoss);
-    } else {
-      toast.partialSaleCompleted(detailedName, quantitySold, remainingQuantity, saleValue, saleProfitLoss);
-    }
+      // Show toast
+      const detailedName = buildDetailedItemName(soldItem);
+      if (isFullSale) {
+        toast.fullSaleCompleted(detailedName, quantitySold, saleValue, saleProfitLoss);
+      } else {
+        toast.partialSaleCompleted(detailedName, quantitySold, remainingQuantity, saleValue, saleProfitLoss);
+      }
 
-}, [investments, userSession.id, setInvestments, setSoldItems, buildDetailedItemName, toast]);
+  }, [investments, userSession.id, setInvestments, setSoldItems, buildDetailedItemName, toast]);
 
   if (loading) {
     return (
@@ -323,12 +406,12 @@ const portfolioMetrics = useMemo(() => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {/* Total Portfolio Value Card */}
+          {/* Current Holdings Value Card */}
           <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">Total Portfolio Value</p>
-                <p className="text-2xl font-bold text-white">{formatPrice(portfolioMetrics.totalCurrentValue)}</p>
+                <p className="text-gray-400 text-sm">Current Holding Value</p>
+                <p className="text-2xl font-bold text-white">{formatPrice(portfolioMetrics.currentHoldingsValue)}</p>
               </div>
               <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
                 <DollarSign className="w-6 h-6 text-white" />
@@ -381,7 +464,10 @@ const portfolioMetrics = useMemo(() => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           <div className="lg:col-span-2">
-            <RecentPriceChanges investments={investments} />
+            <RecentPriceChanges 
+              investments={investments}
+              itemStates={itemStates} 
+            />
           </div>
 
           {/* Quick Actions Sidebar */}
@@ -475,8 +561,12 @@ const portfolioMetrics = useMemo(() => {
 
         {/* Portfolio Health */}
         <div className="lg:col-span-1">
-        <PortfolioHealthPieChart portfolioHealth={portfolioHealth} />
-      </div>
+          <PortfolioHealthPieChart 
+            portfolioHealth={portfolioHealth} 
+            optimisticUpdates={optimisticUpdates}
+            portfolioSummary={portfolioSummary}
+          />
+        </div>
       </div>
 
       </div>
