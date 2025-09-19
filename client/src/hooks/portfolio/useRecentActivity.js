@@ -37,28 +37,36 @@ export const useRecentActivity = (investments, soldItems) => {
     const recentSales = soldItems
       .filter(sale => sale.sale_date && parseFloat(sale.total_sale_value) > 0)
       .sort((a, b) => new Date(b.sale_date) - new Date(a.sale_date))
-      .slice(0, 12) // Increased from 10 to 12
+      .slice(0, 12)
       .map(sale => {
         const subtitle = sale.item_condition && sale.item_condition.toLowerCase() !== 'unknown'
           ? `${sale.item_condition} • Qty: ${sale.quantity_sold}`
           : `Qty: ${sale.quantity_sold}`;
-       
+      
         return {
           ...sale,
           type: 'sale',
           date: new Date(sale.sale_date),
-          title: `${sale.item_name}${sale.item_skin_name ? ` (${sale.item_skin_name})` : ''}`,
+          // Map database fields to match formatting hook expectations
+          name: sale.item_name || 'Unknown Item',
+          skin_name: sale.item_skin_name,
+          condition: sale.item_condition,
+          variant: sale.item_variant || 'normal',
+          quantity: sale.quantity_sold,
+          // original fields for compatibility
+          item_name: sale.item_name,
+          item_skin_name: sale.item_skin_name,
+          item_condition: sale.item_condition,
+          item_variant: sale.item_variant,
           subtitle: subtitle,
           amount: parseFloat(sale.total_sale_value),
           isPositive: true,
-          image_url: sale.image_url,
-          variant: sale.item_variant,
-          quantity: sale.quantity_sold
+          image_url: sale.image_url
         };
       });
       
     return [...recentInvestments, ...recentSales]
       .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, 12); // Increased from 8 to 12
+      .slice(0, 12); 
   }, [investments, soldItems]);
 };

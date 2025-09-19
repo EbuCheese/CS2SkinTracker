@@ -47,13 +47,12 @@ const RecentActivity = ({ recentActivity, formatPrice }) => {
   const processedActivities = useMemo(() => {
   return recentActivity.map(activity => ({
     ...activity,
-    // Fix: Use the hook's subtitle function properly with correct field mapping
     processedSubtitle: subtitle(activity, { 
-      quantityField: 'quantity_sold', // This field might not exist
-      conditionField: 'condition',     // Make sure this maps correctly
+      quantityField: activity.type === 'sale' ? 'quantity_sold' : 'quantity',
+      conditionField: activity.type === 'sale' ? 'item_condition' : 'condition',
       showQuantity: true
     }),
-    // Fix: Use displayName from hook instead of building it manually
+    // Now that sold items have the correct field names, displayName hook should work
     displayTitle: displayName(activity)
   }));
 }, [recentActivity, subtitle, displayName]);
