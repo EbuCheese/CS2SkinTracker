@@ -87,7 +87,7 @@ const DistributionItem = React.memo(({
 ));
 
 // Main Portfolio Health Pie Chart Component
-const PortfolioHealthPieChart = ({ portfolioHealth }) => {
+const PortfolioHealthPieChart = ({ portfolioHealth, optimisticUpdates = null, portfolioSummary = null }) => {
   // Toggle types
   const [activeToggle, setActiveToggle] = useState('type');
   const [viewMode, setViewMode] = useState('chart'); // 'chart' or 'table'
@@ -694,6 +694,19 @@ const StickyTooltip = React.memo(() => {
   const currentData = viewMode === 'table' ? tableData : sortedProcessedData;
   const startIndex = 0;
 
+  // calculate total holding value with optimistic updates
+  const currentTotal = useMemo(() => {
+    // Use current holdings value from portfolio summary if available
+    const baseHoldingsValue = portfolioSummary?.current_holdings_value ? 
+      parseFloat(portfolioSummary.current_holdings_value) : 
+      currentData.reduce((sum, item) => sum + item.value, 0);
+    
+    // Apply optimistic updates
+    const optimisticHoldingsUpdate = optimisticUpdates?.currentHoldingsValue || 0;
+    
+    return baseHoldingsValue + optimisticHoldingsUpdate;
+  }, [currentData, optimisticUpdates, portfolioSummary]);
+
   // Handle clicks on distribution list items
   const handleDistributionItemClick = useCallback((item, event) => {
   if (activeToggle === 'item') {
@@ -839,7 +852,7 @@ const StickyTooltip = React.memo(() => {
         <div>
           <h2 className="text-xl font-semibold text-white">Portfolio Distribution</h2>
           <p className="text-sm text-gray-400 mt-1">
-            Total: {formatCurrency(currentData.reduce((sum, item) => sum + item.value, 0))}
+            Total: {formatCurrency(currentTotal)}
           </p>
         </div>
 
