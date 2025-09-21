@@ -353,18 +353,27 @@ const getEditFormDefaults = useCallback(() => {
   const currentPriceSource = item.price_source === 'manual' ? 'manual' : 
     (item.preferred_marketplace_override || item.price_source || 'csfloat');
   
+  // Check if valid prices
+  const availableMarketplaces = getAvailableMarketplaces();
+  const isCurrentSourceAvailable = availableMarketplaces.some(mp => mp.marketplace === currentPriceSource);
+  
+  // If no marketplaces available OR current source isn't available, default to manual
+  const effectivePriceSource = (availableMarketplaces.length === 0 || !isCurrentSourceAvailable) 
+    ? 'manual' 
+    : currentPriceSource;
+
   return {
     condition: displayValues.condition || '',
     variant: displayValues.variant || 'normal',
     quantity: item.quantity || 1,
     buy_price: item.buy_price || 0,
     notes: item.notes || '',
-    price_source: currentPriceSource,
-    manual_price: item.market_price_override || item.current_price || 0
+    price_source: effectivePriceSource,
+    manual_price: item.market_price_override || item.current_price || ''
   };
 }, [isSoldItem, displayValues.condition, displayValues.variant, 
     item.quantity_sold, item.price_per_unit, item.quantity, item.buy_price, item.notes,
-    item.price_source, item.preferred_marketplace_override, item.market_price_override, item.current_price]);
+    item.price_source, item.preferred_marketplace_override, item.market_price_override, item.current_price, getAvailableMarketplaces]);
 
 // Initialize edit form and open edit mode
 const handleStartEdit = useCallback(() => {
@@ -694,20 +703,31 @@ const handleEditFormSubmit = useCallback(async () => {
 
     // Handle price source changes
     if (editForm.price_source === 'manual') {
-      // Manual price logic remains the same
-      const manualPriceValue = parseFloat(editForm.manual_price);
-      if (isNaN(manualPriceValue) || manualPriceValue <= 0) {
-        throw new Error('Manual price must be greater than 0');
+      const manualPriceValue = editForm.manual_price ? parseFloat(editForm.manual_price) : null;
+      
+      if (manualPriceValue === null || manualPriceValue === '') {
+        // User wants to clear manual override - revert to no pricing
+        const { error: priceError } = await supabase.rpc('set_investment_price_override', {
+          p_investment_id: item.id,
+          p_user_id: userSession.id,
+          p_override_price: null,
+          p_use_override: false
+        });
+        
+        if (priceError) throw priceError;
+      } else if (isNaN(manualPriceValue) || manualPriceValue <= 0) {
+        throw new Error('Manual price must be greater than 0 or left empty to remove override');
+      } else {
+        // Valid manual price
+        const { error: priceError } = await supabase.rpc('set_investment_price_override', {
+          p_investment_id: item.id,
+          p_user_id: userSession.id,
+          p_override_price: manualPriceValue,
+          p_use_override: true
+        });
+        
+        if (priceError) throw priceError;
       }
-      
-      const { error: priceError } = await supabase.rpc('set_investment_price_override', {
-        p_investment_id: item.id,
-        p_user_id: userSession.id,
-        p_override_price: manualPriceValue,
-        p_use_override: true
-      });
-      
-      if (priceError) throw priceError;
       
     } else if (editForm.price_source !== item.price_source || item.preferred_marketplace_override) {
       // User selected a specific marketplace different from current
@@ -1407,8 +1427,16 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">
-                      Current Price
+                    <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center space-x-1">
+                      <span>Current Price</span>
+                      {editForm.price_source === 'manual' && (
+                        <div className="relative group">
+                          <Info className="w-3 h-3 mt-0.5 text-gray-500 hover:text-gray-400 cursor-help" />
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                            Leave empty and save to remove manual pricing
+                          </div>
+                        </div>
+                      )}
                     </label>
                     <input
                       type="number"
