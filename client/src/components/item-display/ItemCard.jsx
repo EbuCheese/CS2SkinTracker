@@ -1024,11 +1024,11 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <div className="text-gray-400 mb-0.5">Sold:</div>
-                    <div className="text-green-400">${item.price_per_unit?.toFixed(2)}</div>
+                    <div className="text-green-400">${item.price_per_unit?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                   </div>
                   <div>
                     <div className="text-gray-400 mb-0.5">Bought:</div>
-                    <div className="text-white">${item.buy_price_per_unit?.toFixed(2)}</div>
+                    <div className="text-white">${item.buy_price_per_unit?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                   </div>
                 </div>
 
@@ -1039,7 +1039,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                 </div>
                 <div className="mt-1">
                   <span className="text-gray-400">Total Sale: </span>
-                  <span className="text-white">${item.total_sale_value?.toFixed(2)}</span>
+                  <span className="text-white">${item.total_sale_value?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </>
@@ -1100,7 +1100,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                   <div>
                     <div className="text-gray-400 mb-0.5">Buy:</div>
                     <div className="text-white">
-                      ${baseMetrics.buyPrice.toFixed(2)}
+                      ${baseMetrics.buyPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                   </div>
                   <div>
@@ -1108,7 +1108,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                     <div className="text-white">
                       {hasValidPriceData(item) ? ( 
                         <div className="flex items-center space-x-1">
-                            <span>${baseMetrics.currentPrice.toFixed(2)}</span>
+                            <span>${baseMetrics.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             {/* Price loading indicator for recently added items */} 
                             {isPriceLoading && (
                               <div className="relative group">
@@ -1183,16 +1183,16 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
             profitMetrics.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'
           }`}>
             {profitMetrics.totalProfitLoss >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-            <span className="font-medium">${Math.abs(profitMetrics.totalProfitLoss).toFixed(2)}</span>
+            <span className="font-medium">${Math.abs(profitMetrics.totalProfitLoss).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             <span className="text-xs">({profitMetrics.profitPercentage}%)</span>
           </div>
           
           {/* P&L breakdown for items with mixed realized/unrealized gains - helps users understand split */}
           {showSalesBreakdown && (
             <div className="text-xs text-gray-400 mt-1">
-              <div>Realized: {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toFixed(2)}</div>
-              <div>Unrealized: {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.unrealizedProfitLoss).toFixed(2)}</div>
-              <div>Avg Sale: ${salesSummary.averageSalePrice.toFixed(2)}</div>
+              <div>Realized: {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div>Unrealized: {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.unrealizedProfitLoss).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div>Avg Sale: ${salesSummary.averageSalePrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             </div>
           )}
           
