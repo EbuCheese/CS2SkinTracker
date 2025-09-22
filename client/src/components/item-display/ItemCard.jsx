@@ -29,6 +29,54 @@ import { useToast } from '@/contexts/ToastContext';
     EDITING: 'editing'
   };
 
+  // comparison prop function
+  const areItemsEqual = (prevProps, nextProps) => {
+  // Critical props that should trigger re-renders
+  const criticalProps = [
+    'item.id',
+    'item.quantity',
+    'item.current_price',
+    'item.buy_price', 
+    'item.realized_profit_loss',
+    'item.unrealized_profit_loss',
+    'item.total_sold_quantity',
+    'item.total_sale_value',
+    'item.notes',
+    'item.condition',
+    'item.variant',
+    'isNew',
+    'isPriceLoading',
+    'isSoldItem'
+  ];
+
+  // Check if any critical prop has changed
+  for (const prop of criticalProps) {
+    const keys = prop.split('.');
+    let prevValue = prevProps;
+    let nextValue = nextProps;
+    
+    for (const key of keys) {
+      prevValue = prevValue?.[key];
+      nextValue = nextValue?.[key];
+    }
+    
+    if (prevValue !== nextValue) {
+      return false;
+    }
+  }
+
+  // Special check for itemStates since it's a Map
+  const prevItemState = prevProps.itemStates?.get(prevProps.item.id) || { isNew: false, isPriceLoading: false };
+  const nextItemState = nextProps.itemStates?.get(nextProps.item.id) || { isNew: false, isPriceLoading: false };
+  
+  if (prevItemState.isNew !== nextItemState.isNew || 
+      prevItemState.isPriceLoading !== nextItemState.isPriceLoading) {
+    return false;
+  }
+
+  return true;
+};
+
 // Main ItemCard Component - Displays individual investment items with interactive features
 const ItemCard = React.memo(({ 
   item, 
@@ -1581,6 +1629,6 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
       />
     </div>
   );
-});
+}, areItemsEqual);
 
 export default ItemCard;
