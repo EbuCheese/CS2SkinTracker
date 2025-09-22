@@ -3,6 +3,7 @@ import { TrendingUp, Plus, DollarSign, Activity, Loader2 } from 'lucide-react';
 import { PortfolioPerformanceChart, PortfolioHealthPieChart } from '@/components/charts';
 import { RecentPriceChanges, RecentActivity } from '@/components/item-display';
 import { QuickAddItemForm, QuickSellModal } from '@/components/forms';
+import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { supabase } from '@/supabaseClient';
 import { formatPrice } from '@/hooks/util';
 import { useCalculatePortfolioHealth, useChartData, usePortfolioData, useQuickActions, useRecentActivity, usePortfolioSummary, useSingleItemPrice } from '@/hooks/portfolio';
@@ -453,21 +454,33 @@ const portfolioMetrics = useMemo(() => {
         </div>
 
         {/* Portfolio Performance Chart */}
-        <PortfolioPerformanceChart 
-          chartData={chartData}
-          chartLoading={chartLoading}
-          selectedTimePeriod={selectedTimePeriod}
-          onTimePeriodChange={setSelectedTimePeriod}
-        />
+        <ErrorBoundary
+          title="Chart Error"
+          message="Unable to load portfolio performance chart. Your data is safe, but the visualization is temporarily unavailable."
+          onRetry={() => refetch()}
+        >
+          <PortfolioPerformanceChart 
+            chartData={chartData}
+            chartLoading={chartLoading}
+            selectedTimePeriod={selectedTimePeriod}
+            onTimePeriodChange={setSelectedTimePeriod}
+          />
+        </ErrorBoundary>
 
         {/* Recent Price Changes */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           <div className="lg:col-span-2">
-            <RecentPriceChanges 
-              investments={investments}
-              itemStates={itemStates} 
-            />
+            <ErrorBoundary
+              title="Price Data Error"
+              message="Unable to load recent price changes. This might be due to a temporary API issue."
+              onRetry={() => refetch()}
+            >
+              <RecentPriceChanges 
+                investments={investments}
+                itemStates={itemStates} 
+              />
+            </ErrorBoundary>
           </div>
 
           {/* Quick Actions Sidebar */}
@@ -531,10 +544,16 @@ const portfolioMetrics = useMemo(() => {
 
         {/* Recent Activity Widget */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
-        <RecentActivity 
-          recentActivity={recentActivity} 
-          formatPrice={formatPrice} 
-        />
+          <ErrorBoundary
+            title="Activity Feed Error"
+            message="Unable to load recent activity feed. Your transaction history is safe, but the display is temporarily unavailable."
+            onRetry={() => refetch()}
+          >
+            <RecentActivity 
+              recentActivity={recentActivity} 
+              formatPrice={formatPrice} 
+            />
+          </ErrorBoundary>
 
         {/* QuickAddItemForm (Quick Action Popup) */}
         {showQuickAdd && (
@@ -561,11 +580,17 @@ const portfolioMetrics = useMemo(() => {
 
         {/* Portfolio Health */}
         <div className="lg:col-span-1">
-          <PortfolioHealthPieChart 
-            portfolioHealth={portfolioHealth} 
-            optimisticUpdates={optimisticUpdates}
-            portfolioSummary={portfolioSummary}
-          />
+          <ErrorBoundary
+            title="Portfolio Analysis Error"
+            message="Unable to load portfolio health analysis. Your investment data is still safe."
+            onRetry={() => refetch()}
+          >
+            <PortfolioHealthPieChart 
+              portfolioHealth={portfolioHealth} 
+              optimisticUpdates={optimisticUpdates}
+              portfolioSummary={portfolioSummary}
+            />
+          </ErrorBoundary>
         </div>
       </div>
 
