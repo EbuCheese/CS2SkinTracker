@@ -3,7 +3,8 @@ import { Search, Plus, X, DollarSign, TrendingUp, TrendingDown, Loader2 } from '
 import { supabase } from '@/supabaseClient';
 import { ItemCard } from '@/components/item-display';
 import { AddItemForm } from '@/components/forms'
-import { useScrollLock } from '@/hooks/util';
+import ErrorBoundary from '@/components/ui/ErrorBoundary';
+import { useScrollLock, useAdvancedDebounce } from '@/hooks/util';
 import { usePortfolioData, usePortfolioFiltering, usePortfolioSummary, usePortfolioTabs, useSingleItemPrice } from '@/hooks/portfolio';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -13,6 +14,7 @@ const InvestmentsPage = ({ userSession }) => {
 
   // UI States
   const [activeTab, setActiveTab] = useState('All');          // Current category filter
+  const [searchInput, setSearchInput] = useState('');         // For Debounced search
   const [searchQuery, setSearchQuery] = useState('');        // User's search input
   const [showAddForm, setShowAddForm] = useState(false);     // Add item modal visibility
   const [itemToDelete, setItemToDelete] = useState(null);    // Item selected for deletion
@@ -31,6 +33,13 @@ const InvestmentsPage = ({ userSession }) => {
     totalRealizedPL: 0,
     totalUnrealizedPL: 0
   });
+
+  // Set debounced search
+  const { debouncedFunction: updateSearchQuery } = useAdvancedDebounce(
+    (query) => setSearchQuery(query),
+    300, // 300ms delay
+    { trailing: true, leading: false }
+  );
 
   // Investment data from hook
   const { investments, soldItems, portfolioSummary, loading, error, errorDetails, refetch, retry, setInvestments, setSoldItems } = usePortfolioData(userSession);
@@ -324,8 +333,16 @@ const handleAddItem = useCallback((newItem) => {
   }, []);
 
   const handleSearchChange = useCallback((e) => {
-    setSearchQuery(e.target.value);
-  }, []);
+    const value = e.target.value;
+    setSearchInput(value); // Update UI immediately
+    updateSearchQuery(value); // Update search query after debounce
+  }, [updateSearchQuery]);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchInput('');
+    setSearchQuery('');
+    updateSearchQuery.cancel(); // Cancel any pending updates
+  }, [updateSearchQuery]);
 
   const handleShowAddForm = useCallback(() => {
     setShowAddForm(true);
@@ -671,13 +688,13 @@ const handleAddItem = useCallback((newItem) => {
             <input
               type="text"
               placeholder={searchPlaceholder}
-              value={searchQuery}
+              value={searchInput}
               onChange={handleSearchChange}
               className="w-full pl-10 pr-10 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
             />
-            {searchQuery && (
+            {searchInput && (
               <button
-                onClick={() => setSearchQuery('')}
+                onClick={handleClearSearch}
                 className="absolute right-3 top-2.5 w-5 h-5 text-gray-400 hover:text-white transition-colors"
                 style={{ marginTop: '2px' }}
               >
@@ -737,33 +754,48 @@ const handleAddItem = useCallback((newItem) => {
         )}
 
         {/* Items Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {currentItems.map((item) => {
-            const itemState = itemStates.get(item.id) || { isNew: false, isPriceLoading: false }
-            const relatedInvestment = activeTab === 'Sold' && item.investment_id 
-              ? investments.find(inv => inv.id === item.investment_id) 
-              : null;
-              
-            return (
-              <ItemCard
-                key={item.id}
-                item={item}
-                userSession={userSession}
-                onUpdate={handleItemUpdate}
-                onDelete={handleItemDelete}
-                onRemove={handleItemRemove}
-                onRefresh={handleRefreshData}
-                isNew={itemState.isNew}
-                isPriceLoading={itemState.isPriceLoading}
-                isSoldItem={activeTab === 'Sold'}
-                relatedInvestment={relatedInvestment}
-                refreshSingleItemPrice={refreshSingleItemPrice}
-                updateItemState={updateItemState}
-                setInvestments={setInvestments}
-              />
-            );
-          })}
-        </div>
+        <ErrorBoundary 
+          title="Error Loading Items"
+          message="There was an issue displaying your items. This might be due to corrupted data or a temporary glitch."
+          onRetry={() => {
+            refetch();
+            setItemStates(new Map());
+          }}
+        >
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {currentItems.map((item) => {
+              const itemState = itemStates.get(item.id) || { isNew: false, isPriceLoading: false }
+              const relatedInvestment = activeTab === 'Sold' && item.investment_id 
+                ? investments.find(inv => inv.id === item.investment_id) 
+                : null;
+                
+              return (
+                <ErrorBoundary
+                  key={item.id}
+                  title={`Error Loading Item`}
+                  message="This item couldn't be displayed properly. You can try refreshing or contact support if this continues."
+                  onRetry={() => refetch()}
+                >
+                  <ItemCard
+                    item={item}
+                    userSession={userSession}
+                    onUpdate={handleItemUpdate}
+                    onDelete={handleItemDelete}
+                    onRemove={handleItemRemove}
+                    onRefresh={handleRefreshData}
+                    isNew={itemState.isNew}
+                    isPriceLoading={itemState.isPriceLoading}
+                    isSoldItem={activeTab === 'Sold'}
+                    relatedInvestment={relatedInvestment}
+                    refreshSingleItemPrice={refreshSingleItemPrice}
+                    updateItemState={updateItemState}
+                    setInvestments={setInvestments}
+                  />
+                </ErrorBoundary>
+              );
+            })}
+          </div>
+        </ErrorBoundary>
 
         {/* Empty State - Shows when no items match current filters */}
         {currentItems.length === 0 && (
