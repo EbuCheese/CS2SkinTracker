@@ -45,7 +45,7 @@ const QuickLogin = ({ onQuickLogin, onNewBetaKey, storedBetaKey, revocationMessa
         <div className="text-center mb-8">
           <div className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-2xl mx-auto mb-6">
             <img 
-              src="/logoTEST10.png" 
+              src="/skinwatch_logo_rounded.png" 
               alt="SkinWatch Logo" 
               className="w-20 h-20 object-contain rounded-2xl"
             />
