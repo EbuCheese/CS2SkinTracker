@@ -341,7 +341,6 @@ const handleAddItem = useCallback((newItem) => {
   const handleClearSearch = useCallback(() => {
     setSearchInput('');
     setSearchQuery('');
-    updateSearchQuery.cancel(); // Cancel any pending updates
   }, [updateSearchQuery]);
 
   const handleShowAddForm = useCallback(() => {
