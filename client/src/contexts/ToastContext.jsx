@@ -122,12 +122,11 @@ export const ToastProvider = ({ children }) => {
 };
 
   const itemUpdated = (itemName, options = {}) => {
-    // Keep full name with variants for edit confirmations
     return addToast({
       type: 'success',
       title: 'Item Updated',
-      message: itemName, // Full name including variants
-      metadata: null, // No metadata needed for updates
+      message: itemName,
+      metadata: null,
       duration: 5000,
       ...options
     });

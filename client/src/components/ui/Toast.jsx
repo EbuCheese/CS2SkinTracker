@@ -110,17 +110,16 @@ const Toast = ({ toast, onRemove }) => {
           progressColor: 'bg-slate-400',
           iconBg: 'bg-slate-500/25'
         };
-        case 'revert':
-  return {
-    bg: 'from-amber-900/90 via-orange-900/90 to-amber-900/90',
-    border: 'border-amber-500/40',
-    glow: 'shadow-amber-500/30',
-    icon: <CornerUpLeft className="w-5 h-5 text-amber-400" />,
-    titleColor: 'text-amber-100',
-    progressColor: 'bg-amber-400',
-    iconBg: 'bg-amber-500/25'
-  };
-
+      case 'revert':
+        return {
+        bg: 'from-indigo-900/90 via-indigo-800/90 to-indigo-900/90',
+        border: 'border-indigo-500/40',
+        glow: 'shadow-indigo-500/30',
+        icon: <CornerUpLeft className="w-5 h-5 text-indigo-400" />,
+        titleColor: 'text-indigo-100',
+        progressColor: 'bg-indigo-400',
+        iconBg: 'bg-indigo-500/25'
+      };
       case 'info':
         return {
           bg: 'from-purple-900/90 via-violet-900/90 to-purple-900/90',
