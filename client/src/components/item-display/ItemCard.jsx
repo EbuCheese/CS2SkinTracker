@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { TrendingUp, TrendingDown, Loader2, Edit2, Save, AlertTriangle, Info } from 'lucide-react';
+import { Loader2, Edit2, Save, AlertTriangle, Info, Calendar, DollarSign, Store, Package } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 import { PopupManager } from '@/components/ui';
 import { useScrollLock } from '@/hooks/util';
@@ -983,687 +983,553 @@ const handleSoldEditFormChange = useCallback((field, value) => {
 const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
 
   return (
-    <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-4 border border-gray-700 hover:border-orange-500/50 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-300 ${animationClass} ${profitMetrics.isFullySold ? 'opacity-75' : ''} overflow-hidden`}>
-      <div className="flex items-start space-x-4 min-w-0">
+  <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-xl p-5 border border-slate-700/50 hover:border-orange-400/30 shadow-xl hover:shadow-orange-500/5 transition-all duration-300 ${animationClass} ${profitMetrics.isFullySold ? 'opacity-75' : ''} overflow-hidden`}>
+    {/* Header Section */}
+    <div className="flex items-start justify-between mb-4">
+      <div className="flex items-start space-x-4">
         {/* Image Container with Variant Badges */}
-        <div className="relative w-20 h-20 bg-gradient-to-br from-gray-700/50 to-gray-600/50 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-gray-600/30 shadow-lg">
-          {item.image_url ? (
-            <img 
-              src={item.image_url} 
-              alt={name} 
-              className="max-w-full max-h-full object-contain"
-            />
-          ) : (
-            <div className="text-gray-400 text-xs text-center">No Image</div>
-          )}
-          
-          {/* Variant badges overlay (StatTrak/Souvenir indicators) */}
-          {(variant && variant !== 'normal') && (
-            <div className="absolute top-0 right-0 flex flex-col gap-0.5">
-              {variant === 'stattrak' && (
-                <span className="text-[10px] px-1 py-0.5 rounded-sm bg-orange-500 text-white font-medium shadow-sm">
-                  ST
-                </span>
-              )}
-              {variant === 'souvenir' && (
-                <span className="text-[10px] px-1 py-0.5 rounded-sm bg-yellow-500 text-white font-medium shadow-sm">
-                  SV
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Sold indicator overlay for fully sold items */}
-          {profitMetrics.isFullySold && (
-            <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
-              <span className="text-green-400 text-xs font-bold bg-green-600/40 px-1 py-0.5 rounded">SOLD</span>
-            </div>
-          )}
-        </div>
-        
-        {/* Improved content layout with better information hierarchy */}
-        <div className="flex-1 min-w-0 space-y-2">
-          {/* Primary identification - more prominent with better contrast */}
-          <div className="space-y-0.5">
-            <h3 className="font-semibold text-white text-base leading-tight truncate">
-              {name}
-            </h3>
-            {skinName && (
-              <p className="text-sm text-white truncate leading-tight font-medium">
-                {skinName}
-              </p>
+        <div className="relative group">
+          <div className="w-20 h-20 bg-gradient-to-br from-slate-700/30 to-gray-700/30 rounded-2xl overflow-hidden border border-slate-600/40 shadow-lg">
+            {item.image_url ? (
+              <img src={item.image_url} alt={name} className="w-full h-full object-contain p-1" />
+            ) : (
+              <div className="text-gray-400 text-xs text-center flex items-center justify-center h-full">No Image</div>
             )}
           </div>
-            
-            
-          {/* Conditional rendering based on item type (sold vs active) */}
-          {isSoldItem ? (
-            // Sold item display
-            <>
-              {/* Condition and Variant Display for Sold Items */}
-              {(condition || (variant && variant !== 'normal')) && (
-                <div
-                  className={`flex items-center ${
-                    variant && variant !== 'normal' ? 'space-x-2 mt-1' : ''
-                  }`}
-                >
-                  {condition && (
-                    <p className="text-xs text-gray-500 truncate">{condition}</p>
-                  )}
+          
+          {/* Variant badges */}
+          {(variant && variant !== 'normal') && (
+            <div className={`absolute -top-1 -right-1 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg ${
+              variant === 'stattrak' 
+                ? 'bg-gradient-to-r from-orange-500 to-red-500' 
+                : 'bg-gradient-to-r from-yellow-500 to-yellow-600'
+            }`}>
+              {variant === 'stattrak' ? 'ST' : 'SV'}
+            </div>
+          )}
 
-                  {/* Variant badges for active items */}
-                  {variant && variant !== 'normal' && (
-                    <div className="flex items-center space-x-1">
-                      {variant === 'stattrak' && (
-                        <span className="text-xs px-1 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">
-                          StatTrak™
-                        </span>
-                      )}
-                      {variant === 'souvenir' && (
-                        <span className="text-xs px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
-                          Souvenir
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div>
-                <span className="text-gray-400 text-xs">Sale Date: </span>
-                <span className="text-white text-xs">
-                  {item.sale_date ? new Date(item.sale_date).toLocaleDateString() : 'Unknown'}
-                </span>
-              </div>
-
-              {/* Notes display with popup on click */}
-                {item.notes && (
-                  <div>
-                    <button
-                      onClick={() => showPopup({
-                        type: 'note',
-                        title: 'Item Note',
-                        message: item.notes,
-                        confirmText: 'Close'
-                      })}
-                      className="text-xs text-gray-400 italic truncate hover:text-orange-400 transition-colors text-left w-full"
-                      title="Click to view full note"
-                    >
-                      note: {item.notes}
-                    </button>
-                  </div>
-                )}  
-
-              {/* Price comparison grid for sold items */}
-              <div className="mt-2 text-sm">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-gray-400 mb-0.5">Sold:</div>
-                    <div className="text-green-400">${item.price_per_unit?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-400 mb-0.5">Bought:</div>
-                    <div className="text-white">${item.buy_price_per_unit?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  </div>
-                </div>
-
-                {/* Additional sale details */}
-                <div className="mt-1">
-                  <span className="text-gray-400">Qty: </span>
-                  <span className="text-white">{item.quantity_sold}</span>
-                </div>
-                <div className="mt-1">
-                  <span className="text-gray-400">Total Sale: </span>
-                  <span className="text-white">${item.total_sale_value?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Condition and Variant Display for Active Items */}
-              {(condition || (variant && variant !== 'normal')) && (
-                <div
-                  className={`flex items-center ${
-                    variant && variant !== 'normal' ? 'space-x-2 mt-1' : ''
-                  }`}
-                >
-                  {condition && (
-                    <p className="text-xs text-gray-500 truncate">{condition}</p>
-                  )}
-
-                  {/* Variant badges for active items */}
-                  {variant && variant !== 'normal' && (
-                    <div className="flex items-center space-x-1">
-                      {variant === 'stattrak' && (
-                        <span className="text-xs px-1 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">
-                          StatTrak™
-                        </span>
-                      )}
-                      {variant === 'souvenir' && (
-                        <span className="text-xs px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
-                          Souvenir
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Purchase Date for active items */}
-              <div>
-                <span className="text-gray-400 text-xs">Purchased: </span>
-                <span className="text-white text-xs">
-                  {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Unknown'}
-                </span>
-              </div>
-
-              {/* Notes display with popup on click */}
-              {item.notes && (
-                <div>
-                  <button
-                    onClick={() => showPopup({
-                      type: 'note',
-                      title: 'Item Note',
-                      message: item.notes,
-                      confirmText: 'Close'
-                    })}
-                    className="text-xs text-gray-400 italic truncate hover:text-orange-400 transition-colors text-left w-full"
-                    title="Click to view full note"
-                  >
-                    note: {item.notes}
-                  </button>
-                </div>
-              )}
-              
-              {/* Price comparison grid for active investments */}
-              <div className="mt-2 text-sm">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-gray-400 mb-0.5">Buy:</div>
-                    <div className="text-white">
-                      ${baseMetrics.buyPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-gray-400 mb-0.5">Current:</div>
-                    <div className="text-white">
-                      {hasValidPriceData(item) ? ( 
-                        <div className="flex items-center space-x-1">
-                            <span>${baseMetrics.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                            {/* Price loading indicator for recently added items */} 
-                            {isPriceLoading && (
-                              <div className="relative group">
-                                <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
-                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                  {isNew ? 'Loading current price...' : 'Refreshing price...'}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Manual price icon */}
-                            {item.price_source === 'manual' && (
-                              <div className="relative group">
-                                <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
-                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                  Custom price override
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Bid price icon - only show for non-manual prices and exclude new items */}
-                            {item.price_source !== 'manual' && !isNew && isBidOnlyPrice() && (
-                              <div className="relative group">
-                                <AlertTriangle className="w-3 h-3 text-yellow-400 mt-0.5" />
-                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                  Bid-only price (buy order)
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ) : ( <span className="text-gray-500 text-sm flex items-center space-x-1">
-                            {isPriceLoading ? (
-                              <>
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                                <span>Loading...</span>
-                              </>
-                            ) : (
-                              <>
-                                <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                                <span>No data</span>
-                              </>
-                            )}
-                          </span>
-                        )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quantity display with sold status indicator */}
-              <div className="mt-2 text-sm">
-                <div className="flex items-center space-x-1.5">
-                  <span className="text-gray-400">Qty:</span>
-                  <span className="text-white">{profitMetrics.availableQuantity}</span>
-                  {/* Show sold quantity if any items have been sold */}
-                  {salesSummary.soldItems > 0 && (
-                    <span className="text-green-400 text-xs">
-                      ({salesSummary.soldItems} sold)
-                    </span>
-                  )}
-                </div>
-              </div>
-            </>
+          {/* Sold indicator for fully sold items */}
+          {profitMetrics.isFullySold && (
+            <div className="absolute inset-0 bg-green-500/10 rounded-2xl flex items-center justify-center backdrop-blur-[1px]">
+              <span className="bg-green-500/90 text-white text-xs px-2 py-1 rounded-full font-medium">SOLD</span>
+            </div>
           )}
         </div>
         
-        {/* Right sidebar - P&L display and action buttons */}
-        <div className="text-right flex-shrink-0 self-start min-w-0 max-w-40">
-          {/* Main P&L Display - Responsive Layout */}
-          <div className="space-y-1">
-          <div className={`text-center ${
-            profitMetrics.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'
-          }`}>
-            <div className="font-medium text-md">
-              {profitMetrics.totalProfitLoss >= 0 ? '+' : '-'}${Math.abs(profitMetrics.totalProfitLoss).toLocaleString('en-US', { 
-                minimumFractionDigits: 2, 
-                maximumFractionDigits: 2 
-              })}
-            </div>
-            <div className="text-xs opacity-90">
-              ({profitMetrics.profitPercentage >= 0 ? '' : ''}{profitMetrics.profitPercentage}%)
-            </div>
+        {/* Title and metadata section */}
+        <div className="space-y-1.5 flex-1 min-w-0">
+          <div>
+            <h3 className="text-base font-bold text-white leading-tight truncate" title={name}>
+              {name.length > 25 ? `${name.slice(0, 25)}...` : name}
+            </h3>
+            {skinName && (
+              <p className="text-white font-medium text-xs leading-tight truncate">{skinName}</p>
+            )}
           </div>
-
-          {/* Condensed breakdown for mixed P&L */}
-          {showSalesBreakdown && (
-            <div className="text-xs text-gray-400 space-y-0.5 border-t border-gray-600/30 pt-1">
-              <div className="flex justify-between">
-                <span>Real:</span>
-                <span className={salesSummary.realizedProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Unreal:</span>
-                <span className={salesSummary.unrealizedProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}
-                  ${Math.abs(salesSummary.unrealizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Avg:</span>
-                <span>${salesSummary.averageSalePrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
-              </div>
-            </div>
-          )}
-        </div>
           
-          {/* Action buttons for active items */}
-          {!isSoldItem && (
-            <div className="mt-2 space-y-1">
-              {/* Edit Button */}
+          <div className="flex items-center space-x-3">
+            {condition && (
+              <span className="text-xs px-2 py-1 rounded-md bg-slate-700/50 text-slate-300 border border-slate-600/30">
+                {condition}
+              </span>
+            )}
+            <span className="text-xs text-slate-400 flex items-center">
+              <Calendar className="w-3 h-3 mr-1" />
+              {new Date(isSoldItem ? item.sale_date : item.created_at).toLocaleDateString()}
+            </span>
+          </div>
+
+          {/* Notes display */}
+          {item.notes && (
+            <div className="mt-2">
               <button
-                onClick={handleStartEdit}
-                className="text-xs bg-blue-500/20 text-blue-400 px-3 py-1.5 rounded hover:bg-blue-500/30 transition-colors block w-full flex items-center justify-center space-x-1 transform hover:scale-103 active:scale-95 transition-transform"
+                onClick={() => showPopup({
+                  type: 'note',
+                  title: 'Item Note',
+                  message: item.notes,
+                  confirmText: 'Close'
+                })}
+                className="text-xs text-slate-400 italic hover:text-orange-300 transition-colors flex items-center space-x-1"
               >
-                <Edit2 className="w-3 h-3" />
-                <span>Edit</span>
-              </button>
-              
-              {/* Dynamic sell button - changes text based on sale history */}
-              {!profitMetrics.isFullySold ? (
-                <button
-                  onClick={handleStartSell}
-                  className="text-xs bg-orange-500/20 text-orange-400 px-3 py-1.5 rounded hover:bg-orange-500/30 transition-colors block w-full transform hover:scale-103 active:scale-95 transition-transform"
-                >
-                  {salesSummary.soldItems === 0 ? 'Mark Sold' : 'Sell More'}
-                </button>
-              ) : (
-                <div className="text-xs bg-green-500/20 text-green-400 px-3 py-1.5 rounded border border-green-500/30 text-center">
-                  Fully Sold
-                </div>
-              )}
-              
-              <button
-                onClick={() => onDelete(item)}
-                className="text-xs bg-red-500/20 text-red-400 px-3 py-1.5 rounded hover:bg-red-500/30 transition-colors block w-full transform hover:scale-103 active:scale-95 transition-transform"
-              >
-                Delete
+                <span className="truncate max-w-[200px]">note: {item.notes}</span>
               </button>
             </div>
-          )}
-
-          {/* Action buttons for sold items */}
-          {isSoldItem && (
-          <div className="mt-2 space-y-1">
-            <button
-              onClick={handleStartEdit}
-              disabled={asyncState.isLoading}
-              className="text-xs bg-blue-500/20 text-blue-400 px-3 py-1.5 rounded hover:bg-blue-500/30 transition-colors block w-full flex items-center justify-center space-x-1 disabled:opacity-50 transform hover:scale-103 active:scale-95 transition-transform"
-            >
-              <Edit2 className="w-3 h-3" />
-              <span>Edit</span>
-            </button>
-            
-            <button
-              onClick={handleRevertSale}
-              disabled={asyncState.isLoading}
-              className="text-xs bg-amber-500/20 text-amber-400 px-3 py-1.5 rounded hover:bg-amber-500/30 transition-colors block w-full flex items-center justify-center space-x-1 disabled:opacity-50 transform hover:scale-103 active:scale-95 transition-transform">
-              {asyncState.operation === 'REVERT_SALE' && asyncState.isLoading ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                </svg>
-              )}
-              <span>Revert</span>
-            </button>
-            
-            <button
-              onClick={() => onDelete(item)}
-              disabled={asyncState.isLoading}
-              className="text-xs bg-red-500/20 text-red-400 px-3 py-1.5 rounded hover:bg-red-500/30 transition-colors block w-full disabled:opacity-50 transform hover:scale-103 active:scale-95 transition-transform"
-            >
-              Delete
-            </button>
-          </div>
           )}
         </div>
       </div>
       
-      {/* Edit Form - restrict fields for sold items */}
-      {mode === ITEM_MODES.EDITING && (
-        <div className="space-y-3">
-          {isSoldItem ? (
-            // SOLD ITEM EDIT FORM - Only allow quantity and price changes
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Quantity Sold
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="9999"
-                    value={soldEditForm.quantity_sold}
-                    onChange={(e) => handleSoldEditFormChange('quantity_sold', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Sale Price (each)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={soldEditForm.price_per_unit}
-                    onChange={(e) => handleSoldEditFormChange('price_per_unit', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-              
-              {/* Notes field */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Notes (optional)
-                </label>
-                <textarea
-                  value={soldEditForm.notes}
-                  onChange={(e) => handleSoldEditFormChange('notes', e.target.value)}
-                  placeholder="Add notes about this sale..."
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none resize-none"
-                  rows="2"
-                />
-              </div>
-            </>
-          ) : (
-            // ACTIVE ITEM EDIT FORM - Allow all fields
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Condition
-                  </label>
-                  <select
-                    value={editForm.condition}
-                    onChange={(e) => handleEditFormChange('condition', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                  >
-                    {CONDITION_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Variant
-                  </label>
-                  <select
-                    value={editForm.variant}
-                    onChange={(e) => handleEditFormChange('variant', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                  >
-                    {VARIANT_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Quantity
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="9999"
-                    value={editForm.quantity}
-                    onChange={(e) => handleEditFormChange('quantity', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Buy Price (each)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={editForm.buy_price}
-                    onChange={(e) => handleEditFormChange('buy_price', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                  />
-                </div>
-              </div>    
+      {/* P&L Display */}
+      <div className="text-right flex-shrink-0">
+        <div className={`text-lg font-bold flex items-center justify-end space-x-1 ${
+          profitMetrics.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'
+        }`}>
+          <span>
+            {profitMetrics.totalProfitLoss >= 0 ? '+' : '-'}$
+            {Math.abs(profitMetrics.totalProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+          </span>
+        </div>
+        <div className={`text-xs ${
+          profitMetrics.totalProfitLoss >= 0 ? 'text-green-300/80' : 'text-red-300/80'
+        }`}>
+          {parseFloat(profitMetrics.profitPercentage) >= 0 ? '+' : ''}{parseFloat(profitMetrics.profitPercentage).toLocaleString('en-US', { maximumFractionDigits: 2 })}%
+        </div>
+        
+        {/* Breakdown of profits */}
+        {!isSoldItem && salesSummary.hasAnySales && (
+          <div className="mt-0.5 text-[10px] text-slate-400 leading-tight space-y-0">
+            <div>
+              {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })} real
+            </div>
+            <div>
+              {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.unrealizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })} unreal
+            </div>
+            <div className="text-yellow-400">
+              avg: ${salesSummary.averageSalePrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">
-                      Price Source
-                    </label>
-                    <select
-                      value={editForm.price_source}
-                      onChange={(e) => handleEditFormChange('price_source', e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                    >
-                      {/* Remove the "Global Preference" option entirely */}
-                      {getAvailableMarketplaces().map(mp => (
-                        <option key={mp.marketplace} value={mp.marketplace}>
-                          {mp.marketplace.toUpperCase()}
-                          {mp.is_bid_price ? ' (Bid)' : ''}
-                        </option>
-                      ))}
-                      <option value="manual">Set Manual Price</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center space-x-1">
-                      <span>Current Price</span>
-                      {editForm.price_source === 'manual' && (
-                        <div className="relative group">
-                          <Info className="w-3 h-3 mt-0.5 text-gray-500 hover:text-gray-400 cursor-help" />
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                            Leave empty and save to remove manual pricing
-                          </div>
-                        </div>
-                      )}
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      value={editForm.price_source === 'manual' ? editForm.manual_price : 
-                        (getAvailableMarketplaces().find(mp => mp.marketplace === editForm.price_source)?.price?.toFixed(2) || 
-                        item.current_price?.toFixed(2) || '')}
-                      onChange={(e) => handleEditFormChange('manual_price', e.target.value)}
-                      disabled={editForm.price_source !== 'manual'}
-                      className={`w-full px-3 py-2 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none ${
-                        editForm.price_source !== 'manual' 
-                          ? 'bg-gray-600 cursor-not-allowed opacity-75' 
-                          : 'bg-gray-700'
-                      }`}
-                      placeholder={editForm.price_source !== 'manual' ? 'Managed automatically' : 'Enter manual price'}
-                    />
+    {/* Metrics Section */}
+    <div className="grid grid-cols-3 gap-3 mb-3">
+      <div className="bg-slate-800/40 rounded-lg p-2 border border-slate-700/30">
+        <div className="flex items-center space-x-1 mb-0.5">
+          <DollarSign className="w-3.5 h-3.5 text-blue-400" />
+          <span className="text-[11px] text-slate-400 uppercase tracking-wide">
+            {isSoldItem ? 'Sale Price' : 'Buy Price'}
+          </span>
+        </div>
+        <div className="text-sm font-bold text-white">
+          ${isSoldItem ? 
+            item.price_per_unit?.toLocaleString('en-US', { maximumFractionDigits: 2 }) : 
+            item.buy_price?.toLocaleString('en-US', { maximumFractionDigits: 2 })
+          }
+        </div>
+      </div>
+      
+      <div className="bg-slate-800/40 rounded-lg p-2 border border-slate-700/30 relative">
+        <div className="flex items-center space-x-1 mb-0.5">
+          <Store className="w-3.5 h-3.5 text-orange-400" />
+          <span className="text-[11px] text-slate-400 uppercase tracking-wide">
+            {isSoldItem ? 'Buy Price' : 'Current'}
+          </span>
+        </div>
+        <div className="text-sm font-bold text-white">
+          {isSoldItem ? (
+            `$${item.buy_price_per_unit?.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+          ) : (
+            <div className="flex items-center space-x-1">
+              {hasValidPriceData(item) ? (
+                <span>${baseMetrics.currentPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
+              ) : (
+                <span className="text-gray-500 text-sm">No data</span>
+              )}
+              {isPriceLoading && <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin" />}
+              {item.price_source === 'manual' && (
+                <div className="relative group">
+                  <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                    Manual Price
                   </div>
                 </div>
-              
-              
-              {/* Notes field */}
+              )}
+              {item.price_source !== 'manual' && !isNew && isBidOnlyPrice() && (
+                <div className="relative group">
+                  <AlertTriangle className="w-3 h-3 text-yellow-400 mt-0.5" />
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                    Bid Price Only
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      
+      <div className="bg-slate-800/40 rounded-lg p-2 border border-slate-700/30">
+        <div className="flex items-center space-x-1 mb-0.5">
+          <Package className="w-3.5 h-3.5 text-purple-400" />
+          <span className="text-[11px] text-slate-400 uppercase tracking-wide">
+            {isSoldItem ? 'Total Sale' : 'Quantity'}
+          </span>
+        </div>
+        <div className="text-sm font-bold text-white">
+          {isSoldItem ? (
+            `$${item.total_sale_value?.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+          ) : (
+            <div className="flex items-center space-x-1">
+              <span>{profitMetrics.availableQuantity.toLocaleString('en-US')}</span>
+              {salesSummary.soldItems > 0 && (
+                <span className="text-xs text-green-400">
+                  ({salesSummary.soldItems.toLocaleString('en-US')} sold)
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+
+    {/* Actions at bottom */}
+    <div className="flex space-x-1.5">
+      {!isSoldItem ? (
+        <>
+          <button
+            onClick={handleStartEdit}
+            className="flex-1 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center space-x-1 border border-slate-600/30 hover:border-slate-500/50"
+          >
+            <Edit2 className="w-3 h-3" />
+            <span>Edit</span>
+          </button>
+          {!profitMetrics.isFullySold ? (
+            <button
+              onClick={handleStartSell}
+              className="flex-1 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center space-x-1 border border-slate-600/30 hover:border-slate-500/50"
+            >
+              <DollarSign className="w-3 h-3" />
+              <span>{salesSummary.soldItems === 0 ? 'Sell' : 'Sell More'}</span>
+            </button>
+          ) : (
+            <div className="flex-1 bg-green-700/20 text-green-400 px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center justify-center border border-green-600/30">
+              Fully Sold
+            </div>
+          )}
+          <button
+            onClick={() => onDelete(item)}
+            className="bg-slate-700/50 hover:bg-red-600/30 text-slate-400 hover:text-red-300 px-2 py-1.5 rounded-md transition-colors border border-slate-600/30 hover:border-red-600/30"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            onClick={handleStartEdit}
+            className="flex-1 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center space-x-1 border border-slate-600/30 hover:border-slate-500/50"
+          >
+            <Edit2 className="w-3 h-3" />
+            <span>Edit</span>
+          </button>
+          <button
+            onClick={handleRevertSale}
+            disabled={asyncState.isLoading}
+            className="flex-1 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center space-x-1 border border-slate-600/30 hover:border-slate-500/50 disabled:opacity-50"
+          >
+            {asyncState.operation === 'REVERT_SALE' && asyncState.isLoading ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+              </svg>
+            )}
+            <span>Revert</span>
+          </button>
+          <button
+            onClick={() => onDelete(item)}
+            disabled={asyncState.isLoading}
+            className="bg-slate-700/50 hover:bg-red-600/30 text-slate-400 hover:text-red-300 px-2 py-1.5 rounded-md transition-colors border border-slate-600/30 hover:border-red-600/30 disabled:opacity-50"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </>
+      )}
+    </div>
+      
+    {/* Edit Form - restrict fields for sold items */}
+    {mode === ITEM_MODES.EDITING && (
+      <div className="mt-4 pt-4 border-t border-gray-700 space-y-3">
+        {isSoldItem ? (
+          // SOLD ITEM EDIT FORM - Only allow quantity and price changes
+          <>
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Notes (optional)
+                  Quantity Sold
                 </label>
-                <textarea
-                  value={editForm.notes}
-                  onChange={(e) => handleEditFormChange('notes', e.target.value)}
-                  placeholder="Add notes about this investment..."
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none resize-none"
-                  rows="2"
+                <input
+                  type="number"
+                  min="1"
+                  max="9999"
+                  value={soldEditForm.quantity_sold}
+                  onChange={(e) => handleSoldEditFormChange('quantity_sold', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
                 />
               </div>
-            </>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Sale Price (each)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={soldEditForm.price_per_unit}
+                  onChange={(e) => handleSoldEditFormChange('price_per_unit', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                />
+              </div>
+            </div>
+            
+            {/* Notes field */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Notes (optional)
+              </label>
+              <textarea
+                value={soldEditForm.notes}
+                onChange={(e) => handleSoldEditFormChange('notes', e.target.value)}
+                placeholder="Add notes about this sale..."
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none resize-none"
+                rows="2"
+              />
+            </div>
+          </>
+        ) : (
+          // ACTIVE ITEM EDIT FORM - Allow all fields
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Condition
+                </label>
+                <select
+                  value={editForm.condition}
+                  onChange={(e) => handleEditFormChange('condition', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                >
+                  {CONDITION_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Variant
+                </label>
+                <select
+                  value={editForm.variant}
+                  onChange={(e) => handleEditFormChange('variant', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                >
+                  {VARIANT_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Quantity
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="9999"
+                  value={editForm.quantity}
+                  onChange={(e) => handleEditFormChange('quantity', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Buy Price (each)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={editForm.buy_price}
+                  onChange={(e) => handleEditFormChange('buy_price', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                />
+              </div>
+            </div>    
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Price Source
+                </label>
+                <select
+                  value={editForm.price_source}
+                  onChange={(e) => handleEditFormChange('price_source', e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                >
+                  {getAvailableMarketplaces().map(mp => (
+                    <option key={mp.marketplace} value={mp.marketplace}>
+                      {mp.marketplace.toUpperCase()}
+                      {mp.is_bid_price ? ' (Bid)' : ''}
+                    </option>
+                  ))}
+                  <option value="manual">Set Manual Price</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center space-x-1">
+                  <span>Current Price</span>
+                  {editForm.price_source === 'manual' && (
+                    <div className="relative group">
+                      <Info className="w-3 h-3 mt-0.5 text-gray-500 hover:text-gray-400 cursor-help" />
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                        Leave empty and save to remove manual pricing
+                      </div>
+                    </div>
+                  )}
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={editForm.price_source === 'manual' ? editForm.manual_price : 
+                    (getAvailableMarketplaces().find(mp => mp.marketplace === editForm.price_source)?.price?.toFixed(2) || 
+                    item.current_price?.toFixed(2) || '')}
+                  onChange={(e) => handleEditFormChange('manual_price', e.target.value)}
+                  disabled={editForm.price_source !== 'manual'}
+                  className={`w-full px-3 py-2 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none ${
+                    editForm.price_source !== 'manual' 
+                      ? 'bg-gray-600 cursor-not-allowed opacity-75' 
+                      : 'bg-gray-700'
+                  }`}
+                  placeholder={editForm.price_source !== 'manual' ? 'Managed automatically' : 'Enter manual price'}
+                />
+              </div>
+            </div>
+            
+            {/* Notes field */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Notes (optional)
+              </label>
+              <textarea
+                value={editForm.notes}
+                onChange={(e) => handleEditFormChange('notes', e.target.value)}
+                placeholder="Add notes about this investment..."
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none resize-none"
+                rows="2"
+              />
+            </div>
+          </>
+        )}
+        
+        <div className="flex space-x-2">
+          <button
+            onClick={isSoldItem ? handleSoldEditFormSubmit : handleEditFormSubmit}
+            disabled={asyncState.isLoading}
+            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            {asyncState.isLoading ? 'Saving...' : 'Save Changes'}
+          </button>
+          <button
+            onClick={handleEditFormCancel}
+            disabled={asyncState.isLoading}
+            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    )}
+
+    {/* Partial sale form - handles selling portions of investment positions */}
+    {mode === ITEM_MODES.SELLING && !profitMetrics.isFullySold && !isSoldItem && (
+      <div className="mt-4 pt-4 border-t border-gray-700">
+        <h5 className="text-sm font-medium text-white mb-2">
+          Sell Items ({profitMetrics.availableQuantity} available)
+        </h5>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">
+              Quantity to sell
+            </label>
+            <input
+              type="number"
+              min="1"
+              max={profitMetrics.availableQuantity}
+              value={soldQuantity}
+              onChange={(e) => setSoldQuantity(Math.min(parseInt(e.target.value) || 1, profitMetrics.availableQuantity))}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">
+              Sale price per item ($)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              placeholder="Enter sale price per item"
+              value={soldPrice}
+              onChange={(e) => setSoldPrice(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
+            />
+          </div>
+
+          {/* Preview */}
+          {salePreview && (
+            <div className="text-xs text-gray-400 bg-gray-700/50 p-2 rounded">
+              <div>Total sale value: ${salePreview.totalSaleValue.toFixed(2)}</div>
+              <div className={salePreview.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
+                Profit/Loss: {salePreview.profitLoss >= 0 ? '+' : '-'}${Math.abs(salePreview.profitLoss).toFixed(2)} ({salePreview.percentage}%)
+              </div>
+            </div>
           )}
           
-          <div className="flex space-x-2">
+          <div className="flex items-center space-x-2">
             <button
-              onClick={isSoldItem ? handleSoldEditFormSubmit : handleEditFormSubmit}
+              onClick={handlePartialSale}
               disabled={asyncState.isLoading}
-              className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors disabled:opacity-50 flex items-center space-x-1"
             >
-              {asyncState.isLoading ? 'Saving...' : 'Save Changes'}
+              {asyncState.isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+              <span>Confirm Sale</span>
             </button>
             <button
-              onClick={handleEditFormCancel}
-              disabled={asyncState.isLoading}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+              onClick={() => {
+                setMode(ITEM_MODES.VIEW);
+                setSoldPrice('');
+                setSoldQuantity(1);
+              }}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
             >
               Cancel
             </button>
           </div>
         </div>
-      )}
+      </div>
+    )}
 
-      {/* Partial sale form - handles selling portions of investment positions */}
-      {mode === ITEM_MODES.SELLING && !profitMetrics.isFullySold && !isSoldItem && (
-        <div className="mt-3 pt-3 border-t border-gray-700">
-          <h5 className="text-sm font-medium text-white mb-2">
-            Sell Items ({profitMetrics.availableQuantity} available)
-          </h5>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">
-                Quantity to sell
-              </label>
-              <input
-                type="number"
-                min="1"
-                max={profitMetrics.availableQuantity}
-                value={soldQuantity}
-                onChange={(e) => setSoldQuantity(Math.min(parseInt(e.target.value) || 1, profitMetrics.availableQuantity))}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
-              />
-            </div>
-            
-            {/* Real-time sale preview - helps users understand transaction impact before confirming */}
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">
-                Sale price per item ($)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                placeholder="Enter sale price per item"
-                value={soldPrice}
-                onChange={(e) => setSoldPrice(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
-              />
-            </div>
-
-            {/* Preview */}
-              {salePreview && (
-                <div className="text-xs text-gray-400 bg-gray-700/50 p-2 rounded">
-                  <div>Total sale value: ${salePreview.totalSaleValue.toFixed(2)}</div>
-                  <div className={salePreview.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
-                    Profit/Loss: {salePreview.profitLoss >= 0 ? '+' : '-'}${Math.abs(salePreview.profitLoss).toFixed(2)} ({salePreview.percentage}%)
-                  </div>
-                </div>
-              )}
-            
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={handlePartialSale}
-                disabled={asyncState.isLoading}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors disabled:opacity-50 flex items-center space-x-1"
-              >
-                {asyncState.isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                <span>Confirm Sale</span>
-              </button>
-              <button
-                onClick={() => {
-                  setMode(ITEM_MODES.VIEW);
-                  setSoldPrice('');
-                  setSoldQuantity(1);
-                }}
-                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-        {/* Centralized popup system - handles all modal dialogs (confirmations, errors, notes, etc.) */}
-        <PopupManager
-        isOpen={popup.isOpen}
-        onClose={closePopup}
-        type={popup.type}
-        title={popup.title}
-        message={popup.message}
-        onConfirm={popup.onConfirm}
-        onCancel={popup.onCancel}
-        confirmText={popup.confirmText}
-        cancelText={popup.cancelText}
-        isLoading={asyncState.isLoading}
-        data={popup.data}
-      />
-    </div>
-  );
+    {/* Centralized popup system */}
+    <PopupManager
+      isOpen={popup.isOpen}
+      onClose={closePopup}
+      type={popup.type}
+      title={popup.title}
+      message={popup.message}
+      onConfirm={popup.onConfirm}
+      onCancel={popup.onCancel}
+      confirmText={popup.confirmText}
+      cancelText={popup.cancelText}
+      isLoading={asyncState.isLoading}
+      data={popup.data}
+    />
+  </div>
+);
 }, areItemsEqual);
 
 export default ItemCard;
