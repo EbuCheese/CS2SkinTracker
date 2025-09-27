@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2, Edit2, Save, AlertTriangle, Info, Calendar, DollarSign, Store, Package } from 'lucide-react';
+import { Loader2, Edit2, Save, AlertTriangle, Info, CalendarMinus, CalendarPlus, DollarSign, Tag, Store, Package, TrendingUp } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 import { PopupManager } from '@/components/ui';
 import { useScrollLock } from '@/hooks/util';
@@ -101,6 +101,7 @@ const ItemCard = React.memo(({
   const [soldPrice, setSoldPrice] = useState('');
   const [soldQuantity, setSoldQuantity] = useState(1);
   const [animationClass, setAnimationClass] = useState('');
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   // Edit form states
   const [editForm, setEditForm] = useState(null);
@@ -985,36 +986,36 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
   return (
   <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-xl p-5 border border-slate-700/50 hover:border-orange-400/30 shadow-xl hover:shadow-orange-500/5 transition-all duration-300 ${animationClass} ${profitMetrics.isFullySold ? 'opacity-75' : ''} overflow-hidden`}>
     {/* Header Section */}
-    <div className="flex items-start justify-between mb-4">
-      <div className="flex items-start space-x-4">
+    <div className="flex items-start justify-between mb-4 gap-3">
+      <div className="flex items-start space-x-4 min-w-0 flex-1">
         {/* Image Container with Variant Badges */}
         <div className="relative group">
-          <div className="w-20 h-20 bg-gradient-to-br from-slate-700/30 to-gray-700/30 rounded-2xl overflow-hidden border border-slate-600/40 shadow-lg">
+          <div className={`w-20 h-20 bg-gradient-to-br from-slate-700/30 to-gray-700/30 rounded-2xl overflow-hidden border border-slate-600/40 shadow-lg ${profitMetrics.isFullySold ? 'backdrop-blur-[1px]' : ''}`}>
             {item.image_url ? (
-              <img src={item.image_url} alt={name} className="w-full h-full object-contain p-1" />
+              <img src={item.image_url} alt={name} className={`w-full h-full object-contain p-1 ${profitMetrics.isFullySold ? 'opacity-60' : ''}`} />
             ) : (
-              <div className="text-gray-400 text-xs text-center flex items-center justify-center h-full">No Image</div>
+              <div className={`text-gray-400 text-xs text-center flex items-center justify-center h-full ${profitMetrics.isFullySold ? 'opacity-60' : ''}`}>No Image</div>
             )}
           </div>
-          
-          {/* Variant badges */}
-          {(variant && variant !== 'normal') && (
-            <div className={`absolute -top-1 -right-1 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg ${
-              variant === 'stattrak' 
-                ? 'bg-gradient-to-r from-orange-500 to-red-500' 
-                : 'bg-gradient-to-r from-yellow-500 to-yellow-600'
-            }`}>
-              {variant === 'stattrak' ? 'ST' : 'SV'}
-            </div>
-          )}
-
-          {/* Sold indicator for fully sold items */}
-          {profitMetrics.isFullySold && (
-            <div className="absolute inset-0 bg-green-500/10 rounded-2xl flex items-center justify-center backdrop-blur-[1px]">
-              <span className="bg-green-500/90 text-white text-xs px-2 py-1 rounded-full font-medium">SOLD</span>
-            </div>
-          )}
+  
+      {/* Variant badges */}
+      {(variant && variant !== 'normal') && (
+        <div className={`absolute -top-1 -right-1 z-10 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg ${
+          variant === 'stattrak' 
+            ? 'bg-gradient-to-r from-orange-500 to-red-500' 
+            : 'bg-gradient-to-r from-yellow-500 to-yellow-600'
+        } ${profitMetrics.isFullySold ? 'opacity-65' : ''}`}>
+          {variant === 'stattrak' ? 'ST' : 'SV'}
         </div>
+      )}
+
+      {/* Sold indicator for fully sold items */}
+      {profitMetrics.isFullySold && (
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-green-600/90 via-green-500/70 to-transparent text-white text-[10px] py-0.5 font-bold text-center rounded-b-2xl">
+          SOLD
+        </div>
+      )}
+    </div>
         
         {/* Title and metadata section */}
         <div className="space-y-1.5 flex-1 min-w-0">
@@ -1027,14 +1028,18 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
             )}
           </div>
           
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
             {condition && (
-              <span className="text-xs px-2 py-1 rounded-md bg-slate-700/50 text-slate-300 border border-slate-600/30">
+              <span className="text-xs px-1.5 py-1 rounded-md bg-slate-700/50 text-slate-300 border border-slate-600/30">
                 {condition}
               </span>
             )}
             <span className="text-xs text-slate-400 flex items-center">
-              <Calendar className="w-3 h-3 mr-1" />
+              {isSoldItem ? (
+                <CalendarMinus className="w-3.5 h-3.5 mr-1" />
+              ) : (
+                <CalendarPlus className="w-3.5 h-3.5 mr-1" />
+              )}
               {new Date(isSoldItem ? item.sale_date : item.created_at).toLocaleDateString()}
             </span>
           </div>
@@ -1051,7 +1056,7 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
                 })}
                 className="text-xs text-slate-400 italic hover:text-orange-300 transition-colors flex items-center space-x-1"
               >
-                <span className="truncate max-w-[200px]">note: {item.notes}</span>
+                <span className="truncate max-w-[170px]">note: {item.notes}</span>
               </button>
             </div>
           )}
@@ -1059,8 +1064,8 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
       </div>
       
       {/* P&L Display */}
-      <div className="text-right flex-shrink-0">
-        <div className={`text-lg font-bold flex items-center justify-end space-x-1 ${
+      <div className="text-right flex-shrink-0 min-w-0">
+        <div className={`text-lg font-bold ${
           profitMetrics.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'
         }`}>
           <span>
@@ -1074,18 +1079,44 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
           {parseFloat(profitMetrics.profitPercentage) >= 0 ? '+' : ''}{parseFloat(profitMetrics.profitPercentage).toLocaleString('en-US', { maximumFractionDigits: 2 })}%
         </div>
         
+        {/* Total sale breakdown for sold items */}
+        {isSoldItem && (
+          <div className="mt-1 text-[11px] text-slate-400">
+            total: ${item.total_sale_value?.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+          </div>
+        )}
+        
         {/* Breakdown of profits */}
         {!isSoldItem && salesSummary.hasAnySales && (
-          <div className="mt-0.5 text-[10px] text-slate-400 leading-tight space-y-0">
-            <div>
-              {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })} real
-            </div>
-            <div>
-              {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.unrealizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })} unreal
-            </div>
-            <div className="text-yellow-400">
-              avg: ${salesSummary.averageSalePrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-            </div>
+          <div className="mt-0.5 flex flex-col items-end">
+            <button
+              onClick={() => setShowBreakdown(!showBreakdown)}
+              className="text-[11px] text-slate-400 hover:text-slate-300 transition-colors flex items-center space-x-0.5"
+            >
+              <span>breakdown</span>
+              <svg 
+                className={`w-3 h-3 mt-0.5 transition-transform ${showBreakdown ? 'rotate-180' : ''}`}
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            
+            {showBreakdown && (
+              <div className="mt-1 text-[11px] text-slate-400 leading-tight space-y-0 text-right">
+                <div>
+                  {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })} real
+                </div>
+                <div>
+                  {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.unrealizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })} unreal
+                </div>
+                <div className="text-yellow-400">
+                  avg: ${salesSummary.averageSalePrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1095,7 +1126,11 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
     <div className="grid grid-cols-3 gap-3 mb-3">
       <div className="bg-slate-800/40 rounded-lg p-2 border border-slate-700/30">
         <div className="flex items-center space-x-1 mb-0.5">
-          <DollarSign className="w-3.5 h-3.5 text-blue-400" />
+          {isSoldItem ? (
+          <Tag className="w-3.5 h-3.5 text-green-400" />
+          ) : (
+            <DollarSign className="w-3.5 h-3.5 text-blue-400" />
+          )}
           <span className="text-[11px] text-slate-400 uppercase tracking-wide">
             {isSoldItem ? 'Sale Price' : 'Buy Price'}
           </span>
@@ -1110,7 +1145,11 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
       
       <div className="bg-slate-800/40 rounded-lg p-2 border border-slate-700/30 relative">
         <div className="flex items-center space-x-1 mb-0.5">
-          <Store className="w-3.5 h-3.5 text-orange-400" />
+          {isSoldItem ? (
+          <DollarSign className="w-3.5 h-3.5 text-blue-400" />
+          ) : (
+            <TrendingUp className="w-3.5 h-3.5 text-orange-400" />
+          )}
           <span className="text-[11px] text-slate-400 uppercase tracking-wide">
             {isSoldItem ? 'Buy Price' : 'Current'}
           </span>
@@ -1153,23 +1192,23 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
         <div className="flex items-center space-x-1 mb-0.5">
           <Package className="w-3.5 h-3.5 text-purple-400" />
           <span className="text-[11px] text-slate-400 uppercase tracking-wide">
-            {isSoldItem ? 'Total Sale' : 'Quantity'}
+            Quantity
           </span>
         </div>
         <div className="text-sm font-bold text-white">
-          {isSoldItem ? (
-            `$${item.total_sale_value?.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-          ) : (
-            <div className="flex items-center space-x-1">
-              <span>{profitMetrics.availableQuantity.toLocaleString('en-US')}</span>
-              {salesSummary.soldItems > 0 && (
-                <span className="text-xs text-green-400">
-                  ({salesSummary.soldItems.toLocaleString('en-US')} sold)
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+        {isSoldItem ? (
+          baseMetrics.quantity.toLocaleString('en-US')
+        ) : (
+          <div className="flex items-center space-x-1">
+            <span>{profitMetrics.availableQuantity.toLocaleString('en-US')}</span>
+            {salesSummary.soldItems > 0 && (
+              <span className="text-xs text-green-400">
+                ({salesSummary.soldItems.toLocaleString('en-US')} sold)
+              </span>
+            )}
+          </div>
+        )}
+      </div>
       </div>
     </div>
 
