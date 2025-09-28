@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2, Edit2, Save, AlertTriangle, Info, CalendarMinus, CalendarPlus, DollarSign, Tag, Store, Package, TrendingUp } from 'lucide-react';
+import { Loader2, Edit2, Save, AlertTriangle, Info, CalendarMinus, CalendarPlus, DollarSign, Tag, Wallet, Package, TrendingUp } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 import { PopupManager } from '@/components/ui';
 import { useScrollLock } from '@/hooks/util';
@@ -1127,9 +1127,9 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
       <div className="bg-slate-800/40 rounded-lg p-2 border border-slate-700/30">
         <div className="flex items-center space-x-1 mb-0.5">
           {isSoldItem ? (
-          <Tag className="w-3.5 h-3.5 text-green-400" />
+          <DollarSign className="w-3.5 h-3.5 text-green-400" />
           ) : (
-            <DollarSign className="w-3.5 h-3.5 text-blue-400" />
+            <Wallet className="w-3.5 h-3.5 text-blue-400" />
           )}
           <span className="text-[11px] text-slate-400 uppercase tracking-wide">
             {isSoldItem ? 'Sale Price' : 'Buy Price'}
@@ -1146,9 +1146,9 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
       <div className="bg-slate-800/40 rounded-lg p-2 border border-slate-700/30 relative">
         <div className="flex items-center space-x-1 mb-0.5">
           {isSoldItem ? (
-          <DollarSign className="w-3.5 h-3.5 text-blue-400" />
+          <Wallet className="w-3.5 h-3.5 text-blue-400" />
           ) : (
-            <TrendingUp className="w-3.5 h-3.5 text-orange-400" />
+            <Tag className="w-3.5 h-3.5 text-orange-400" />
           )}
           <span className="text-[11px] text-slate-400 uppercase tracking-wide">
             {isSoldItem ? 'Buy Price' : 'Current'}
