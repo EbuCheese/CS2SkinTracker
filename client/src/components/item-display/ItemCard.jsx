@@ -2,32 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Loader2, Edit2, Save, AlertTriangle, Info, CalendarMinus, CalendarPlus, DollarSign, Tag, Wallet, Package, TrendingUp } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 import { PopupManager } from '@/components/ui';
+import { EditItemModal, SellItemModal } from '@/components/forms';
 import { useScrollLock } from '@/hooks/util';
 import { useToast } from '@/contexts/ToastContext';
-
-  // Dropdown options for item conditions (CS2 skin wear levels)
-  const CONDITION_OPTIONS = [
-    { value: '', label: 'Select condition' },
-    { value: 'Factory New', label: 'Factory New' },
-    { value: 'Minimal Wear', label: 'Minimal Wear' },
-    { value: 'Field-Tested', label: 'Field-Tested' },
-    { value: 'Well-Worn', label: 'Well-Worn' },
-    { value: 'Battle-Scarred', label: 'Battle-Scarred' }
-  ];
-
-  // Dropdown options for item variants (special types)
-  const VARIANT_OPTIONS = [
-    { value: 'normal', label: 'Normal' },
-    { value: 'stattrak', label: 'StatTrak™' },
-    { value: 'souvenir', label: 'Souvenir' }
-  ];
-
-  // mode of item card
-  const ITEM_MODES = {
-    VIEW: 'view',
-    SELLING: 'selling', 
-    EDITING: 'editing'
-  };
 
   // comparison prop function
   const areItemsEqual = (prevProps, nextProps) => {
@@ -97,15 +74,14 @@ const ItemCard = React.memo(({
   const toast = useToast();
 
   // UI state management
-  const [mode, setMode] = useState(ITEM_MODES.VIEW); // 'view', 'selling', 'editing'
-  const [soldPrice, setSoldPrice] = useState('');
-  const [soldQuantity, setSoldQuantity] = useState(1);
   const [animationClass, setAnimationClass] = useState('');
   const [showBreakdown, setShowBreakdown] = useState(false);
 
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showSellModal, setShowSellModal] = useState(false);
+
   // Edit form states
-  const [editForm, setEditForm] = useState(null);
-  const [soldEditForm, setSoldEditForm] = useState(null);
+  const [formData, setEditForm] = useState(null);
 
   // Consolidated popup state management - handles all modal dialogs
   const [popup, setPopup] = useState({
@@ -160,7 +136,7 @@ const getErrorMessage = useCallback((error) => {
 }, []);
 
 // Prevent body scroll when popup is open
-useScrollLock(popup.isOpen);
+useScrollLock(popup.isOpen || showEditModal || showSellModal);
 
 // Generic async operation handler with loading states and error handling
 const handleAsyncOperation = useCallback(async (operation, operationFn, ...args) => {
@@ -252,23 +228,6 @@ const salesSummary = useMemo(() => {
   item.original_quantity,
   baseMetrics.quantity
 ]);
-
-const salePreview = useMemo(() => {
-  // Early return if not in selling mode - prevents unnecessary calculations
-  if (mode !== ITEM_MODES.SELLING) return null;
-  
-  const pricePerUnit = parseFloat(soldPrice);
-  const quantity = parseInt(soldQuantity);
-  
-  if (!soldPrice || !soldQuantity || isNaN(pricePerUnit) || isNaN(quantity)) return null;
-  
-  const totalSaleValue = pricePerUnit * quantity;
-  const profitLoss = (pricePerUnit - baseMetrics.buyPrice) * quantity;
-  const investment = baseMetrics.buyPrice * quantity;
-  const percentage = investment > 0 ? ((profitLoss / investment) * 100).toFixed(2) : '0.00';
-  
-  return { totalSaleValue, profitLoss, percentage };
-}, [mode, soldPrice, soldQuantity, baseMetrics.buyPrice]);
 
 const displayValues = useMemo(() => ({
   name: isSoldItem ? item.item_name : item.name,
@@ -373,73 +332,29 @@ const buildItemDisplayName = () => {
 
 const fullItemName = buildItemDisplayName();
 
-const validateSaleInput = useCallback((price, quantity) => {
-  const priceNum = parseFloat(price);
-  const quantityNum = parseInt(quantity);
-  
-  if (!price || isNaN(priceNum) || priceNum <= 0) {
-    return { isValid: false, error: 'Please enter a valid price per unit greater than 0' };
-  }
-  
-  if (!quantity || quantityNum < 1 || quantityNum > profitMetrics.availableQuantity) {
-    return { isValid: false, error: `Please enter a valid quantity between 1 and ${profitMetrics.availableQuantity}` };
-  }
-  
-  return { isValid: true, error: null };
-}, [profitMetrics.availableQuantity]);
-
-// Handles different field names between sold items and active investments
-const getEditFormDefaults = useCallback(() => {
-  if (isSoldItem) {
-    return {
-      quantity_sold: item.quantity_sold || 1,
-      price_per_unit: item.price_per_unit || 0,
-      notes: item.notes || ''
-    };
-  }
-  
-  // Use the actual marketplace being used, not "global"
-  const currentPriceSource = item.price_source === 'manual' ? 'manual' : 
-    (item.preferred_marketplace_override || item.price_source || 'csfloat');
-  
-  // Check if valid prices
-  const availableMarketplaces = getAvailableMarketplaces();
-  const isCurrentSourceAvailable = availableMarketplaces.some(mp => mp.marketplace === currentPriceSource);
-  
-  // If no marketplaces available OR current source isn't available, default to manual
-  const effectivePriceSource = (availableMarketplaces.length === 0 || !isCurrentSourceAvailable) 
-    ? 'manual' 
-    : currentPriceSource;
-
-  return {
-    condition: displayValues.condition || '',
-    variant: displayValues.variant || 'normal',
-    quantity: item.quantity || 1,
-    buy_price: item.buy_price || 0,
-    notes: item.notes || '',
-    price_source: effectivePriceSource,
-    manual_price: item.market_price_override || item.current_price || ''
-  };
-}, [isSoldItem, displayValues.condition, displayValues.variant, 
-    item.quantity_sold, item.price_per_unit, item.quantity, item.buy_price, item.notes,
-    item.price_source, item.preferred_marketplace_override, item.market_price_override, item.current_price, getAvailableMarketplaces]);
-
 // Initialize edit form and open edit mode
 const handleStartEdit = useCallback(() => {
-  if (isSoldItem) {
-    setSoldEditForm(getEditFormDefaults());
-  } else {
-    setEditForm(getEditFormDefaults());
-  }
-  setMode(ITEM_MODES.EDITING);
-}, [isSoldItem, getEditFormDefaults]);
+  setShowEditModal(true);
+}, []);
 
-// Initialize sell form and open sell mode
 const handleStartSell = useCallback(() => {
-  setMode(ITEM_MODES.SELLING);
-  setSoldQuantity(Math.min(1, profitMetrics.availableQuantity));
-  setSoldPrice('');
-}, [profitMetrics.availableQuantity]);
+  setShowSellModal(true);
+}, []);
+
+const handleSellSubmit = useCallback(async (quantity, pricePerUnit) => {
+  // Close the sell modal immediately
+  setShowSellModal(false);
+  
+  // Calculate sale metrics for processing
+  const totalSaleValue = pricePerUnit * quantity;
+  const profitLoss = (pricePerUnit - baseMetrics.buyPrice) * quantity;
+  
+  await handleAsyncOperation(
+    'PARTIAL_SALE',
+    handleConfirmedSale,
+    quantity, pricePerUnit, totalSaleValue, profitLoss
+  );
+}, [baseMetrics.buyPrice, handleAsyncOperation]);
 
 // handle the reverted sale
 const handleRevertSale = useCallback(async () => {
@@ -466,57 +381,14 @@ const handleRevertSale = useCallback(async () => {
 
   // Handle slide-in animation for newly added items
   useEffect(() => {
-    if (isNew) {
-      setAnimationClass('animate-slide-in-from-top');
-      const timer = setTimeout(() => {
-        setAnimationClass('');
-      }, 600);
-      return () => clearTimeout(timer);
-    }
-  }, [isNew]);
-
-  // Reset sold quantity when starting to edit sales
-  useEffect(() => {
-  if (mode === ITEM_MODES.SELLING) {
-    setSoldQuantity(Math.min(1, profitMetrics.availableQuantity));
-    setSoldPrice('');
+  if (isNew) {
+    setAnimationClass('animate-slide-in-from-top');
+    const timer = setTimeout(() => {
+      setAnimationClass('');
+    }, 600);
+    return () => clearTimeout(timer);
   }
-}, [mode, profitMetrics.availableQuantity]);
-
-// Handle partial sale submission with validation and confirmation
-const handlePartialSale = useCallback(async () => {
-  const validation = validateSaleInput(soldPrice, soldQuantity);
-  
-  if (!validation.isValid) {
-    showPopup({
-      type: 'error',
-      title: 'Error',
-      message: validation.error
-    });
-    return;
-  }
-  
-  const pricePerUnit = parseFloat(soldPrice);
-  const quantity = parseInt(soldQuantity);
-  const totalSaleValue = pricePerUnit * quantity;
-  const profitLoss = (pricePerUnit - baseMetrics.buyPrice) * quantity;
-  const investment = baseMetrics.buyPrice * quantity;
-  const percentage = investment > 0 ? ((profitLoss / investment) * 100).toFixed(2) : '0.00';
-
-  showPopup({
-    type: 'confirm',
-    title: 'Confirm Sale',
-    message: `Sell ${quantity} "${fullItemName}" at $${pricePerUnit.toFixed(2)} each?`,
-    data: { quantity, pricePerUnit, totalSaleValue, profitLoss, percentage },
-    onConfirm: () => handleAsyncOperation(
-      'PARTIAL_SALE',
-      handleConfirmedSale,
-      quantity, pricePerUnit, totalSaleValue, profitLoss, percentage
-    ),
-    confirmText: 'Confirm Sale',
-    cancelText: 'Cancel'
-  });
-}, [soldPrice, soldQuantity, validateSaleInput, baseMetrics.buyPrice, handleAsyncOperation, showPopup]);
+}, [isNew]);
 
 // Process confirmed sale through database RPC function
 const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profitLoss) => {
@@ -562,7 +434,7 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
       onRemove?.(item.id, false, soldItemData, false);
       
       // enhanced show full sale toast
-      toast.fullSaleCompleted(fullItemName, quantity, totalSaleValue, profitLoss);
+      // toast.fullSaleCompleted(fullItemName, quantity, totalSaleValue, profitLoss);
 
     } else {
       // PARTIAL SALE
@@ -577,13 +449,8 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
       onUpdate(item.id, updatedItem, false, soldItemData);
       
       // enhanced show partial sale toast
-      toast.partialSaleCompleted(fullItemName, quantity, remainingQuantity, totalSaleValue, profitLoss);
+      // toast.partialSaleCompleted(fullItemName, quantity, remainingQuantity, totalSaleValue, profitLoss);
     }
-    
-    // Reset form state
-    setMode(ITEM_MODES.VIEW);
-    setSoldPrice('');
-    setSoldQuantity(1);
     
   } catch (err) {
     console.error('Error processing sale:', err);
@@ -730,15 +597,17 @@ const handleConfirmedRevert = async () => {
 };
 
 // Handle edit form submission with validation with rpc func
-const handleEditFormSubmit = useCallback(async () => {
+const handleEditSubmit = useCallback(async (formData) => {
+  setShowEditModal(false);
+
   await handleAsyncOperation('EDIT_SUBMIT', async () => {
     // Prepare update data with type conversion
     const updateData = {
-      condition: editForm.condition,
-      variant: editForm.variant,
-      quantity: parseInt(editForm.quantity),
-      buy_price: parseFloat(editForm.buy_price),
-      notes: editForm.notes?.trim() || null
+      condition: formData.condition,
+      variant: formData.variant,
+      quantity: parseInt(formData.quantity),
+      buy_price: parseFloat(formData.buy_price),
+      notes: formData.notes?.trim() === '' ? null : (formData.notes?.trim() || null)
     };
 
     // Validate input data
@@ -751,8 +620,8 @@ const handleEditFormSubmit = useCallback(async () => {
     }
 
     // Handle price source changes
-    if (editForm.price_source === 'manual') {
-      const manualPriceValue = editForm.manual_price ? parseFloat(editForm.manual_price) : null;
+    if (formData.price_source === 'manual') {
+      const manualPriceValue = formData.manual_price ? parseFloat(formData.manual_price) : null;
       
       if (manualPriceValue === null || manualPriceValue === '') {
         // User wants to clear manual override - revert to no pricing
@@ -778,12 +647,12 @@ const handleEditFormSubmit = useCallback(async () => {
         if (priceError) throw priceError;
       }
       
-    } else if (editForm.price_source !== item.price_source || item.preferred_marketplace_override) {
+    } else if (formData.price_source !== item.price_source || item.preferred_marketplace_override) {
       // User selected a specific marketplace different from current
       const { error: marketplaceError } = await supabase.rpc('set_investment_marketplace_override', {
         p_investment_id: item.id,
         p_user_id: userSession.id,
-        p_marketplace: editForm.price_source
+        p_marketplace: formData.price_source
       });
       
       if (marketplaceError) throw marketplaceError;
@@ -819,32 +688,32 @@ const handleEditFormSubmit = useCallback(async () => {
     
     // After successful database update, check if item identity changed
     const itemIdentityChanged = 
-      editForm.condition !== item.condition ||
-      editForm.variant !== item.variant ||
-      editForm.name !== item.name ||
-      editForm.skin_name !== item.skin_name;
+      formData.condition !== item.condition ||
+      formData.variant !== item.variant ||
+      formData.name !== item.name ||
+      formData.skin_name !== item.skin_name;
 
     // For non-manual prices, refresh data to get updated marketplace pricing
     const updatedItem = {
       ...item,
       ...updateData,
       // Update pricing fields based on form selection
-      market_price_override: editForm.price_source === 'manual' ? parseFloat(editForm.manual_price) : null,
-      use_override: editForm.price_source === 'manual',
-      preferred_marketplace_override: editForm.price_source === 'global' ? null : 
-        (editForm.price_source === 'manual' ? item.preferred_marketplace_override : editForm.price_source),
+      market_price_override: formData.price_source === 'manual' ? parseFloat(formData.manual_price) : null,
+      use_override: formData.price_source === 'manual',
+      preferred_marketplace_override: formData.price_source === 'global' ? null : 
+        (formData.price_source === 'manual' ? item.preferred_marketplace_override : formData.price_source),
       
       // Update current_price optimistically
-      current_price: editForm.price_source === 'manual' ? parseFloat(editForm.manual_price) :
-        (getAvailableMarketplaces().find(mp => mp.marketplace === editForm.price_source)?.price || item.current_price),
+      current_price: formData.price_source === 'manual' ? parseFloat(formData.manual_price) :
+        (getAvailableMarketplaces().find(mp => mp.marketplace === formData.price_source)?.price || item.current_price),
       
       // Update price_source for display
-      price_source: editForm.price_source === 'manual' ? 'manual' : 
-        (editForm.price_source === 'global' ? (item.price_source === 'manual' ? 'csfloat' : item.price_source) : editForm.price_source),
+      price_source: formData.price_source === 'manual' ? 'manual' : 
+        (formData.price_source === 'global' ? (item.price_source === 'manual' ? 'csfloat' : item.price_source) : formData.price_source),
       
       unrealized_profit_loss: (
-        (editForm.price_source === 'manual' ? parseFloat(editForm.manual_price) :
-          (getAvailableMarketplaces().find(mp => mp.marketplace === editForm.price_source)?.price || item.current_price)
+        (formData.price_source === 'manual' ? parseFloat(formData.manual_price) :
+          (getAvailableMarketplaces().find(mp => mp.marketplace === formData.price_source)?.price || item.current_price)
         ) - updateData.buy_price
       ) * updateData.quantity,
       
@@ -878,19 +747,18 @@ onUpdate(item.id, updatedItem, false);
       }, 1000);
     }
 
-    setMode(ITEM_MODES.VIEW);
     toast.itemUpdated(fullItemName);
 
   }).catch(err => {
     toast.error(getErrorMessage(err));
   });
-}, [handleAsyncOperation, editForm, item, userSession.id, onUpdate, onRefresh, toast, fullItemName, refreshSingleItemPrice, updateItemState, setInvestments, getErrorMessage]);
+}, [handleAsyncOperation, formData, item, userSession.id, onUpdate, onRefresh, toast, fullItemName, refreshSingleItemPrice, updateItemState, setInvestments, getErrorMessage]);
 
-const handleSoldEditFormSubmit = useCallback(async () => {
+const handleSoldEditFormSubmit = useCallback(async (formData) => {
   await handleAsyncOperation('EDIT_SOLD_SUBMIT', async () => {
     // Validate input data
-    const quantity = parseInt(soldEditForm.quantity_sold);
-    const pricePerUnit = parseFloat(soldEditForm.price_per_unit);
+    const quantity = parseInt(formData.quantity_sold);
+    const pricePerUnit = parseFloat(formData.price_per_unit);
     
     if (quantity < 1 || quantity > 9999) {
       throw new Error('Quantity must be between 1 and 9999');
@@ -907,7 +775,7 @@ const handleSoldEditFormSubmit = useCallback(async () => {
       p_price_per_unit: pricePerUnit,
       p_item_condition: null, // Don't change condition
       p_item_variant: null,   // Don't change variant
-      p_notes: soldEditForm.notes?.trim() || null,
+      p_notes: formData.notes?.trim() || null,
       p_user_id: userSession.id
     });
 
@@ -926,7 +794,7 @@ const handleSoldEditFormSubmit = useCallback(async () => {
       quantity_sold: quantity,
       price_per_unit: pricePerUnit,
       total_sale_value: newTotalSaleValue,
-      notes: soldEditForm.notes?.trim() || null
+      notes: formData.notes?.trim() || null
       // condition and variant remain unchanged
     };
 
@@ -949,39 +817,13 @@ const handleSoldEditFormSubmit = useCallback(async () => {
     }
 
     onUpdate(item.id, updatedItem, false);
-    setMode(ITEM_MODES.VIEW);
-    setSoldEditForm(null);
 
     toast.saleRecordUpdated(fullItemName);
 
   }).catch(err => {
     toast.error(getErrorMessage(err));
   });
-}, [handleAsyncOperation, soldEditForm, item, userSession.id, onUpdate, toast, fullItemName, getErrorMessage, relatedInvestment]);
-
-// Cancel edit form and reset to defaults
-const handleEditFormCancel = useCallback(() => {
-  setEditForm(null);
-  setSoldEditForm(null);
-  setMode(ITEM_MODES.VIEW);
-}, []);
-
-// Handle edit form field changes
-const handleEditFormChange = useCallback((field, value) => {
-  setEditForm(prev => ({
-    ...prev,
-    [field]: value
-  }));
-}, []);
-
-const handleSoldEditFormChange = useCallback((field, value) => {
-  setSoldEditForm(prev => ({
-    ...prev,
-    [field]: value
-  }));
-}, []);
-
-const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
+}, [handleAsyncOperation, formData, item, userSession.id, onUpdate, toast, fullItemName, getErrorMessage, relatedInvestment]);
 
   return (
   <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-xl p-5 border border-slate-700/50 hover:border-orange-400/30 shadow-xl hover:shadow-orange-500/5 transition-all duration-300 ${animationClass} ${profitMetrics.isFullySold ? 'opacity-75' : ''} overflow-hidden`}>
@@ -992,9 +834,16 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
         <div className="relative group">
           <div className={`w-20 h-20 bg-gradient-to-br from-slate-700/30 to-gray-700/30 rounded-2xl overflow-hidden border border-slate-600/40 shadow-lg ${profitMetrics.isFullySold ? 'backdrop-blur-[1px]' : ''}`}>
             {item.image_url ? (
-              <img src={item.image_url} alt={name} className={`w-full h-full object-contain p-1 ${profitMetrics.isFullySold ? 'opacity-60' : ''}`} />
+              <img 
+                src={item.image_url} 
+                alt={name || 'Item image'}
+                className="w-full h-full object-contain p-1"
+                style={{ 
+                  textIndent: '-9999px' 
+                }}
+              />
             ) : (
-              <div className={`text-gray-400 text-xs text-center flex items-center justify-center h-full ${profitMetrics.isFullySold ? 'opacity-60' : ''}`}>No Image</div>
+              <div className="text-gray-400 text-xs text-center flex items-center justify-center h-full">No Image</div>
             )}
           </div>
   
@@ -1107,10 +956,10 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
             {showBreakdown && (
               <div className="mt-1 text-[11px] text-slate-400 leading-tight space-y-0 text-right">
                 <div>
-                  {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })} real
+                  {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })} rlzd
                 </div>
                 <div>
-                  {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.unrealizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })} unreal
+                  {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.unrealizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })} unrlzd
                 </div>
                 <div className="text-yellow-400">
                   avg: ${salesSummary.averageSalePrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}
@@ -1281,277 +1130,24 @@ const showSalesBreakdown = !isSoldItem && salesSummary.hasAnySales;
       )}
     </div>
       
-    {/* Edit Form - restrict fields for sold items */}
-    {mode === ITEM_MODES.EDITING && (
-      <div className="mt-4 pt-4 border-t border-gray-700 space-y-3">
-        {isSoldItem ? (
-          // SOLD ITEM EDIT FORM - Only allow quantity and price changes
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Quantity Sold
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="9999"
-                  value={soldEditForm.quantity_sold}
-                  onChange={(e) => handleSoldEditFormChange('quantity_sold', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Sale Price (each)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={soldEditForm.price_per_unit}
-                  onChange={(e) => handleSoldEditFormChange('price_per_unit', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                />
-              </div>
-            </div>
-            
-            {/* Notes field */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Notes (optional)
-              </label>
-              <textarea
-                value={soldEditForm.notes}
-                onChange={(e) => handleSoldEditFormChange('notes', e.target.value)}
-                placeholder="Add notes about this sale..."
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none resize-none"
-                rows="2"
-              />
-            </div>
-          </>
-        ) : (
-          // ACTIVE ITEM EDIT FORM - Allow all fields
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Condition
-                </label>
-                <select
-                  value={editForm.condition}
-                  onChange={(e) => handleEditFormChange('condition', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                >
-                  {CONDITION_OPTIONS.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Variant
-                </label>
-                <select
-                  value={editForm.variant}
-                  onChange={(e) => handleEditFormChange('variant', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                >
-                  {VARIANT_OPTIONS.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Quantity
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="9999"
-                  value={editForm.quantity}
-                  onChange={(e) => handleEditFormChange('quantity', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Buy Price (each)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={editForm.buy_price}
-                  onChange={(e) => handleEditFormChange('buy_price', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                />
-              </div>
-            </div>    
+    <EditItemModal
+      isOpen={showEditModal}
+      onClose={() => setShowEditModal(false)}
+      item={item}
+      isSoldItem={isSoldItem}
+      onSave={isSoldItem ? handleSoldEditFormSubmit : handleEditSubmit}
+      isLoading={asyncState.isLoading && asyncState.operation === (isSoldItem ? 'EDIT_SOLD_SUBMIT' : 'EDIT_SUBMIT')}
+    />
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Price Source
-                </label>
-                <select
-                  value={editForm.price_source}
-                  onChange={(e) => handleEditFormChange('price_source', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                >
-                  {getAvailableMarketplaces().map(mp => (
-                    <option key={mp.marketplace} value={mp.marketplace}>
-                      {mp.marketplace.toUpperCase()}
-                      {mp.is_bid_price ? ' (Bid)' : ''}
-                    </option>
-                  ))}
-                  <option value="manual">Set Manual Price</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center space-x-1">
-                  <span>Current Price</span>
-                  {editForm.price_source === 'manual' && (
-                    <div className="relative group">
-                      <Info className="w-3 h-3 mt-0.5 text-gray-500 hover:text-gray-400 cursor-help" />
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                        Leave empty and save to remove manual pricing
-                      </div>
-                    </div>
-                  )}
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={editForm.price_source === 'manual' ? editForm.manual_price : 
-                    (getAvailableMarketplaces().find(mp => mp.marketplace === editForm.price_source)?.price?.toFixed(2) || 
-                    item.current_price?.toFixed(2) || '')}
-                  onChange={(e) => handleEditFormChange('manual_price', e.target.value)}
-                  disabled={editForm.price_source !== 'manual'}
-                  className={`w-full px-3 py-2 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none ${
-                    editForm.price_source !== 'manual' 
-                      ? 'bg-gray-600 cursor-not-allowed opacity-75' 
-                      : 'bg-gray-700'
-                  }`}
-                  placeholder={editForm.price_source !== 'manual' ? 'Managed automatically' : 'Enter manual price'}
-                />
-              </div>
-            </div>
-            
-            {/* Notes field */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Notes (optional)
-              </label>
-              <textarea
-                value={editForm.notes}
-                onChange={(e) => handleEditFormChange('notes', e.target.value)}
-                placeholder="Add notes about this investment..."
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:border-orange-500 focus:outline-none resize-none"
-                rows="2"
-              />
-            </div>
-          </>
-        )}
-        
-        <div className="flex space-x-2">
-          <button
-            onClick={isSoldItem ? handleSoldEditFormSubmit : handleEditFormSubmit}
-            disabled={asyncState.isLoading}
-            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
-          >
-            {asyncState.isLoading ? 'Saving...' : 'Save Changes'}
-          </button>
-          <button
-            onClick={handleEditFormCancel}
-            disabled={asyncState.isLoading}
-            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    )}
-
-    {/* Partial sale form - handles selling portions of investment positions */}
-    {mode === ITEM_MODES.SELLING && !profitMetrics.isFullySold && !isSoldItem && (
-      <div className="mt-4 pt-4 border-t border-gray-700">
-        <h5 className="text-sm font-medium text-white mb-2">
-          Sell Items ({profitMetrics.availableQuantity} available)
-        </h5>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">
-              Quantity to sell
-            </label>
-            <input
-              type="number"
-              min="1"
-              max={profitMetrics.availableQuantity}
-              value={soldQuantity}
-              onChange={(e) => setSoldQuantity(Math.min(parseInt(e.target.value) || 1, profitMetrics.availableQuantity))}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">
-              Sale price per item ($)
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              placeholder="Enter sale price per item"
-              value={soldPrice}
-              onChange={(e) => setSoldPrice(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:border-orange-500 focus:outline-none"
-            />
-          </div>
-
-          {/* Preview */}
-          {salePreview && (
-            <div className="text-xs text-gray-400 bg-gray-700/50 p-2 rounded">
-              <div>Total sale value: ${salePreview.totalSaleValue.toFixed(2)}</div>
-              <div className={salePreview.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}>
-                Profit/Loss: {salePreview.profitLoss >= 0 ? '+' : '-'}${Math.abs(salePreview.profitLoss).toFixed(2)} ({salePreview.percentage}%)
-              </div>
-            </div>
-          )}
-          
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handlePartialSale}
-              disabled={asyncState.isLoading}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors disabled:opacity-50 flex items-center space-x-1"
-            >
-              {asyncState.isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-              <span>Confirm Sale</span>
-            </button>
-            <button
-              onClick={() => {
-                setMode(ITEM_MODES.VIEW);
-                setSoldPrice('');
-                setSoldQuantity(1);
-              }}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
+    <SellItemModal
+      isOpen={showSellModal}
+      onClose={() => setShowSellModal(false)}
+      item={item}
+      availableQuantity={profitMetrics.availableQuantity}
+      buyPrice={baseMetrics.buyPrice}
+      onConfirmSale={handleSellSubmit}
+      isLoading={asyncState.isLoading && asyncState.operation === 'PARTIAL_SALE'}
+    />
 
     {/* Centralized popup system */}
     <PopupManager
