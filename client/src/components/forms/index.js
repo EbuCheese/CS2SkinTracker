@@ -1,4 +1,6 @@
 export { default as AddItemForm } from './AddItemForm'
+export { default as EditItemModal } from './EditItemModal'
+export { default as SellItemModal } from './SellItemModal'
 export { default as QuickAddItemForm } from './QuickAddItemForm'
 export { default as QuickSellModal } from './QuickSellModal'
 export { default as MarketplacePriorityManager } from './MarketplacePriorityManager'
