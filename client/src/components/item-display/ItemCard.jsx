@@ -598,7 +598,6 @@ const handleConfirmedRevert = async () => {
 
 // Handle edit form submission with validation with rpc func
 const handleEditSubmit = useCallback(async (formData) => {
-  setShowEditModal(false);
 
   await handleAsyncOperation('EDIT_SUBMIT', async () => {
     // Prepare update data with type conversion
@@ -689,9 +688,7 @@ const handleEditSubmit = useCallback(async (formData) => {
     // After successful database update, check if item identity changed
     const itemIdentityChanged = 
       formData.condition !== item.condition ||
-      formData.variant !== item.variant ||
-      formData.name !== item.name ||
-      formData.skin_name !== item.skin_name;
+      formData.variant !== item.variant;
 
     // For non-manual prices, refresh data to get updated marketplace pricing
     const updatedItem = {
@@ -720,7 +717,7 @@ const handleEditSubmit = useCallback(async (formData) => {
       original_quantity: Math.max(item.original_quantity || item.quantity, updateData.quantity)
 };
 
-onUpdate(item.id, updatedItem, false);
+    onUpdate(item.id, updatedItem, false);
 
     // Refresh price if item identity changed
     if (itemIdentityChanged) {
@@ -748,6 +745,7 @@ onUpdate(item.id, updatedItem, false);
     }
 
     toast.itemUpdated(fullItemName);
+    setShowEditModal(false);
 
   }).catch(err => {
     toast.error(getErrorMessage(err));
@@ -773,9 +771,9 @@ const handleSoldEditFormSubmit = useCallback(async (formData) => {
       p_sale_id: item.id,
       p_quantity_sold: quantity,
       p_price_per_unit: pricePerUnit,
-      p_item_condition: null, // Don't change condition
-      p_item_variant: null,   // Don't change variant
-      p_notes: formData.notes?.trim() || null,
+      p_item_condition: null,
+      p_item_variant: null,
+      p_notes: formData.notes?.trim() === '' ? null : (formData.notes?.trim() || null),
       p_user_id: userSession.id
     });
 
@@ -795,7 +793,6 @@ const handleSoldEditFormSubmit = useCallback(async (formData) => {
       price_per_unit: pricePerUnit,
       total_sale_value: newTotalSaleValue,
       notes: formData.notes?.trim() || null
-      // condition and variant remain unchanged
     };
 
     // Update related active investment if it exists
@@ -819,6 +816,7 @@ const handleSoldEditFormSubmit = useCallback(async (formData) => {
     onUpdate(item.id, updatedItem, false);
 
     toast.saleRecordUpdated(fullItemName);
+    setShowEditModal(false);
 
   }).catch(err => {
     toast.error(getErrorMessage(err));
