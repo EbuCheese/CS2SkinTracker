@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { useAuth } from '@/hooks/auth';
 import { CSDataProvider } from './contexts/CSDataContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { UserSettingsProvider } from './contexts/UserSettingsContext';
 import './index.css'
 import Home from './pages/Home'
 import PricesPage from './pages/Prices';
@@ -40,6 +41,7 @@ function App() {
   if (hasValidBetaKey) {
     return (
       <ToastProvider>
+        <UserSettingsProvider userSession={userSession}>
         <CSDataProvider>
           <Router>
             <Navbar userSession={userSession} onLogout={logout} />
@@ -63,6 +65,7 @@ function App() {
             <ToastContainer />
           </Router>
         </CSDataProvider>
+        </UserSettingsProvider>
       </ToastProvider>
     );
   }
