@@ -365,6 +365,7 @@ const loginWithBetaKey = useCallback(async (betaKey) => {
     
     // Always clear session data
     localStorage.removeItem(STORAGE_KEYS.USER_SESSION);
+    sessionStorage.removeItem('user_settings');
     setUserSession(null);
     setHasValidBetaKey(false);
     setRevocationMessage(null);

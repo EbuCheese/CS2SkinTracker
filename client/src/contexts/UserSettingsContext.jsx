@@ -32,19 +32,36 @@ export const UserSettingsProvider = ({ children, userSession }) => {
   }, [userSession?.id]);
 
   const loadSettings = async () => {
-    const { data } = await supabase
+  try {
+    const { data, error } = await supabase
       .rpc('get_user_settings', { p_user_id: userSession.id });
     
+    console.log('Raw settings response:', { data, error });
+    
+    if (error) {
+      console.error('Error loading settings:', error);
+      return;
+    }
+    
+    // data IS the JSON object from your RPC function
     if (data?.success) {
+      const preferred = data.preferred_marketplace || 'csfloat';
+      const fallbacks = data.fallback_marketplaces || ['steam', 'buff163', 'skinport'];
+      
       const newSettings = {
         timezone: data.timezone || settings.timezone,
-        // Map other settings from DB response
+        marketplacePriority: [preferred, ...fallbacks]
       };
+      
+      console.log('Loaded settings:', newSettings);
       
       setSettings(newSettings);
       sessionStorage.setItem('user_settings', JSON.stringify(newSettings));
     }
-  };
+  } catch (error) {
+    console.error('Failed to load settings:', error);
+  }
+};
 
   const updateSetting = (key, value) => {
     setSettings(prev => {
