@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Loader2, Edit2, Save, AlertTriangle, Info, CalendarMinus, CalendarPlus, DollarSign, Tag, Wallet, Package, TrendingUp } from 'lucide-react';
+import { Loader2, Edit2, ChartNoAxesColumnIncreasing, AlertTriangle, DollarSign, CalendarPlus, CalendarCheck2, Wallet, Package } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 import { PopupManager } from '@/components/ui';
 import { EditItemModal, SellItemModal } from '@/components/forms';
-import { useScrollLock } from '@/hooks/util';
+import { useScrollLock, formatDateInTimezone } from '@/hooks/util';
 import { useToast } from '@/contexts/ToastContext';
+import { useUserSettings } from '@/contexts/UserSettingsContext';
 
   // comparison prop function
   const areItemsEqual = (prevProps, nextProps) => {
@@ -71,6 +72,7 @@ const ItemCard = React.memo(({
   setInvestments 
 }) => {  
   // Add toast hook
+  const { timezone } = useUserSettings();
   const toast = useToast();
 
   // UI state management
@@ -489,8 +491,8 @@ const handleConfirmedRevert = async () => {
         const realizedPLRemoved = (item.price_per_unit - buyPrice) * quantityRestored;
         
         // Match the database function's note format exactly
-        const restorationNote = `Restored ${quantityRestored} units from sale reversion on ${new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}`;
-        
+        const restorationNote = `Restored ${quantityRestored} units from sale reversion on ${formatDateInTimezone(new Date(), timezone, { month: 'numeric', day: 'numeric', year: 'numeric' })}`;
+
         let updatedNotes;
         if (relatedInvestment.notes && relatedInvestment.notes.trim() !== '') {
           updatedNotes = relatedInvestment.notes + '\n' + restorationNote;
@@ -531,7 +533,9 @@ const handleConfirmedRevert = async () => {
         current_price: item.buy_price_per_unit,
         quantity: revertResult.quantity_restored,
         image_url: item.image_url,
-        notes: item.notes ? `${item.notes}\nRecreated from sale reversion on ${new Date().toLocaleDateString()}` : `Recreated from sale reversion on ${new Date().toLocaleDateString()}`,
+        notes: item.notes ? 
+        `${item.notes}\nRecreated from sale reversion on ${formatDateInTimezone(new Date(), timezone, { month: 'numeric', day: 'numeric', year: 'numeric' })}` : 
+        `Recreated from sale reversion on ${formatDateInTimezone(new Date(), timezone, { month: 'numeric', day: 'numeric', year: 'numeric' })}`,
         created_at: revertResult.original_created_at || new Date().toISOString(),
         total_sold_quantity: 0,
         total_sale_value: 0,
@@ -827,7 +831,7 @@ const handleSoldEditFormSubmit = useCallback(async (formData) => {
   <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-xl p-5 border border-slate-700/50 hover:border-orange-400/30 shadow-xl hover:shadow-orange-500/5 transition-all duration-300 ${animationClass} ${profitMetrics.isFullySold ? 'opacity-75' : ''} overflow-hidden`}>
     {/* Header Section */}
     <div className="flex items-start justify-between mb-4 gap-3">
-      <div className="flex items-start space-x-4 min-w-0 flex-1">
+      <div className="flex items-start space-x-3 min-w-0 flex-1">
         {/* Image Container with Variant Badges */}
         <div className="relative group">
           <div className={`w-20 h-20 bg-gradient-to-br from-slate-700/30 to-gray-700/30 rounded-2xl overflow-hidden border border-slate-600/40 shadow-lg ${profitMetrics.isFullySold ? 'backdrop-blur-[1px]' : ''}`}>
@@ -875,19 +879,23 @@ const handleSoldEditFormSubmit = useCallback(async (formData) => {
             )}
           </div>
           
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-1 flex-wrap">
             {condition && (
-              <span className="text-xs px-1.5 py-1 rounded-md bg-slate-700/50 text-slate-300 border border-slate-600/30">
+              <span className="text-xs px-1.5 py-1 rounded-md bg-slate-700/50 text-slate-300 border border-slate-600/30 font-semibold whitespace-nowrap">
                 {condition}
               </span>
             )}
-            <span className="text-xs text-slate-400 flex items-center">
+            <span className="text-xs text-slate-400 flex items-center whitespace-nowrap">
               {isSoldItem ? (
-                <CalendarMinus className="w-3.5 h-3.5 mr-1" />
+                <CalendarCheck2 className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
               ) : (
-                <CalendarPlus className="w-3.5 h-3.5 mr-1" />
+                <CalendarPlus className="w-3.5 h-3.5 mr-1 flex-shrink-0" />
               )}
-              {new Date(isSoldItem ? item.sale_date : item.created_at).toLocaleDateString()}
+              {formatDateInTimezone(
+                isSoldItem ? item.sale_date : item.created_at, 
+                timezone, 
+                { month: 'short', day: 'numeric', year: 'numeric' }
+              )}
             </span>
           </div>
 
@@ -995,7 +1003,7 @@ const handleSoldEditFormSubmit = useCallback(async (formData) => {
           {isSoldItem ? (
           <Wallet className="w-3.5 h-3.5 text-blue-400" />
           ) : (
-            <Tag className="w-3.5 h-3.5 text-orange-400" />
+            <ChartNoAxesColumnIncreasing className="w-3.5 h-3.5 text-orange-400" />
           )}
           <span className="text-[11px] text-slate-400 uppercase tracking-wide">
             {isSoldItem ? 'Buy Price' : 'Current'}
@@ -1059,22 +1067,20 @@ const handleSoldEditFormSubmit = useCallback(async (formData) => {
       </div>
     </div>
 
-    {/* Actions at bottom */}
+    {/* Bottom Action Buttons */}
     <div className="flex space-x-1.5">
       {!isSoldItem ? (
         <>
           <button
             onClick={handleStartEdit}
-            className="flex-1 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center space-x-1 border border-slate-600/30 hover:border-slate-500/50"
-          >
+            className="flex-1 bg-slate-700/50 hover:bg-blue-600/20 text-slate-300 hover:text-blue-300 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center space-x-1 border border-slate-600/30 hover:border-blue-500/40"          >
             <Edit2 className="w-3 h-3" />
             <span>Edit</span>
           </button>
           {!profitMetrics.isFullySold ? (
             <button
               onClick={handleStartSell}
-              className="flex-1 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center space-x-1 border border-slate-600/30 hover:border-slate-500/50"
-            >
+              className="flex-1 bg-slate-700/50 hover:bg-green-600/20 text-slate-300 hover:text-green-300 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center space-x-1 border border-slate-600/30 hover:border-green-500/40"            >
               <DollarSign className="w-3 h-3" />
               <span>{salesSummary.soldItems === 0 ? 'Sell' : 'Sell More'}</span>
             </button>
@@ -1096,16 +1102,14 @@ const handleSoldEditFormSubmit = useCallback(async (formData) => {
         <>
           <button
             onClick={handleStartEdit}
-            className="flex-1 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center space-x-1 border border-slate-600/30 hover:border-slate-500/50"
-          >
+            className="flex-1 bg-slate-700/50 hover:bg-blue-600/20 text-slate-300 hover:text-blue-300 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center space-x-1 border border-slate-600/30 hover:border-blue-500/40"          >
             <Edit2 className="w-3 h-3" />
             <span>Edit</span>
           </button>
           <button
             onClick={handleRevertSale}
             disabled={asyncState.isLoading}
-            className="flex-1 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center space-x-1 border border-slate-600/30 hover:border-slate-500/50 disabled:opacity-50"
-          >
+            className="flex-1 bg-slate-700/50 hover:bg-orange-600/20 text-slate-300 hover:text-orange-300 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center justify-center space-x-1 border border-slate-600/30 hover:border-orange-500/40"          >
             {asyncState.operation === 'REVERT_SALE' && asyncState.isLoading ? (
               <Loader2 className="w-3 h-3 animate-spin" />
             ) : (

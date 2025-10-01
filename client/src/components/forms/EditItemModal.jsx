@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Save, Info } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { useItemFormatting } from '@/hooks/util';
+import { useItemFormatting, formatDateInTimezone } from '@/hooks/util';
+import { useUserSettings } from '@/contexts/UserSettingsContext';
 
 const CONDITION_OPTIONS = [
   { value: '', label: 'Select condition' },
@@ -26,6 +27,8 @@ const EditItemModal = ({
   onSave, 
   isLoading = false 
 }) => {
+  const { timezone } = useUserSettings();
+
   const [formData, setFormData] = useState({});
   const [errors, setErrors] = useState({});
 
@@ -194,7 +197,11 @@ const EditItemModal = ({
                 {itemDisplayName }
               </p>
               <p className="text-xs text-gray-500">
-                {isSoldItem ? 'Sold' : 'Added'}: {new Date(isSoldItem ? item.sale_date : item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                {isSoldItem ? 'Sold' : 'Added'}: {formatDateInTimezone(
+                  isSoldItem ? item.sale_date : item.created_at,
+                  timezone,
+                  { month: 'short', day: 'numeric', year: 'numeric' }
+                )}
               </p>
             </div>
           </div>

@@ -3,8 +3,11 @@ import { User, LogOut, Shield, Calendar, Key, IdCardLanyard, AlertTriangle, Sett
 import { supabase } from '@/supabaseClient';
 import { useToast } from '@/contexts/ToastContext';
 import { MarketplacePriorityManager } from '@/components/forms';
+import { useUserSettings } from '@/contexts/UserSettingsContext';
 
 const AccountPage = ({ userSession, onLogout, onRevoke }) => {
+  const { updateSettings } = useUserSettings();
+
   // State management for loading states and UI controls
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isRevoking, setIsRevoking] = useState(false);
@@ -12,91 +15,69 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
   const [showFields, setShowFields] = useState(false);
   const [copiedField, setCopiedField] = useState(null);
 
+  const [formSettings, setFormSettings] = useState({
+    timezone: 'UTC',
+    marketplacePriority: ['csfloat', 'steam', 'buff163', 'skinport']
+  });
+
+  // Load initial form values from context
+  const { settings: contextSettings } = useUserSettings();
+
+  useEffect(() => {
+    if (contextSettings && contextSettings.marketplacePriority) {
+      setFormSettings(contextSettings);
+    }
+  }, [contextSettings]);
+
   // toast hook
   const toast = useToast();
 
   // State management for user settings
-  const [settings, setSettings] = useState({
-  timezone: 'UTC',
-  marketplacePriority: ['csfloat', 'steam', 'buff163', 'skinport']
-  });
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsChanged, setSettingsChanged] = useState(false);
 
   // Retrieve beta key from localStorage with fallback
   const betaKey = localStorage.getItem('beta_key') || 'N/A';
 
-  // load user settings from db
-  const loadUserSettings = useCallback(async () => {
-  try {
-    const { data, error } = await supabase
-      .rpc('get_user_settings', { 
-        p_user_id: userSession.id
-      });
-    
-    console.log('Get settings result:', { data, error });
-    
-    if (data?.success) {
-      // Reconstruct marketplacePriority from preferred + fallbacks
-      const preferred = data.preferred_marketplace || 'csfloat';
-      const fallbacks = data.fallback_marketplaces || ['steam', 'buff163', 'skinport'];
-      const marketplacePriority = [preferred, ...fallbacks];
-      
-      setSettings({
-        marketplacePriority: marketplacePriority,
-        timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
-      });
-    }
-  } catch (error) {
-    console.error('Failed to load settings:', error);
-  }
-}, [userSession.id]);
-
-// Load settings on component mount
-  useEffect(() => {
-    loadUserSettings();
-  }, [loadUserSettings]);
 
 // save settings to db
-const handleSaveSettings = async () => {
-  setSettingsLoading(true);
-  try {
-    // Split marketplacePriority into preferred + fallbacks for API
-    const preferred = settings.marketplacePriority[0];
-    const fallbacks = settings.marketplacePriority.slice(1);
-    
-    const { data, error } = await supabase
-      .rpc('update_user_settings', {
-        p_user_id: userSession.id,
-        p_preferred_marketplace: preferred,
-        p_timezone: settings.timezone,
-        p_fallback_marketplaces: fallbacks
-      });
-    
-    console.log('Update result:', { data, error });
-    
-    if (error) {
-      console.error('Supabase error:', error);
-      toast.error('Failed to save settings. Please try again.', 'Settings Error');
-    } else if (data?.success) {
-      setSettingsChanged(false);
-      toast.success('Your settings have been saved successfully.', 'Settings Saved');
-    } else {
-      toast.error('Settings could not be saved. Please try again.', 'Save Failed');
+  const handleSaveSettings = async () => {
+    setSettingsLoading(true);
+    try {
+      const preferred = formSettings.marketplacePriority[0];
+      const fallbacks = formSettings.marketplacePriority.slice(1);
+      
+      const { data, error } = await supabase
+        .rpc('update_user_settings', {
+          p_user_id: userSession.id,
+          p_preferred_marketplace: preferred,
+          p_timezone: formSettings.timezone,
+          p_fallback_marketplaces: fallbacks
+        });
+      
+      if (error) {
+        toast.error('Failed to save settings. Please try again.', 'Settings Error');
+      } else if (data?.success) {
+        // Update the context with saved settings
+        updateSettings(formSettings);
+        setSettingsChanged(false);
+        toast.success('Your settings have been saved successfully.', 'Settings Saved');
+      } else {
+        toast.error('Settings could not be saved. Please try again.', 'Save Failed');
+      }
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      toast.error('An unexpected error occurred while saving settings.', 'Settings Error');
+    } finally {
+      setSettingsLoading(false);
     }
-  } catch (error) {
-    console.error('Failed to save settings:', error);
-    toast.error('An unexpected error occurred while saving settings.', 'Settings Error');
-  } finally {
-    setSettingsLoading(false);
-  }
-};
+  };
 
 // handle changing settings
 const handleSettingChange = (key, value) => {
-  setSettings(prev => ({ ...prev, [key]: value }));
-  setSettingsChanged(true);
-};
+    setFormSettings(prev => ({ ...prev, [key]: value }));
+    setSettingsChanged(true);
+  };
 
   // Handles user logout with optional beta key clearing
   const handleLogout = async (clearBetaKey = false) => {
@@ -309,7 +290,7 @@ const handleSettingChange = (key, value) => {
               {/* Preferred Marketplace Setting */}
               <div className="border-t border-gray-700/50 pt-6">
                 <MarketplacePriorityManager
-                  marketplacePriority={settings.marketplacePriority}
+                  marketplacePriority={formSettings.marketplacePriority}
                   onChange={(newPriority) => handleSettingChange('marketplacePriority', newPriority)}
                 />
               </div>
@@ -323,7 +304,7 @@ const handleSettingChange = (key, value) => {
                   </label>
                 </div>
                 <select
-                  value={settings.timezone}
+                  value={formSettings.timezone}
                   onChange={(e) => handleSettingChange('timezone', e.target.value)}
                   className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
                 >

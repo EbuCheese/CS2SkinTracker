@@ -2,27 +2,39 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Loader2 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
+import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { formatDateInTimezone } from '@/hooks/util';
 
 const buildItemDisplayName = (item) => {
   const variant = item.item_variant || item.variant;
   const name = item.item_name || item.name;
   const skinName = item.item_skin_name || item.skin_name;
   const condition = item.item_condition || item.condition;
-  
+ 
   let displayName = '';
   
+  // Handle star prefix first (for knives/special items)
+  if (name && name.startsWith('★')) {
+    displayName += '★ ';
+  }
+  
+  // Add variant prefix
   if (variant === 'souvenir') {
     displayName += 'Souvenir ';
   } else if (variant === 'stattrak') {
     displayName += 'StatTrak™ ';
   }
   
+  // Add base name (without the star if it was already added)
+  const baseName = name && name.startsWith('★') ? name.slice(1).trim() : name;
+  
   if (skinName) {
-    displayName += `${name || 'Custom'} ${skinName}`;
+    displayName += `${baseName || 'Custom'} | ${skinName}`;
   } else {
-    displayName += name;
+    displayName += baseName;
   }
   
+  // Add condition in parentheses if present
   if (condition) {
     displayName += ` (${condition})`;
   }
@@ -39,6 +51,8 @@ const SellItemModal = ({
   onConfirmSale,
   isLoading = false 
 }) => {
+  const { timezone } = useUserSettings();
+
   const [soldPrice, setSoldPrice] = useState('');
   const [soldQuantity, setSoldQuantity] = useState(1);
 
@@ -143,7 +157,11 @@ const SellItemModal = ({
                   {buildItemDisplayName(item)}
                 </p>
                 <p className="text-xs text-gray-500">
-                  Added: {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  Added: {formatDateInTimezone(
+                    item.created_at,
+                    timezone,
+                    { month: 'short', day: 'numeric', year: 'numeric' }
+                  )}
                 </p>
               </div>
             </div>

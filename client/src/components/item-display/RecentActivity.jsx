@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Activity, Plus, DollarSign } from 'lucide-react';
 import { ImageWithLoading } from '@/components/ui';
-import { useItemFormatting } from '@/hooks/util';
+import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { useItemFormatting, formatDateInTimezone } from '@/hooks/util';
 
 const RecentActivity = ({ recentActivity, formatPrice }) => {
+  const { timezone } = useUserSettings();
+
   const [visibleItemsWithoutScroll, setVisibleItemsWithoutScroll] = useState(3);
   const containerRef = useRef(null);
   const headerRef = useRef(null);
@@ -83,18 +86,16 @@ console.log('Activity object fields:', recentActivity[0] && Object.keys(recentAc
         {recentActivity.length > 0 ? (
           <div className={`flex flex-col space-y-3 ${needsScrolling ? 'flex-1 overflow-y-auto pr-2' : 'flex-1'}`}>
             {processedActivities.map((activity, index) => {
-              const formattedDate = (() => {
-                if (!activity.date || isNaN(activity.date.getTime())) {
-                  return 'Unknown date';
-                }
-                return activity.date.toLocaleDateString('en-US', {
-                  month: 'short', 
-                  day: 'numeric', 
-                  hour: 'numeric', 
+              const formattedDate = formatDateInTimezone(
+                activity.date,
+                timezone,
+                {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: 'numeric',
                   minute: '2-digit'
-                });
-              })();
-
+                }
+              );
               const activityIconBg = activity.type === 'purchase' 
                 ? 'bg-blue-500/20 text-blue-400' 
                 : 'bg-green-500/20 text-green-400';
