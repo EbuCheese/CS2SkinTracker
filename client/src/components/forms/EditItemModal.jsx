@@ -33,7 +33,7 @@ const EditItemModal = ({
   const [errors, setErrors] = useState({});
 
   // name format hook
-  const { displayName: formatDisplayName } = useItemFormatting();
+  const { displayName: formatDisplayName, subtitle: formatSubtitle } = useItemFormatting();
   const itemDisplayName = useMemo(() => {
   // Create a normalized item object that works for both sold and active items
   const normalizedItem = {
@@ -42,8 +42,21 @@ const EditItemModal = ({
     condition: item.item_condition || item.condition,
     variant: item.item_variant || item.variant
   };
-  return formatDisplayName(normalizedItem);
+  return formatDisplayName(normalizedItem, { 
+    format: 'full' 
+  });
 }, [item, formatDisplayName]);
+
+const itemSubtitle = useMemo(() => {
+  const normalizedItem = {
+    condition: item.item_condition || item.condition,
+    quantity: item.quantity || item.quantity_sold
+  };
+  return formatSubtitle(normalizedItem, { 
+    showQuantity: false,
+    conditionField: 'condition'
+  });
+}, [item, formatSubtitle]);
 
   // Helper to get available marketplaces
   const getAvailableMarketplaces = useCallback(() => {
@@ -190,20 +203,26 @@ const EditItemModal = ({
             
             {/* Title and Info */}
             <div className="min-w-0 flex-1">
-              <h3 className="text-lg font-semibold text-white">
-                {isSoldItem ? 'Edit Sale Record' : 'Edit Investment'}
-              </h3>
-              <p className="text-sm text-gray-400 mt-1 break-words leading-relaxed" title={itemDisplayName }>
-                {itemDisplayName }
+            <h3 className="text-lg font-semibold text-white mb-2">
+              {isSoldItem ? 'Edit Sale Record' : 'Edit Investment'}
+            </h3>
+            <div className="space-y-1">
+              <p className="text-sm text-white font-medium leading-tight" title={itemDisplayName}>
+                {itemDisplayName}
               </p>
-              <p className="text-xs text-gray-500">
-                {isSoldItem ? 'Sold' : 'Added'}: {formatDateInTimezone(
-                  isSoldItem ? item.sale_date : item.created_at,
-                  timezone,
-                  { month: 'short', day: 'numeric', year: 'numeric' }
-                )}
-              </p>
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-gray-400">{itemSubtitle}</span>
+                <span className="text-gray-600">•</span>
+                <span className="text-gray-500">
+                  {isSoldItem ? 'Sold' : 'Added'} {formatDateInTimezone(
+                    isSoldItem ? item.sale_date : item.created_at,
+                    timezone,
+                    { month: 'short', day: 'numeric', year: 'numeric' }
+                  )}
+                </span>
+              </div>
             </div>
+          </div>
           </div>
           <button
             onClick={onClose}

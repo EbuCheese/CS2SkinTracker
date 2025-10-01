@@ -3,44 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Save, Loader2 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
-import { formatDateInTimezone } from '@/hooks/util';
-
-const buildItemDisplayName = (item) => {
-  const variant = item.item_variant || item.variant;
-  const name = item.item_name || item.name;
-  const skinName = item.item_skin_name || item.skin_name;
-  const condition = item.item_condition || item.condition;
- 
-  let displayName = '';
-  
-  // Handle star prefix first (for knives/special items)
-  if (name && name.startsWith('★')) {
-    displayName += '★ ';
-  }
-  
-  // Add variant prefix
-  if (variant === 'souvenir') {
-    displayName += 'Souvenir ';
-  } else if (variant === 'stattrak') {
-    displayName += 'StatTrak™ ';
-  }
-  
-  // Add base name (without the star if it was already added)
-  const baseName = name && name.startsWith('★') ? name.slice(1).trim() : name;
-  
-  if (skinName) {
-    displayName += `${baseName || 'Custom'} | ${skinName}`;
-  } else {
-    displayName += baseName;
-  }
-  
-  // Add condition in parentheses if present
-  if (condition) {
-    displayName += ` (${condition})`;
-  }
-  
-  return displayName;
-};
+import { formatDateInTimezone, useItemFormatting } from '@/hooks/util';
 
 const SellItemModal = ({ 
   isOpen, 
@@ -53,10 +16,22 @@ const SellItemModal = ({
 }) => {
   const { timezone } = useUserSettings();
 
+  const toast = useToast();
+
+  const { displayName: formatDisplayName, subtitle: formatSubtitle } = useItemFormatting();
+
+  const itemDisplayName = useMemo(() => 
+    formatDisplayName(item, { format: 'full' }), 
+    [item, formatDisplayName]
+  );
+
+  const itemSubtitle = useMemo(() => 
+    formatSubtitle(item, { showQuantity: false }),
+    [item, formatSubtitle]
+  );
+
   const [soldPrice, setSoldPrice] = useState('');
   const [soldQuantity, setSoldQuantity] = useState(1);
-
-  const toast = useToast();
 
   // Reset form when modal opens
   useEffect(() => {
@@ -125,7 +100,7 @@ const SellItemModal = ({
                   {item.image_url ? (
                     <img 
                       src={item.image_url} 
-                      alt={buildItemDisplayName(item) || 'Item image'}
+                      alt={itemDisplayName || 'Item image'}
                       className="w-full h-full object-contain p-1"
                       style={{ 
                         textIndent: '-9999px' 
@@ -148,22 +123,28 @@ const SellItemModal = ({
                 )}
               </div>
               
-              {/* Title and Item Info */}
-              <div className="min-w-0 flex-1">
-                <h3 className="text-lg font-semibold text-white">
-                  Record Sale
-                </h3>
-                <p className="text-sm text-gray-400 mt-1 break-words leading-relaxed" title={buildItemDisplayName(item)}>
-                  {buildItemDisplayName(item)}
+            {/* Title and Item Info */}
+            <div className="min-w-0 flex-1">
+              <h3 className="text-lg font-semibold text-white mb-2">
+                Record Sale
+              </h3>
+              <div className="space-y-1">
+                <p className="text-sm text-white font-medium leading-tight" title={itemDisplayName}>
+                  {itemDisplayName}
                 </p>
-                <p className="text-xs text-gray-500">
-                  Added: {formatDateInTimezone(
-                    item.created_at,
-                    timezone,
-                    { month: 'short', day: 'numeric', year: 'numeric' }
-                  )}
-                </p>
+                <div className="flex items-center gap-1 text-xs">
+                  <span className="text-gray-400">{itemSubtitle}</span>
+                  <span className="text-gray-600">•</span>
+                  <span className="text-gray-500">
+                    Added {formatDateInTimezone(
+                      item.created_at,
+                      timezone,
+                      { month: 'short', day: 'numeric', year: 'numeric' }
+                    )}
+                  </span>
+                </div>
               </div>
+            </div>
             </div>
             <button
               onClick={onClose}

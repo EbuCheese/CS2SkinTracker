@@ -3,7 +3,7 @@ import { Loader2, Edit2, ChartNoAxesColumnIncreasing, AlertTriangle, DollarSign,
 import { supabase } from '@/supabaseClient';
 import { PopupManager } from '@/components/ui';
 import { EditItemModal, SellItemModal } from '@/components/forms';
-import { useScrollLock, formatDateInTimezone } from '@/hooks/util';
+import { useScrollLock, formatDateInTimezone, useItemFormatting } from '@/hooks/util';
 import { useToast } from '@/contexts/ToastContext';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
 
@@ -71,9 +71,14 @@ const ItemCard = React.memo(({
   updateItemState,
   setInvestments 
 }) => {  
-  // Add toast hook
+  // User settings hook
   const { timezone } = useUserSettings();
+
+  // Toast Hook
   const toast = useToast();
+
+  // Display name hook
+  const { displayName } = useItemFormatting();
 
   // UI state management
   const [animationClass, setAnimationClass] = useState('');
@@ -306,33 +311,7 @@ const getAvailableMarketplaces = () => {
   }
 };
 
-// With this comprehensive version that handles all item types:
-const buildItemDisplayName = () => {
-  let displayName = '';
-  
-  // Add variant prefix (Souvenir, StatTrak™)
-  if (variant === 'souvenir') {
-    displayName += 'Souvenir ';
-  } else if (variant === 'stattrak') {
-    displayName += 'StatTrak™ ';
-  }
-  
-  // Add base name and skin name
-  if (skinName) {
-    displayName += `${name ? 'Custom':''} ${skinName}`;
-  } else {
-    displayName += name;
-  }
-  
-  // Add condition in parentheses if present
-  if (condition) {
-    displayName += ` (${condition})`;
-  }
-  
-  return displayName;
-};
-
-const fullItemName = buildItemDisplayName();
+const fullItemName = displayName(item, { includeCondition: true, format: 'full' });
 
 // Initialize edit form and open edit mode
 const handleStartEdit = useCallback(() => {

@@ -5,7 +5,7 @@ import { RecentPriceChanges, RecentActivity } from '@/components/item-display';
 import { QuickAddItemForm, QuickSellModal } from '@/components/forms';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { supabase } from '@/supabaseClient';
-import { formatPrice } from '@/hooks/util';
+import { formatPrice, useItemFormatting } from '@/hooks/util';
 import { useCalculatePortfolioHealth, useChartData, usePortfolioData, useQuickActions, useRecentActivity, usePortfolioSummary, useSingleItemPrice } from '@/hooks/portfolio';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -13,6 +13,9 @@ import { useToast } from '@/contexts/ToastContext';
 const InvestmentDashboard = ({ userSession }) => {
   // Add toast hook
   const toast = useToast();
+
+  // Display name hook
+  const { displayName } = useItemFormatting();
 
   const { investments, soldItems, portfolioSummary, loading, error, errorDetails, refetch, retry, setInvestments, setSoldItems } = usePortfolioData(userSession);
   
@@ -136,31 +139,6 @@ const portfolioMetrics = useMemo(() => {
   };
 }, [basePortfolioMetrics, optimisticUpdates, separatedPL, portfolioSummary]);
 
-  // Helper function to build detailed item name for toasts
-  const buildDetailedItemName = useCallback((item) => {
-    let displayName = '';
-    
-    // Add variant prefix
-    if (item.variant === 'souvenir') {
-      displayName += 'Souvenir ';
-    } else if (item.variant === 'stattrak') {
-      displayName += 'StatTrak™ ';
-    }
-    
-    // Add base name and skin name
-    if (item.skin_name) {
-      displayName += `${item.name || 'Custom'} ${item.skin_name}`;
-    } else {
-      displayName += item.name;
-    }
-    
-    // Add condition in parentheses if present
-    if (item.condition && item.condition.toLowerCase() !== 'unknown') {
-      displayName += ` (${item.condition})`;
-    }
-    
-    return displayName;
-  }, []);
 
   // Helper for updating the item state
   const updateItemState = useCallback((itemId, updates) => {
@@ -324,14 +302,18 @@ const portfolioMetrics = useMemo(() => {
       }));
 
       // Show toast
-      const detailedName = buildDetailedItemName(soldItem);
+      const detailedName = displayName(newItem, { 
+        includeCondition: true, 
+        format: 'simple' 
+      });
+
       if (isFullSale) {
         toast.fullSaleCompleted(detailedName, quantitySold, saleValue, saleProfitLoss);
       } else {
         toast.partialSaleCompleted(detailedName, quantitySold, remainingQuantity, saleValue, saleProfitLoss);
       }
 
-  }, [investments, userSession.id, setInvestments, setSoldItems, buildDetailedItemName, toast]);
+  }, [investments, userSession.id, setInvestments, setSoldItems, toast]);
 
   if (loading) {
     return (
