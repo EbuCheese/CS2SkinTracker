@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/supabaseClient';
 import { useAdvancedDebounce, formatChartDate } from '@/hooks/util';
+import { useUserSettings } from '@/contexts/UserSettingsContext';
 
 export const useChartData = (userSession, selectedTimePeriod, hasInvestments) => {
+  const { timezone } = useUserSettings();
+
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
   const hasInitiallyLoaded = useRef(false);
@@ -29,9 +32,14 @@ export const useChartData = (userSession, selectedTimePeriod, hasInvestments) =>
       const currentDate = new Date();
       const currentMonth = currentDate.getMonth();
      
-      // transform data to graph for time period
+      // Transform data with user's timezone
       const transformedData = chartResult.data.map(point => {
-        const { formattedDate, date, isToday } = formatChartDate(point, chartResult.granularity, timePeriod);
+        const { formattedDate, date, isToday } = formatChartDate(
+          point, 
+          chartResult.granularity, 
+          timePeriod,
+          timezone
+        );
        
         return {
           date: formattedDate,
@@ -42,19 +50,24 @@ export const useChartData = (userSession, selectedTimePeriod, hasInvestments) =>
           returnPercentage: parseFloat(point.return_percentage),
           isCurrentValue: isToday && chartResult.granularity === 'hourly' ||
                         (chartResult.granularity === 'daily' && isToday) ||
-                        (chartResult.granularity === 'monthly' && date.getMonth() === currentMonth)
+                        (chartResult.granularity === 'monthly' && 
+                         date.getMonth() === new Date().getMonth())
         };
       });
 
       transformedData.sort((a, b) => new Date(a.rawDate) - new Date(b.rawDate));
       setChartData(transformedData);
-     
+
+          console.log('Raw data before transform:', chartResult.data);
+      console.log('Transformed data:', transformedData);
+      console.log('Data passed to chart:', chartData);
+
     } catch (err) {
       console.error('Error fetching chart data:', err);
     } finally {
       setChartLoading(false);
     }
-  }, [userSession?.id, hasInvestments]);
+  }, [userSession?.id, hasInvestments, timezone]);
 
   // debounce the chart data to prevent spamming time frames
   const { debouncedFunction: debouncedFetchChartData } = useAdvancedDebounce(

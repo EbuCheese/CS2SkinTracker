@@ -21,21 +21,32 @@ export const timePeriods = [
   { label: 'MAX', value: 'MAX' }
 ];
 
-// Formats date based on granularity and time period
-export const formatChartDate = (point, granularity, selectedTimePeriod) => {
+// Formats date based on granularity, time period, and user's timezone
+export const formatChartDate = (point, granularity, selectedTimePeriod, timezone = 'UTC') => {
   const date = new Date(point.date);
-  const isToday = date.toDateString() === new Date().toDateString();
   
+  // Check if date is today in user's timezone
+  const now = new Date();
+  const todayInUserTz = now.toLocaleDateString('en-US', { timeZone: timezone });
+  const dateInUserTz = date.toLocaleDateString('en-US', { timeZone: timezone });
+  const isToday = todayInUserTz === dateInUserTz;
+ 
   let formattedDate;
+  const options = { timeZone: timezone };
+  
   if (granularity === 'hourly') {
     if (isToday) {
+      // Today's hourly data: show just time
       formattedDate = date.toLocaleTimeString('en-US', {
+        ...options,
         hour: 'numeric',
         minute: '2-digit',
         hour12: true
       });
     } else {
+      // Past hourly data: show date + time
       formattedDate = date.toLocaleDateString('en-US', {
+        ...options,
         month: 'short',
         day: 'numeric',
         hour: 'numeric',
@@ -44,15 +55,17 @@ export const formatChartDate = (point, granularity, selectedTimePeriod) => {
     }
   } else if (granularity === 'daily') {
     formattedDate = date.toLocaleDateString('en-US', {
+      ...options,
       month: 'short',
       day: 'numeric'
     });
-  } else {
+  } else { // monthly
     formattedDate = date.toLocaleDateString('en-US', {
+      ...options,
       month: 'short',
       year: 'numeric'
     });
   }
-  
+ 
   return { formattedDate, date, isToday };
 };
