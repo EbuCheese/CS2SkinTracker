@@ -8,6 +8,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const TIMEOUT_MS = 25000;
+const startTime = Date.now();
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -70,7 +73,13 @@ serve(async (req) => {
 
   // In the loop
   for (const user of userList) {
-    console.log('Processing user:', user.id, typeof user.id)
+      if (Date.now() - startTime > TIMEOUT_MS) {
+      console.warn('Approaching timeout, stopping early');
+      results.errors.push({ 
+        message: `Stopped after ${results.success + results.failed} users due to timeout` 
+      });
+      break;
+    }
         try {
           const { data, error } = await supabaseAdmin.rpc('create_portfolio_snapshot', {
             context_user_id: user.id,
