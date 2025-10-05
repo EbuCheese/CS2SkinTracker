@@ -13,12 +13,23 @@ const PortfolioPerformanceChart = ({
 }) => {
   const { timezone } = useUserSettings();
   // Formats Y-axis tick values with dollar sign
-  const formatTickPrice = useCallback((value) => `$${value.toFixed(2)}`, []);
+  const formatTickPrice = useCallback((value) => {
+  if (value >= 1000000) {
+    return `$${(value / 1000000).toFixed(1)}M`;
+  } else if (value >= 1000) {
+    return `$${(value / 1000).toFixed(1)}K`;
+  }
+  return `$${value.toFixed(0)}`;
+}, []);
 
   // Handles time period selection changes
   const handleTimePeriodChange = useCallback((period) => {
     onTimePeriodChange(period);
   }, [onTimePeriodChange]);
+
+  const shouldShowDots = useMemo(() => {
+    return chartData.length <= 10;
+  }, [chartData]);
 
   // Calculates performance change for selected time frame
   const timeFrameChange = useMemo(() => {
@@ -139,11 +150,15 @@ const PortfolioPerformanceChart = ({
           <div className="flex items-center space-x-4 mb-2">
             <h2 className="text-xl font-semibold text-white">Portfolio Performance</h2>
             <div className="flex items-center space-x-2 text-sm text-gray-400">
-              <div className="flex items-center space-x-2 text-sm text-gray-400">
-                <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                <span>Total Value</span>
-              </div>
+              <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+              <span>Total Value</span>
             </div>
+            {/* Add this */}
+            {chartData.length > 0 && (
+              <span className="px-2 py-0.5 bg-gray-700/50 rounded text-xs text-gray-400">
+                {chartData.length} data points
+              </span>
+            )}
           </div>
           
           {/* Performance Metrics Display */}
@@ -205,7 +220,6 @@ const PortfolioPerformanceChart = ({
               <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <ChartLine className="w-8 h-8 text-gray-500" />
               </div>
-              {/* <ChartLine className="w-12 h-12 mx-auto mb-2 opacity-50 text-gray-400" /> */}
               <h3 className="text-xl font-medium text-gray-400 mb-2">
                 No data for {selectedTimePeriod}
               </h3>
@@ -230,7 +244,11 @@ const PortfolioPerformanceChart = ({
               <XAxis 
                 dataKey="date" 
                 stroke="#9CA3AF"
-                fontSize={12}
+                fontSize={11}
+                interval="preserveStartEnd"
+                minTickGap={50}
+                tick={{ fill: '#9CA3AF' }}
+                height={40}
               />
               <YAxis 
                 stroke="#9CA3AF"
@@ -250,12 +268,13 @@ const PortfolioPerformanceChart = ({
                 dataKey="totalValue"
                 stroke="#F97316"
                 strokeWidth={['1D', '5D'].includes(selectedTimePeriod) ? 2 : 3}
-                dot={{ 
+                dot={shouldShowDots ? { 
                   fill: '#F97316', 
                   strokeWidth: 2, 
-                  r: ['1D', '5D'].includes(selectedTimePeriod) ? 3 : 4 
-                }}
-                activeDot={{ r: 6, fill: '#EA580C' }}
+                  r: 4,
+                  stroke: '#F97316'
+                } : false}
+                activeDot={{ r: 6, fill: '#EA580C', stroke: '#fff', strokeWidth: 2 }}
                 connectNulls={true}
                 isAnimationActive={false}
               />
