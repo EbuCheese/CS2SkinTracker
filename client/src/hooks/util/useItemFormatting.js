@@ -2,69 +2,83 @@ import { useCallback, useMemo } from 'react';
 
 /**
  * Custom hook for consistent item formatting across components
- * Handles display names, conditions, variants, and subtitles
+ * Handles display names, conditions, variants, subtitles, and item keys
  */
 export const useItemFormatting = () => {
+  
+  // Generate canonical item key for database lookups
+  // Matches the logic in generate_simple_item_key database function
+  const generateItemKey = useCallback((fullName) => {
+    return fullName
+      .toLowerCase()
+      .replace(/[★™]/g, '') // Remove special characters
+      .replace(/\s+/g, '_') // Replace spaces with underscores
+      .replace(/[^a-z0-9_]/g, '') // Remove non-alphanumeric except underscores
+      .replace(/_+/g, '_') // Collapse multiple underscores
+      .replace(/^_|_$/g, ''); // Trim underscores from start/end
+  }, []);
+
   // Build display name with variant prefix and skin name
   const buildDisplayName = useCallback((item, options = {}) => {
     const {
-      includeCondition = false,  // Add condition in parentheses
-      format = 'full'  // 'full' | 'simple' | 'compact'
+      includeCondition = false,
+      format = 'full'
     } = options;
-    
-    // Normalize field names (handle both item and sold_item structures)
+   
     const itemName = item.name || item.item_name || '';
     const skinName = item.skin_name || item.item_skin_name;
     const condition = item.condition || item.item_condition;
     const variant = item.variant || item.item_variant;
-    
+   
     const hasStarPrefix = itemName.startsWith('★');
     let displayName = '';
-    
-    // Star prefix for knives/gloves
+   
     if (hasStarPrefix) {
       displayName += '★ ';
     }
-    
-    // Variant prefix
+   
     if (variant === 'souvenir') {
       displayName += 'Souvenir ';
     } else if (variant === 'stattrak') {
       displayName += 'StatTrak™ ';
     }
-    
-    // Base name (remove star if already added)
+   
     const baseName = hasStarPrefix ? itemName.substring(1).trim() : itemName;
-    
-    // Format variations
+   
     if (format === 'simple') {
-      // "ItemName (SkinName)" - Used in toasts
       displayName += baseName;
       if (skinName) {
         displayName += ` (${skinName})`;
       }
     } else if (format === 'compact') {
-      // "ItemName SkinName" or "Custom SkinName" - Short version
       if (skinName) {
         displayName += `${baseName || 'Custom'} ${skinName}`;
       } else {
         displayName += baseName;
       }
     } else {
-      // 'full' - "ItemName | SkinName" - Standard display
       displayName += baseName;
       if (skinName) {
         displayName += ` | ${skinName}`;
       }
     }
-    
-    // Optional condition suffix
+   
     if (includeCondition && condition && condition.toLowerCase() !== 'unknown') {
       displayName += ` (${condition})`;
     }
-    
+   
     return displayName.trim();
   }, []);
+
+  // Build item key directly from item object
+  const buildItemKey = useCallback((item, options = {}) => {
+    const fullName = buildDisplayName(item, { 
+      includeCondition: true, 
+      format: 'full',
+      ...options 
+    });
+    return generateItemKey(fullName);
+  }, [buildDisplayName, generateItemKey]);
 
   // Build subtitle with condition and quantity information
   const buildSubtitle = useCallback((item, options = {}) => {
@@ -73,25 +87,25 @@ export const useItemFormatting = () => {
       quantityField = 'quantity',
       conditionField = 'condition'
     } = options;
-    
+   
     const condition = item[conditionField] || item.item_condition;
     const quantity = item[quantityField] || item.quantity_sold || item.quantity || 1;
-    
+   
     const conditionText = condition &&
       condition.toLowerCase() !== 'unknown' &&
       condition.toLowerCase() !== ''
         ? condition
         : '';
-    
+   
     const parts = [];
     if (conditionText) {
       parts.push(conditionText);
     }
-    
+   
     if (showQuantity) {
       parts.push(`Qty: ${quantity}`);
     }
-    
+   
     return parts.join(' • ');
   }, []);
 
@@ -99,7 +113,7 @@ export const useItemFormatting = () => {
   const getConditionInfo = useCallback((item) => {
     const condition = item.condition || item.item_condition;
     const variant = item.variant || item.item_variant;
-    
+   
     return {
       condition: condition && condition.toLowerCase() !== 'unknown' ? condition : null,
       variant: variant && variant.toLowerCase() !== 'normal' ? variant : null,
@@ -112,8 +126,10 @@ export const useItemFormatting = () => {
   const formatters = useMemo(() => ({
     displayName: buildDisplayName,
     subtitle: buildSubtitle,
-    conditionInfo: getConditionInfo
-  }), [buildDisplayName, buildSubtitle, getConditionInfo]);
-  
+    conditionInfo: getConditionInfo,
+    itemKey: buildItemKey,
+    generateKey: generateItemKey
+  }), [buildDisplayName, buildSubtitle, getConditionInfo, buildItemKey, generateItemKey]);
+ 
   return formatters;
 };
