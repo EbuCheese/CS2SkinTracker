@@ -15,11 +15,15 @@ const PortfolioPerformanceChart = ({
   // Formats Y-axis tick values with dollar sign
   const formatTickPrice = useCallback((value) => {
   if (value >= 1000000) {
-    return `$${(value / 1000000).toFixed(1)}M`;
-  } else if (value >= 1000) {
+    return `$${(value / 1000000).toFixed(2)}M`;
+  } else if (value >= 10000) {
     return `$${(value / 1000).toFixed(1)}K`;
+  } else if (value >= 1000) {
+    return `$${(value / 1000).toFixed(2)}K`;
+  } else if (value >= 1) {
+    return `$${value.toFixed(0)}`;
   }
-  return `$${value.toFixed(0)}`;
+  return `$${value.toFixed(2)}`;
 }, []);
 
   // Handles time period selection changes
@@ -134,11 +138,13 @@ const PortfolioPerformanceChart = ({
     color: '#F9FAFB'
   }), []);
 
-  // X-axis tick count based on time period
-  const tickCount = useMemo(() => 
-    ['1D', '5D'].includes(selectedTimePeriod) ? 8 : 6, 
-    [selectedTimePeriod]
-  );
+  // y-axis tick count based on time period
+  const tickCount = useMemo(() => {
+  if (chartData.length <= 10) return chartData.length;
+  if (['1D', '5D'].includes(selectedTimePeriod)) return 5;
+  if (['1Y'].includes(selectedTimePeriod)) return 7;
+  return 6;
+}, [selectedTimePeriod, chartData.length]);
 
   // Main render
   return (
