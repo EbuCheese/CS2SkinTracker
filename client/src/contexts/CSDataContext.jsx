@@ -27,6 +27,7 @@ export const CSDataProvider = ({ children }) => {
 
   // Processed search indices for efficient querying
   const [searchIndices, setSearchIndices] = useState({});
+  const [unifiedSearchIndex, setUnifiedSearchIndex] = useState(null);
 
   // Loading and error states
   const [loading, setLoading] = useState(true);
@@ -39,6 +40,11 @@ export const CSDataProvider = ({ children }) => {
   const preprocessData = useCallback((rawData) => {
     const processedData = {};
     const indices = {};
+
+    const unifiedIndex = {
+      items: [],
+      searchIndex: new Map()
+    };
 
     // Process each item type (skins, cases, stickers, etc.)
     Object.entries(rawData).forEach(([type, items]) => {
@@ -88,8 +94,26 @@ export const CSDataProvider = ({ children }) => {
         searchIndex,
         searchTokens: Array.from(searchTokens)
       };
+
+      const typeItems = Array.from(baseItemsMap.values()).map(item => ({
+        ...item,
+        itemType: type // Tag with source type
+      }));
+      
+      unifiedIndex.items.push(...typeItems);
     });
 
+    // Build unified search index
+    unifiedIndex.items.forEach((item, index) => {
+      item.searchTokens.forEach(token => {
+        if (!unifiedIndex.searchIndex.has(token)) {
+          unifiedIndex.searchIndex.set(token, []);
+        }
+        unifiedIndex.searchIndex.get(token).push(index);
+      });
+    });
+
+    setUnifiedSearchIndex(unifiedIndex);
     return { processedData, indices };
   }, []);
 
@@ -277,11 +301,59 @@ export const CSDataProvider = ({ children }) => {
   return (
     <CSDataContext.Provider value={{ 
       data,
-      searchIndices, 
+      searchIndices,
+      unifiedSearchIndex, 
       loading, 
       error, 
       loadingProgress,
 
+      // Helper for searching with 'all'
+      searchAllTypes: (query, maxResults = 20) => {
+        if (!query || !unifiedSearchIndex || query.length < 2) return [];
+
+        const normalizedQuery = query.toLowerCase()
+          .replace(/[★]/g, 'star')
+          .replace(/[|]/g, ' ')
+          .replace(/[^\w\s\-]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        const queryWords = normalizedQuery.split(/\s+/).filter(w => w.length >= 2);
+        const { items, searchIndex } = unifiedSearchIndex;
+        let matchingIndices = [];
+
+        queryWords.forEach((word, wordIndex) => {
+          const wordMatches = [];
+
+          for (let [token, indices] of searchIndex) {
+            if (token === word) {
+              wordMatches.push(...indices); // Exact match
+            } else if (token.includes(word) || word.includes(token)) {
+              wordMatches.push(...indices); // Partial match
+            }
+          }
+
+          if (wordIndex === 0) {
+            matchingIndices = wordMatches;
+          } else {
+            matchingIndices = matchingIndices.filter(idx => wordMatches.includes(idx));
+          }
+        });
+
+        const uniqueIndices = [...new Set(matchingIndices)];
+        const results = uniqueIndices
+          .slice(0, maxResults)
+          .map(idx => items[idx])
+          .filter(Boolean);
+
+        results.sort((a, b) => {
+          const aExact = a.searchTokens.some(token => token === normalizedQuery) ? 1 : 0;
+          const bExact = b.searchTokens.some(token => token === normalizedQuery) ? 1 : 0;
+          return bExact - aExact;
+        });
+
+        return results;
+      },
       // Helper function to get raw data for a specific item type
       getDataForType: (type) => {
         // Handle special mapping: 'liquids' -> 'skins'

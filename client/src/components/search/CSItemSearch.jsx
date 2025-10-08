@@ -7,7 +7,7 @@ import { ImageWithLoading } from '@/components/ui';
 
 // CSItemSearch Component - Advanced search interface for CS2 items
 const CSItemSearch = ({ 
-  type = 'skins', 
+  type = 'all', 
   placeholder = 'Search items...', 
   onSelect, 
   value = '',
@@ -16,16 +16,21 @@ const CSItemSearch = ({
   className = '',
   disabled = false,
   showLargeView = false,
-  excludeSpecialItems = false
+  excludeSpecialItems = false,
+  maxHeight = '320px'
 }) => {
   // Context and state management
-  const { searchIndices, loading: globalLoading, error: globalError, getSearchIndexForType } = useCSData();
+  const { searchIndices, unifiedSearchIndex, loading: globalLoading, error: globalError, getSearchIndexForType } = useCSData();
   const [results, setResults] = useState([]); // Current search results
   const [isOpen, setIsOpen] = useState(false); // Dropdown visibility
   const [selectedVariant, setSelectedVariant] = useState({}); // Variant selection per item
 
   // Process and filter data for the current item type
   const typeData = useMemo(() => {
+    if (type === 'all') {
+      return unifiedSearchIndex; // Use unified index
+    }
+
     const rawData = getSearchIndexForType(type);
     
     // Return unfiltered data if no filtering needed
@@ -60,7 +65,7 @@ const CSItemSearch = ({
       items: filteredItems,
       searchIndex: newSearchIndex
     };
-  }, [type, searchIndices, getSearchIndexForType, excludeSpecialItems]);
+  }, [type, searchIndices, unifiedSearchIndex, getSearchIndexForType, excludeSpecialItems]);
 
   // Enhanced search function using preprocessed inverted index
   const performSearch = useCallback((query) => {
@@ -247,9 +252,9 @@ const handleItemSelect = useCallback((item, variant = 'normal') => {
 
       {/* Search Results Dropdown */}
       {isOpen && results.length > 0 && (
-        <div className={`absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 overflow-y-auto z-50 shadow-xl ${
-          showLargeView ? 'max-h-96' : 'max-h-80'
-        }`}>
+        <div className="absolute top-full left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg mt-1 overflow-y-auto z-50 shadow-xl"
+        style={{ maxHeight }}
+        >
           {results.map(item => (
             <OptimizedSearchResultItem
               key={item.id}
