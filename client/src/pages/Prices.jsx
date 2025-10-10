@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Search, Loader2, TrendingUp, AlertTriangle  } from 'lucide-react';
 import CSItemSearch from '@/components/search/CSItemSearch';
 import { usePriceLookup } from '@/hooks/portfolio/usePriceLookup';
@@ -41,18 +41,33 @@ const PricesPage = ({ userSession }) => {
     }
   }, [lookupAllPrices]);
 
-  // Determine if item has configuration options
-  const itemType = selectedItem?.category || selectedItem?.metadata?.[0] || '';
-  const hasConditions = ['Rifles', 'Pistols', 'SMGs', 'Heavy', 'Knives', 'Gloves'].includes(itemType);
-  const hasVariants = selectedItem && (selectedItem.hasStatTrak || selectedItem.hasSouvenir);
-  const showFilters = hasConditions || hasVariants;
-
+  // Item stat calculations
   // Filter results based on user selection
   const filteredPrices = allPrices.filter(config => {
     if (filterCondition !== 'all' && config.condition !== filterCondition) return false;
     if (filterVariant !== 'all' && config.variant !== filterVariant) return false;
     return true;
   });
+
+  const totalMarketPrices = useMemo(() => 
+  allPrices.reduce((sum, config) => {
+    return sum + Object.values(config.prices).reduce((mpSum, prices) => mpSum + prices.length, 0);
+  }, 0),
+  [allPrices]
+);
+
+const filteredMarketPrices = useMemo(() =>
+  filteredPrices.reduce((sum, config) => {
+    return sum + Object.values(config.prices).reduce((mpSum, prices) => mpSum + prices.length, 0);
+  }, 0),
+  [filteredPrices]
+);
+
+  // Determine if item has configuration options
+  const itemType = selectedItem?.category || selectedItem?.metadata?.[0] || '';
+  const hasConditions = ['Rifles', 'Pistols', 'SMGs', 'Heavy', 'Knives', 'Gloves'].includes(itemType);
+  const hasVariants = selectedItem && (selectedItem.hasStatTrak || selectedItem.hasSouvenir);
+  const showFilters = hasConditions || hasVariants;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 p-4">
@@ -120,7 +135,7 @@ const PricesPage = ({ userSession }) => {
         )}
 
         {/* Results Layout: Sidebar + Content (only if item selected and not loading) */}
-        {selectedItem && !loading && (
+        {selectedItem && !loading && allPrices.length > 0 && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             
             {/* Left Sidebar: Item Info + Filters */}
@@ -139,48 +154,39 @@ const PricesPage = ({ userSession }) => {
                 
                 {/* Multi-line stats */}
                 <div className="space-y-1 text-xs">
-  <div className="flex justify-between text-gray-400">
-    <span>Market prices:</span>
-    <span className="text-white font-medium">
-      {filteredPrices.reduce((sum, config) => {
-        return sum + Object.values(config.prices).reduce((mpSum, prices) => mpSum + prices.length, 0);
-      }, 0)}
-    </span>
-  </div>
- 
-  {showFilters && (
-    <>
-      {hasConditions && (
-        <div className="flex justify-between text-gray-400">
-          <span>Conditions:</span>
-          <span className="text-white font-medium">
-            {new Set(filteredPrices.map(p => p.condition).filter(Boolean)).size}
-          </span>
-        </div>
-      )}
-     
-      {hasVariants && (
-        <div className="flex justify-between text-gray-400">
-          <span>Variants:</span>
-          <span className="text-white font-medium">
-            {new Set(filteredPrices.map(p => p.variant)).size}
-          </span>
-        </div>
-      )}
-    </>
-  )}
- 
-  {(filterCondition !== 'all' || filterVariant !== 'all') && (
-    <div className="flex justify-between text-gray-400 pt-1 border-t border-gray-700">
-      <span>Filtered from:</span>
-      <span className="text-gray-500 font-medium">
-        {allPrices.reduce((sum, config) => {
-          return sum + Object.values(config.prices).reduce((mpSum, prices) => mpSum + prices.length, 0);
-        }, 0)} total
-      </span>
-    </div>
-  )}
-</div>
+                <div className="flex justify-between text-gray-400">
+                  <span>Market prices:</span>
+                  <span className="text-white font-medium">{filteredMarketPrices}</span>
+                </div>    
+                {showFilters && (
+                  <>
+                    {hasConditions && (
+                      <div className="flex justify-between text-gray-400">
+                        <span>Conditions:</span>
+                        <span className="text-white font-medium">
+                          {new Set(filteredPrices.map(p => p.condition).filter(Boolean)).size}
+                        </span>
+                      </div>
+                    )}
+                  
+                    {hasVariants && (
+                      <div className="flex justify-between text-gray-400">
+                        <span>Variants:</span>
+                        <span className="text-white font-medium">
+                          {new Set(filteredPrices.map(p => p.variant)).size}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
+              
+                {(filterCondition !== 'all' || filterVariant !== 'all') && (
+                  <div className="flex justify-between text-gray-400 pt-1 border-t border-gray-700">
+                    <span>Filtered from:</span>
+                    <span className="text-gray-500 font-medium">{totalMarketPrices} total</span>
+                  </div>
+                )}
+              </div>
               </div>
 
               {/* Filters (only show if item has options) */}
@@ -276,6 +282,17 @@ const PricesPage = ({ userSession }) => {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* No Market Data State */}
+        {selectedItem && !loading && allPrices.length === 0 && (
+          <div className="bg-gray-800 rounded-xl p-12 border border-gray-700 text-center">
+            <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+            <p className="text-gray-400 text-lg mb-2">No market prices found</p>
+            <p className="text-gray-500 text-sm">
+              This item may not be actively traded or price data is unavailable
+            </p>
           </div>
         )}
 
@@ -382,8 +399,9 @@ const PriceComparisonTable = ({ variantLabel, configs }) => {
       </div>
 
       {/* Compact Table View */}
-      <div className="overflow-x-auto">
-        <table className="w-full">
+      <div className="overflow-x-auto -mx-6 lg:mx-0">
+        <div className="inline-block min-w-full align-middle px-6 lg:px-0">
+        <table className="w-full min-w-[600px]">
           {/* Update the table header to show preference */}
           <thead>
             <tr className="border-b border-gray-700">
@@ -589,6 +607,7 @@ const PriceComparisonTable = ({ variantLabel, configs }) => {
               })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
