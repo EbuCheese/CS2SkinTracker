@@ -136,9 +136,51 @@ const PricesPage = ({ userSession }) => {
                 <h3 className="text-white font-bold text-sm mb-1 leading-tight">
                   {selectedItem.baseName || selectedItem.name}
                 </h3>
-                <p className="text-gray-400 text-xs">
-                  {filteredPrices.length} configuration{filteredPrices.length !== 1 ? 's' : ''} available
-                </p>
+                
+                {/* Multi-line stats */}
+                <div className="space-y-1 text-xs">
+  <div className="flex justify-between text-gray-400">
+    <span>Market prices:</span>
+    <span className="text-white font-medium">
+      {filteredPrices.reduce((sum, config) => {
+        return sum + Object.values(config.prices).reduce((mpSum, prices) => mpSum + prices.length, 0);
+      }, 0)}
+    </span>
+  </div>
+ 
+  {showFilters && (
+    <>
+      {hasConditions && (
+        <div className="flex justify-between text-gray-400">
+          <span>Conditions:</span>
+          <span className="text-white font-medium">
+            {new Set(filteredPrices.map(p => p.condition).filter(Boolean)).size}
+          </span>
+        </div>
+      )}
+     
+      {hasVariants && (
+        <div className="flex justify-between text-gray-400">
+          <span>Variants:</span>
+          <span className="text-white font-medium">
+            {new Set(filteredPrices.map(p => p.variant)).size}
+          </span>
+        </div>
+      )}
+    </>
+  )}
+ 
+  {(filterCondition !== 'all' || filterVariant !== 'all') && (
+    <div className="flex justify-between text-gray-400 pt-1 border-t border-gray-700">
+      <span>Filtered from:</span>
+      <span className="text-gray-500 font-medium">
+        {allPrices.reduce((sum, config) => {
+          return sum + Object.values(config.prices).reduce((mpSum, prices) => mpSum + prices.length, 0);
+        }, 0)} total
+      </span>
+    </div>
+  )}
+</div>
               </div>
 
               {/* Filters (only show if item has options) */}
@@ -310,14 +352,35 @@ const PriceComparisonTable = ({ variantLabel, configs }) => {
   const [expandedRow, setExpandedRow] = useState(null);
   
   const { settings: contextSettings } = useUserSettings();
-  const mSettings = contextSettings;
 
   return (
     <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-      <h3 className="text-xl font-semibold text-white mb-4">
+      <div className="flex items-start justify-between mb-4">
+      <h3 className="text-xl font-semibold text-white">
         {variantLabel} Prices
       </h3>
       
+      {/* Legend - moved to top right */}
+        <div className="flex items-center gap-3 text-xs text-gray-400 bg-gray-700/30 rounded-lg px-3 py-1.5">
+          <div className="flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3 text-yellow-400" />
+            <span>Bid only</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded text-xs font-semibold">
+              $0.00
+            </span>
+            <span>Best</span>
+          </div>
+          <div className="flex items-center gap-0.5">
+            <svg className="w-3 h-3 mt-0.5 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+            </svg>
+            <span>Preferred</span>
+          </div>
+        </div>
+      </div>
+
       {/* Compact Table View */}
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -526,26 +589,6 @@ const PriceComparisonTable = ({ variantLabel, configs }) => {
               })}
           </tbody>
         </table>
-      </div>
-      
-      {/* Legend */}
-      <div className="mt-4 flex items-center gap-4 text-xs text-gray-400">
-        <div className="flex items-center gap-1">
-          <AlertTriangle className="w-3 h-3 text-yellow-400" />
-          <span>Bid only</span>
-        </div>
-        <div className="flex items-center gap-1">
-        <span className="bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded text-xs font-semibold">
-          $0.00
-        </span>
-        <span>Best price in row</span>
-      </div>
-        <div className="flex items-center gap-1">
-          <svg className="w-3 h-3 mt-0.5 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-          </svg>
-          <span>Your preferred marketplace</span>
-        </div>
       </div>
     </div>
   );
