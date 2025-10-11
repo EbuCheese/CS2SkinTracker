@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Search, Loader2, TrendingUp, AlertTriangle  } from 'lucide-react';
 import CSItemSearch from '@/components/search/CSItemSearch';
 import { usePriceLookup } from '@/hooks/portfolio/usePriceLookup';
@@ -17,6 +18,8 @@ const ITEM_TYPES = [
 
 // pages/PricesPage.jsx - Revised UX
 const PricesPage = ({ userSession }) => {
+  const location = useLocation();
+
   const [selectedType, setSelectedType] = useState('all');
   const [searchValue, setSearchValue] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
@@ -27,6 +30,21 @@ const PricesPage = ({ userSession }) => {
   const [filterVariant, setFilterVariant] = useState('all'); // 'all', 'normal', 'stattrak', 'souvenir'
 
   const { lookupAllPrices, loading, error } = usePriceLookup(userSession);
+
+    useEffect(() => {
+      if (location.state?.preSelectedItem) {
+        const item = location.state.preSelectedItem;
+        
+        // Keep filter on 'all' - user can change if needed
+        setSelectedType('all');
+        
+        // Auto-select and fetch prices for the item
+        handleItemSelect(item);
+        
+        // Clear navigation state so refresh doesn't re-trigger
+        window.history.replaceState({}, document.title);
+      }
+    }, [location.state]);
 
   // Auto-fetch on item selection
   const handleItemSelect = useCallback(async (item) => {
