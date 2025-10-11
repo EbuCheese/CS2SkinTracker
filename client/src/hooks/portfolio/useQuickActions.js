@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Search, Plus, DollarSign, Eye, TrendingUp } from 'lucide-react';
 
-export const useQuickActions = (setShowQuickAdd, setShowQuickSell) => {
+export const useQuickActions = (setShowQuickPrice, setShowQuickAdd, setShowQuickSell) => {
   return useMemo(() => [
     {
       title: 'Check Prices',
@@ -9,6 +9,7 @@ export const useQuickActions = (setShowQuickAdd, setShowQuickSell) => {
       icon: Search,
       color: 'from-blue-500 to-cyan-600',
       hoverColor: 'hover:from-blue-600 hover:to-cyan-700',
+      onClick: () => setShowQuickPrice(true)
     },
     {
       title: 'Add New Investment',
@@ -40,5 +41,5 @@ export const useQuickActions = (setShowQuickAdd, setShowQuickSell) => {
       color: 'from-rose-500 to-pink-600',
       hoverColor: 'hover:from-rose-600 hover:to-pink-700',
     },
-  ], [setShowQuickAdd, setShowQuickSell]);
+  ], [setShowQuickAdd, setShowQuickAdd, setShowQuickSell]);
 };
