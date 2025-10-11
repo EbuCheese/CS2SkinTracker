@@ -112,7 +112,11 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
   );
 
   // Renders form sections for standard item types (non-crafts)
-  const renderStandardSections = () => (
+  const renderStandardSections = () => {
+  // Determine if this is a liquid item (either from Liquids tab or detected from All tab)
+  const isLiquidItem = type === 'Liquids' || formData.itemType === 'skins';
+  
+  return (
     <>
       {/* Item Selection - Search in appropriate category */}
       <ItemSelectionSection
@@ -132,8 +136,8 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
         handleFormDataChange={handleFormDataChange}
       />
 
-      {/* Condition Selector - Only for Liquids */}
-      {type === 'Liquids' && (
+      {/* Condition Selector - Show for Liquids tab OR when itemType is 'skins' */}
+      {isLiquidItem && (
         <ConditionSelector
           selectedCondition={formData.condition}
           onConditionChange={handleConditionChange}
@@ -141,8 +145,8 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
         />
       )}
 
-      {/* Quantity Selector - For Liquids and Cases that can be bought in bulk */}
-        {type !== 'Crafts' && (
+      {/* Quantity Selector - For items that can be bought in bulk */}
+      {type !== 'Crafts' && (
         <QuantitySelector
           quantity={formData.quantity}
           onQuantityChange={handleQuantityChange}
@@ -150,6 +154,7 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
       )}
     </>
   );
+};
 
   // Main render
   return (

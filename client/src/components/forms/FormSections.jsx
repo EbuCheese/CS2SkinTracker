@@ -122,7 +122,7 @@ export const SelectedItemDisplay = ({
         <textarea
           placeholder={isCrafts 
             ? "Add craft details (e.g., 4x Katowice 2014, specific sticker placements, float value, etc.)"
-            : "Add any additional details (e.g., 95% fade, 0.16 float, special stickers, etc.)"
+            : "Add any additional details (e.g., 95% fade, 0.16 float, special pattern, etc.)"
           }
           value={formData.notes}
           onChange={(e) => handleFormDataChange('notes', e.target.value)}
