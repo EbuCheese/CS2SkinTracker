@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Search, Plus, X, DollarSign, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 import { ItemCard } from '@/components/item-display';
@@ -11,6 +12,9 @@ import { useToast } from '@/contexts/ToastContext';
 const InvestmentsPage = ({ userSession }) => {
   // toast context
   const toast = useToast()
+
+  // location
+  const location = useLocation();
 
   // UI States
   const [activeTab, setActiveTab] = useState('All');          // Current category filter
@@ -63,6 +67,16 @@ const InvestmentsPage = ({ userSession }) => {
   // lock scroll on add form or delete message  
   useScrollLock(showAddForm || !!itemToDelete);
   
+  // Handle navigation from quick add
+  useEffect(() => {
+    if (location.state?.openAddForm && location.state?.tab) {
+      setActiveTab(location.state.tab);
+      setShowAddForm(true);
+      // Clear the state so it doesn't reopen on refresh
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
+
   // Clean up optimistic sold items when data is refreshed
   useEffect(() => {
     if (!loading && portfolioSummary) {
@@ -740,7 +754,7 @@ const handleAddItem = useCallback((newItem) => {
         </div>
 
         {/* Add Item Button */}
-        {activeTab !== 'All' && activeTab !== 'Sold' && (
+        {activeTab !== 'Sold' && (
           <div className="mb-6 flex justify-center">
             <button
               onClick={handleShowAddForm}
