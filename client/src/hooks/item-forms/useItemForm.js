@@ -14,6 +14,7 @@ const INITIAL_FORM_DATA = {
   custom_image_url: '',
   notes: '',
   type: '',
+  itemType: '',
   detectedCategory: '',
   isItemSelected: false,        
   isSkinSelected: false,        
@@ -122,6 +123,19 @@ const validateForm = (formData, currentCategory) => {
     errors.push('Quantity must be at least 1');
   }
   
+  if (currentCategory === 'All') {
+    if (!formData.name.trim()) {
+      errors.push('Item name is required');
+    }
+    if (!formData.isItemSelected) {
+      errors.push('Please select an item from the dropdown');
+    }
+    // Require condition for liquid items (skins)
+    if (formData.itemType === 'skins' && !formData.condition) {
+      errors.push('Condition is required for weapon skins');
+    }
+  }
+
   // Category-specific validation
   if (currentCategory === 'Crafts') {
     if (!formData.skin_name?.trim()) {
@@ -192,6 +206,7 @@ export const useItemForm = (currentCategory, selectedCategory) => {
         image_url: item.image || '',
         type: currentCategory?.toLowerCase(),
         detectedCategory: currentCategory,
+        itemType: item.itemType,
         
         // Reset variant state to defaults
         stattrak: false,

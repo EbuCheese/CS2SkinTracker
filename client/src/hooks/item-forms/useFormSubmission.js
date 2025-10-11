@@ -4,13 +4,24 @@ import { useToast } from '@/contexts/ToastContext';
 // Maps category names to database type identifiers
 const TYPE_MAP = {
   'Liquids': 'liquid',
-  'Cases': 'case', 
+  'Cases': 'case',
   'Crafts': 'craft',
   'Agents': 'agent',
   'Stickers': 'sticker',
   'Keychains': 'keychain',
   'Graffiti': 'graffiti',
   'Patches': 'patch'
+};
+
+// Maps context data types to database types
+const CONTEXT_TYPE_MAP = {
+  'skins': 'liquid',
+  'cases': 'case',
+  'stickers': 'sticker',
+  'agents': 'agent',
+  'keychains': 'keychain',
+  'graffiti': 'graffiti',
+  'patches': 'patch'
 };
 
 // User-friendly error messages for common database errors
@@ -49,7 +60,7 @@ const buildDetailedItemName = (item) => {
 // Hook for handling form submission to add new investments
 export const useFormSubmission = (supabase) => {
   const [submitting, setSubmitting] = useState(false);
-  const toast = useToast(); // toast hook
+  const toast = useToast();
 
   const handleSubmit = useCallback(async (formData, userSession, currentCategory, onAdd, onClose) => {
     // Validate user session before proceeding
@@ -67,8 +78,21 @@ export const useFormSubmission = (supabase) => {
       // Ensure quantity is at least 1
       const quantity = Math.max(1, parseInt(formData.quantity));
       
-      // Map category to database type or use lowercase category
-      const itemType = TYPE_MAP[currentCategory] || currentCategory?.toLowerCase();
+      // Determine item type for database
+      let itemType;
+      
+      // Priority 1: Use itemType from context data (when item selected from search)
+      if (formData.itemType) {
+        itemType = CONTEXT_TYPE_MAP[formData.itemType] || formData.itemType;
+      }
+      // Priority 2: Use category mapping (for tab-based selection)
+      else if (currentCategory && currentCategory !== 'All') {
+        itemType = TYPE_MAP[currentCategory] || currentCategory.toLowerCase();
+      }
+      // Fallback (should rarely happen)
+      else {
+        itemType = 'liquid';
+      }
       
       // Construct investment object for database insertion
       const newInvestment = {
@@ -110,7 +134,6 @@ export const useFormSubmission = (supabase) => {
       const errorMessage = errorType ? ERROR_MESSAGES[errorType] : `Failed to add investment: ${err.message}`;
 
       toast.error(errorMessage, 'Failed to Add Item');
-
       alert(errorType ? ERROR_MESSAGES[errorType] : `Failed to add investment: ${err.message}`);
 
     } finally {

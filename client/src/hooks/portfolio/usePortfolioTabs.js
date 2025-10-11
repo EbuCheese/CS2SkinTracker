@@ -15,7 +15,7 @@ export const usePortfolioTabs = (activeTab) => {
     'Graffiti',   // Sealed graffiti
     'Patches'     // Collectible patches
   ];
-  
+ 
   // Special tab for sold items - kept separate for UI distinction
   const soldTab = 'Sold';
 
@@ -36,15 +36,18 @@ export const usePortfolioTabs = (activeTab) => {
   /**
    * Formats the "Add Item" button text based on selected category.
    * Handles special cases where UI display names don't match database types.
-   * 
+   *
    * @param {string} activeTab - Current selected tab
    * @returns {string} Properly formatted button text
    */
   const getAddButtonText = (activeTab) => {
+    // Special case for "All" tab - allows adding any item type
+    if (activeTab === 'All') return 'Add Any Item';
+    
     // Special cases with different singular/plural forms
     if (activeTab === 'Graffiti') return 'Add Graffiti';
     if (activeTab === 'Patches') return 'Add Patch';
-    
+   
     // Standard case: remove 's' from plural tab name
     // e.g., "Cases" -> "Add Case", "Stickers" -> "Add Sticker"
     return `Add ${activeTab.slice(0, -1)}`;
