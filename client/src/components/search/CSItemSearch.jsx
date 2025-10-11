@@ -159,7 +159,8 @@ const handleItemSelect = useCallback((item, variant = 'normal') => {
     selectedVariant: variant,
     hasStatTrak: item.variants.has('stattrak') && !isMusicKitBox, // Disable variants for all music kit boxes
     hasSouvenir: item.variants.has('souvenir') && !isMusicKitBox, // Disable variants for all music kit boxes
-    baseName: item.baseName
+    baseName: item.baseName,
+    itemType: item.itemType
   };
   
   onSelect?.(itemWithVariant);
