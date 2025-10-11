@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Plus, DollarSign, Activity, Loader2 } from 'lucide-react';
 import { PortfolioPerformanceChart, PortfolioHealthPieChart } from '@/components/charts';
-import { RecentPriceChanges, RecentActivity } from '@/components/item-display';
+import { RecentPriceChanges, RecentActivity, QuickCheckPriceModal } from '@/components/item-display';
 import { QuickAddItemForm, QuickSellModal } from '@/components/forms';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { supabase } from '@/supabaseClient';
@@ -36,9 +37,20 @@ const InvestmentDashboard = ({ userSession }) => {
   
   const recentActivity = useRecentActivity(investments, soldItems);
   
+  const [showQuickPrice, setShowQuickPrice] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showQuickSell, setShowQuickSell] = useState(false);
-  const quickActions = useQuickActions(setShowQuickAdd, setShowQuickSell);
+
+  const navigate = useNavigate();
+
+  const quickActions = useQuickActions(setShowQuickPrice, setShowQuickAdd, setShowQuickSell);
+
+  const handleViewFullPriceDetails = (item) => {
+    // Navigate to Prices page with the selected item pre-loaded
+    navigate('/prices', { 
+      state: { preSelectedItem: item } 
+    });
+  };
 
   // track the new added item states
   const [itemStates, setItemStates] = useState(new Map());
@@ -537,7 +549,17 @@ const portfolioMetrics = useMemo(() => {
             />
           </ErrorBoundary>
 
-        {/* QuickAddItemForm (Quick Action Popup) */}
+        {/* QuickCheckPriceModal */}
+        {showQuickPrice && (
+          <QuickCheckPriceModal
+            isOpen={showQuickPrice}
+            onClose={() => setShowQuickPrice(false)}
+            userSession={userSession}
+            onViewFullDetails={handleViewFullPriceDetails}
+          />
+        )}
+
+        {/* QuickAddItemForm */}
         {showQuickAdd && (
           <QuickAddItemForm
             onClose={() => setShowQuickAdd(false)}
@@ -546,7 +568,7 @@ const portfolioMetrics = useMemo(() => {
           />
         )}
 
-        {/* QuickSellModal (Quick Action Popup) */}
+        {/* QuickSellModal */}
         {showQuickSell && (
           <div className="fixed inset-0 z-50 overflow-y-auto">
             <QuickSellModal
