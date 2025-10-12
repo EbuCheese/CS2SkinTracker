@@ -172,7 +172,7 @@ const validateForm = (formData, currentCategory) => {
 export const useItemForm = (currentCategory, selectedCategory) => {
   const [formData, dispatch] = useReducer(formDataReducer, INITIAL_FORM_DATA);
   
-  // Use ref to track if form has been touched for better UX
+  // Use ref to track if form has been touched
   const touchedRef = useRef(false);
   
   // Enhanced form validation with error details

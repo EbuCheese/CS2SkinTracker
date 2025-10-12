@@ -414,9 +414,6 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
       // FULL SALE
       onRemove?.(item.id, false, soldItemData, false);
       
-      // enhanced show full sale toast
-      // toast.fullSaleCompleted(fullItemName, quantity, totalSaleValue, profitLoss);
-
     } else {
       // PARTIAL SALE
       const updatedItem = {
@@ -429,8 +426,6 @@ const handleConfirmedSale = async (quantity, pricePerUnit, totalSaleValue, profi
       };
       onUpdate(item.id, updatedItem, false, soldItemData);
       
-      // enhanced show partial sale toast
-      // toast.partialSaleCompleted(fullItemName, quantity, remainingQuantity, totalSaleValue, profitLoss);
     }
     
   } catch (err) {

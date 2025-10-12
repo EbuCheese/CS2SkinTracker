@@ -18,6 +18,7 @@ const InvestmentDashboard = ({ userSession }) => {
   // Display name hook
   const { displayName } = useItemFormatting();
 
+  // Get Portfolio Data hook
   const { investments, soldItems, portfolioSummary, loading, error, errorDetails, refetch, retry, setInvestments, setSoldItems } = usePortfolioData(userSession);
   
   // single price data hook
@@ -41,9 +42,14 @@ const InvestmentDashboard = ({ userSession }) => {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showQuickSell, setShowQuickSell] = useState(false);
 
-  const navigate = useNavigate();
+  // track the new added item states
+  const [itemStates, setItemStates] = useState(new Map());
 
-  const quickActions = useQuickActions(setShowQuickPrice, setShowQuickAdd, setShowQuickSell);
+  // Calculate portfolio health metrics using custom hook
+  const portfolioHealth = useCalculatePortfolioHealth(investments);
+
+  // navigation for quick add
+  const navigate = useNavigate();
 
   const handleViewFullPriceDetails = (item) => {
     // Navigate to Prices page with the selected item pre-loaded
@@ -52,11 +58,8 @@ const InvestmentDashboard = ({ userSession }) => {
     });
   };
 
-  // track the new added item states
-  const [itemStates, setItemStates] = useState(new Map());
-
-  // Calculate portfolio health metrics using custom hook
-  const portfolioHealth = useCalculatePortfolioHealth(investments);
+  // current quick actions
+  const quickActions = useQuickActions(setShowQuickPrice, setShowQuickAdd, setShowQuickSell);
   
   // Reset optimistic updates when data is refetched
   useEffect(() => {
@@ -230,7 +233,7 @@ const portfolioMetrics = useMemo(() => {
         totalUnrealizedPL: (prev.totalUnrealizedPL || 0) + priceDifference
       }));
     },
-      // Error callback - still stop loading indicator
+      // Error callback - stop loading indicator
       (itemId, error) => {
         console.error('Failed to refresh price for new item:', error);
         updateItemState(itemId, { isPriceLoading: false });
@@ -510,7 +513,7 @@ const portfolioMetrics = useMemo(() => {
                 })}
               </div>
 
-              {/* Portfolio P&L Summary - Now using correct values */}
+              {/* Portfolio P&L Summary */}
               <div className="mt-6 mb-1 space-y-3">
                 {/* Realized P&L */}
                 <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600/30">

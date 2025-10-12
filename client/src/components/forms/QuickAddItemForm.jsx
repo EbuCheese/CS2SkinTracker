@@ -53,17 +53,6 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
     resetForm
   } = useItemForm(currentCategory, 'all');
 
-  // from useImageUpload
-  const {
-    uploadingImage,
-    isDragOver,
-    handleDragOver,
-    handleDragLeave,
-    handleDrop,
-    handleImageUpload,
-    handleRemoveImage
-  } = useImageUpload(dispatch, formData);
-
   // from useFormLogic hook - handles escape key, backdrop click, and form submission
   const { handleBackdropClick, handleSubmit } = useFormLogic({
     onClose,
@@ -108,12 +97,12 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
         </button>
       </div>
 
-      {/* REPLACE conditional rendering with direct form */}
+      {/* conditional rendering with direct form */}
       <div className="space-y-6">
         {/* Unified search - no category needed */}
         <ItemSelectionSection
           type="All"
-          searchType="all"  // ← Use 'all' to search unified index
+          searchType="all"  // 'all' to search unified index
           formData={formData}
           handleFormDataChange={handleFormDataChange}
           handleItemSelect={handleItemSelect}

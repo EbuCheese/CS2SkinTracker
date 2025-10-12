@@ -101,7 +101,7 @@ const InvestmentsPage = ({ userSession }) => {
     if (!loading && portfolioSummary) {
       setItemStates(new Map());
       setOptimisticSoldItems([]);
-      setDeletedSoldItems([]); // Add this line
+      setDeletedSoldItems([]);
     }
   }, [loading, portfolioSummary]);
 
@@ -374,8 +374,6 @@ const handleAddItem = useCallback((newItem) => {
   
   try {
     if (activeTab === 'Sold') {
-      // SOLD ITEM DELETION - Enhanced with proper group handling
-      
       // Store references before deletion for rollback if needed
       const deletedSoldItem = itemToDelete;
       const relatedInvestmentId = deletedSoldItem.investment_id;
@@ -445,7 +443,7 @@ const handleAddItem = useCallback((newItem) => {
           throw errors[0].error;
         }
         
-        // Success toast - treat all deletions the same way for user simplicity
+        // Success toast - treat all deletions the same way for simplicity
         const detailedName = buildDetailedItemName(deletedSoldItem);
         const deletedQuantity = deletedSoldItem.quantity_sold || 1;
         toast.saleRecordDeleted(detailedName, deletedQuantity);
@@ -475,7 +473,7 @@ const handleAddItem = useCallback((newItem) => {
       }
       
     } else {
-      // ACTIVE INVESTMENT DELETION (existing logic unchanged)
+      // ACTIVE INVESTMENT DELETION
       const investmentIds = itemToDelete.investment_ids || [itemToDelete.id];
       
       const deletePromises = investmentIds.map(investmentId => 
