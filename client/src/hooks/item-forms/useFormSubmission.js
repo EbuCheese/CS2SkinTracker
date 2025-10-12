@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useToast } from '@/contexts/ToastContext';
+import { useItemFormatting } from '@/hooks/util';
 
 // Maps category names to database type identifiers
 const TYPE_MAP = {
@@ -31,36 +32,14 @@ const ERROR_MESSAGES = {
   'context': 'Authentication context error: Please try again or refresh the page.'
 };
 
-// Helper function to build detailed item names (same as in ItemCard)
-const buildDetailedItemName = (item) => {
-  let displayName = '';
-  
-  // Add variant prefix
-  if (item.variant === 'souvenir') {
-    displayName += 'Souvenir ';
-  } else if (item.variant === 'stattrak') {
-    displayName += 'StatTrak™ ';
-  }
-  
-  // Add base name and skin name
-  if (item.skin_name) {
-    displayName += `${item.name || 'Custom'} ${item.skin_name}`;
-  } else {
-    displayName += item.name;
-  }
-  
-  // Add condition in parentheses if present
-  if (item.condition) {
-    displayName += ` (${item.condition})`;
-  }
-  
-  return displayName;
-};
 
 // Hook for handling form submission to add new investments
 export const useFormSubmission = (supabase) => {
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
+
+  // useItemFormatting for detailed name
+   const { displayName } = useItemFormatting();
 
   const handleSubmit = useCallback(async (formData, userSession, currentCategory, onAdd, onClose) => {
     // Validate user session before proceeding
@@ -117,7 +96,10 @@ export const useFormSubmission = (supabase) => {
       if (insertError) throw insertError;
       
       // Build detailed name for toast
-      const detailedName = buildDetailedItemName(insertData);
+      const detailedName = displayName(insertData, { 
+        includeCondition: true, 
+        format: 'compact' 
+      });
 
       // Show success toast using the enhanced method
       toast.itemAdded(detailedName, insertData.quantity, insertData.buy_price);
