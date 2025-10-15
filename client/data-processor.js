@@ -8,60 +8,104 @@ const fieldMappings = {
     id: item.id,
     name: item.name,
     image: item.image,
+    weapon: item.weapon?.name || null,
     category: item.category?.name || null,
     rarity: item.rarity?.name || null,
     rarityColor: item.rarity?.color || null,
     pattern: item.pattern?.name || null,
+    minFloat: item.min_float,
+    maxFloat: item.max_float,
     stattrak: item.stattrak || false,
-    souvenir: item.souvenir || false
+    souvenir: item.souvenir || false,
+    collections: item.collections?.map(c => c.id) || [], 
+    crates: item.crates?.map(c => c.id) || [] 
   }),
-  
+ 
   cases: (item) => ({
     id: item.id,
     name: item.name,
     image: item.image,
     type: item.type || 'Case',
+    contains: item.contains?.map(skin => skin.id) || [],
+    containsRare: item.contains_rare?.map(skin => skin.id) || [] 
   }),
-  
+ 
   stickers: (item) => ({
     id: item.id,
     name: item.name,
     image: item.image,
     type: item.type || null,
+    rarity: item.rarity?.name || null,
+    rarityColor: item.rarity?.color || null,
     tournamentEvent: item.tournament_event || null,
     tournamentTeam: item.tournament_team || null,
+    crates: item.crates?.map(c => c.id) || []
   }),
-  
+ 
   agents: (item) => ({
     id: item.id,
     name: item.name,
     image: item.image,
     rarity: item.rarity?.name || null,
     rarityColor: item.rarity?.color || null,
+    collections: item.collections?.map(c => c.id) || [],
+    isHighlight: item.id.startsWith('highlight-')
   }),
-  
+ 
   keychains: (item) => ({
     id: item.id,
     name: item.name,
     image: item.image,
     rarity: item.rarity?.name || null,
-    rarityColor: item.rarity?.color || null
+    rarityColor: item.rarity?.color || null,
+    collections: item.collections?.map(c => c.id) || [],
   }),
-  
+ 
   graffiti: (item) => ({
     id: item.id,
     name: item.name,
     image: item.image,
     rarity: item.rarity?.name || null,
-    rarityColor: item.rarity?.color || null
+    rarityColor: item.rarity?.color || null,
+    crates: item.crates?.map(c => c.id) || []
   }),
-    
+   
   patches: (item) => ({
     id: item.id,
     name: item.name,
     image: item.image,
     rarity: item.rarity?.name || null,
     rarityColor: item.rarity?.color || null
+  }),
+  
+  music_kits: (item) => ({
+    id: item.id,
+    name: item.name,
+    image: item.image,
+    rarity: item.rarity?.name || null,
+    rarityColor: item.rarity?.color || null
+  }),
+  
+  highlights: (item) => ({
+    id: item.id,
+    name: item.name,
+    description: item.description,
+    image: item.image,
+    video: item.video,
+    tournamentEvent: item.tournament_event,
+    team0: item.team0,
+    team1: item.team1,
+    stage: item.stage,
+    map: item.map,
+    keychainId: `highlight-${item.id}`
+  }),
+  
+  collections: (item) => ({
+    id: item.id,
+    name: item.name,
+    image: item.image,
+    crates: item.crates?.map(c => c.id) || [],
+    contains: item.contains?.map(skin => skin.id) || []
   })
 };
 
@@ -147,6 +191,18 @@ async function processAll() {
     'patches.json': {
       url: 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/patches.json',
       type: 'patches'
+    },
+    'music_kits.json': { 
+    url: 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/music_kits.json',
+    type: 'music_kits'
+    },
+    'highlights.json': {
+      url: 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/highlights.json',
+      type: 'highlights'
+    },
+    'collections.json': {
+      url: 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/collections.json',
+      type: 'collections'
     }
   };
 
