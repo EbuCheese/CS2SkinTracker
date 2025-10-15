@@ -217,44 +217,82 @@ export const VariantControls = memo(({
   );
 });
 
-// Condition selector for weapon skins
+// Condition options with float ranges
 const CONDITION_OPTIONS = [
-  { short: 'FN', full: 'Factory New' },
-  { short: 'MW', full: 'Minimal Wear' },
-  { short: 'FT', full: 'Field-Tested' },
-  { short: 'WW', full: 'Well-Worn' },
-  { short: 'BS', full: 'Battle-Scarred' }
+  { short: 'FN', full: 'Factory New', minFloat: 0.00, maxFloat: 0.07 },
+  { short: 'MW', full: 'Minimal Wear', minFloat: 0.07, maxFloat: 0.15 },
+  { short: 'FT', full: 'Field-Tested', minFloat: 0.15, maxFloat: 0.37 },
+  { short: 'WW', full: 'Well-Worn', minFloat: 0.37, maxFloat: 0.44 },
+  { short: 'BS', full: 'Battle-Scarred', minFloat: 0.44, maxFloat: 1.00 }
 ];
 
+// Helper function to check if condition is available for item
+const isConditionAvailable = (conditionMin, conditionMax, itemMinFloat, itemMaxFloat) => {
+  // If item has no float data, allow all conditions
+  if (itemMinFloat === undefined || itemMaxFloat === undefined) return true;
+  
+  // Check if there's any overlap between condition range and item range
+  return conditionMin < itemMaxFloat && conditionMax > itemMinFloat;
+};
+
 // Provides selection interface for CS2 weapon skin conditions.
-export const ConditionSelector = memo(({ selectedCondition, onConditionChange, required = false }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-300 mb-2">
-      Condition {required && <span className="text-red-400">*</span>}
-    </label>
-    {/* Button grid for condition selection using standard CS:GO abbreviations */}
-    <div className="flex items-center gap-2 flex-wrap">
-      {CONDITION_OPTIONS.map(({ short, full }) => (
-        <button
-          key={short}
-          type="button"
-          onClick={() => onConditionChange(full)}
-          className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
-            selectedCondition === full
-              ? 'bg-blue-600 text-white' // Active condition
-              : 'bg-gray-600 text-gray-300 hover:bg-gray-500' // Inactive conditions
-          }`}
-        >
-          {short}
-        </button>
-      ))}
+export const ConditionSelector = memo(({ 
+  selectedCondition, 
+  onConditionChange, 
+  required = false,
+  minFloat,
+  maxFloat
+}) => {
+  // Filter available conditions based on float range
+  const availableConditions = useMemo(() => {
+    return CONDITION_OPTIONS.filter(condition => 
+      isConditionAvailable(condition.minFloat, condition.maxFloat, minFloat, maxFloat)
+    );
+  }, [minFloat, maxFloat]);
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-300 mb-2">
+        Condition {required && <span className="text-red-400">*</span>}
+      </label>
+      {/* Button grid for condition selection using standard CS:GO abbreviations */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {availableConditions.map(({ short, full, minFloat: condMin, maxFloat: condMax }) => {
+          const isAvailable = isConditionAvailable(condMin, condMax, minFloat, maxFloat);
+          const isDisabled = !isAvailable;
+          
+          return (
+            <button
+              key={short}
+              type="button"
+              onClick={() => !isDisabled && onConditionChange(full)}
+              disabled={isDisabled}
+              className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
+                selectedCondition === full
+                  ? 'bg-blue-600 text-white' // Active condition
+                  : isDisabled
+                  ? 'bg-gray-700 text-gray-500 cursor-not-allowed' // Disabled (not available for this skin)
+                  : 'bg-gray-600 text-gray-300 hover:bg-gray-500' // Inactive but available
+              }`}
+            >
+              {short}
+            </button>
+          );
+        })}
+      </div>
+      {/* Show selected condition feedback with full name for clarity */}
+      {selectedCondition && (
+        <p className="text-gray-400 text-xs mt-2">Selected: {selectedCondition}</p>
+      )}
+      {/* Show float range info if available */}
+      {minFloat !== undefined && maxFloat !== undefined && (
+        <p className="text-gray-500 text-xs mt-1">
+          Available float range: {minFloat.toFixed(2)} - {maxFloat.toFixed(2)}
+        </p>
+      )}
     </div>
-    {/* Show selected condition feedback with full name for clarity */}
-    {selectedCondition && (
-      <p className="text-gray-400 text-xs mt-2">Selected: {selectedCondition}</p>
-    )}
-  </div>
-));
+  );
+});
 
 // Set display names for debugging
 VariantBadge.displayName = 'VariantBadge';
