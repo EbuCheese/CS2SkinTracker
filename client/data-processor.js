@@ -37,8 +37,8 @@ const fieldMappings = {
     type: item.type || null,
     rarity: item.rarity?.name || null,
     rarityColor: item.rarity?.color || null,
-    tournamentEvent: item.tournament_event || null,
-    tournamentTeam: item.tournament_team || null,
+    tournament: item.tournament || null,
+    collections: item.collections?.map(c => c.id) || [], 
     crates: item.crates?.map(c => c.id) || []
   }),
  
@@ -49,7 +49,6 @@ const fieldMappings = {
     rarity: item.rarity?.name || null,
     rarityColor: item.rarity?.color || null,
     collections: item.collections?.map(c => c.id) || [],
-    isHighlight: item.id.startsWith('highlight-')
   }),
  
   keychains: (item) => ({
@@ -59,6 +58,8 @@ const fieldMappings = {
     rarity: item.rarity?.name || null,
     rarityColor: item.rarity?.color || null,
     collections: item.collections?.map(c => c.id) || [],
+    isHighlight: item.id.startsWith('highlight-'),
+    souvenir: item.id.startsWith('highlight-')
   }),
  
   graffiti: (item) => ({
@@ -97,7 +98,8 @@ const fieldMappings = {
     team1: item.team1,
     stage: item.stage,
     map: item.map,
-    keychainId: `highlight-${item.id}`
+    keychainId: `highlight-${item.id}`,
+    souvenir: true
   }),
   
   collections: (item) => ({
