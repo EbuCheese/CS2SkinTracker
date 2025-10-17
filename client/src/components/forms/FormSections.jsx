@@ -20,14 +20,34 @@ export const ItemSelectionSection = ({
   // Determine if we're working with crafts (special handling required)
   const isCrafts = type === 'Crafts';
   
-  // Memoize the search component to prevent unnecessary re-renders
-  // Different behavior for crafts vs standard items:
-  // - Crafts: Search for base skins using 'liquids' type
-  // - Standard: Search for items using the specified searchType
-  const itemSearch = useMemo(() => (
+  // display name mapper
+  const getTypeDisplayName = (searchType) => {
+    const displayMap = {
+      'music_kits': 'music kits',
+      'liquids': 'liquids',
+      'cases': 'cases',
+      'stickers': 'stickers',
+      'agents': 'agents',
+      'keychains': 'keychains',
+      'graffiti': 'graffiti',
+      'patches': 'patches',
+      'highlights': 'highlights',
+      'all': 'items'
+    };
+    return displayMap[searchType] || searchType;
+  };
+
+    // Memoize the search component to prevent unnecessary re-renders
+    // Different behavior for crafts vs standard items:
+    // - Crafts: Search for base skins using 'liquids' type
+    // - Standard: Search for items using the specified searchType
+    const itemSearch = useMemo(() => (
     <CSItemSearch
       type={isCrafts ? 'liquids' : searchType}
-      placeholder={isCrafts ? 'Search base skins...' : `Search ${type.toLowerCase()}...`}
+      placeholder={isCrafts 
+        ? 'Search base skins...' 
+        : `Search ${getTypeDisplayName(searchType)}...`  // Use display name here
+      }
       value={isCrafts ? formData.skin_name : (searchValue || formData.name)}
       onChange={isCrafts 
         ? (e) => handleFormDataChange('skin_name', e.target.value)
@@ -37,7 +57,7 @@ export const ItemSelectionSection = ({
       className="w-full"
       showLargeView={true}
       maxResults={15}
-      excludeSpecialItems={isCrafts} // Exclude special items for craft base selection
+      excludeSpecialItems={isCrafts}
     />
   ), [type, searchType, formData, handleFormDataChange, handleItemSelect, handleSkinSelect, searchValue, onSearchChange, isCrafts]);
 
@@ -72,13 +92,16 @@ export const SelectedItemDisplay = ({
   const isMusicKitBox = displayName?.includes('Music Kit Box');
   const hasStatTrakInName = displayName?.includes('StatTrak™');
 
-  return (
+  // Check if this is a highlight
+  const isHighlight = formData.itemType === 'highlights' || 
+                     displayName?.startsWith('Souvenir Charm');
+
+    return (
     <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
       <label className="block text-sm font-medium text-gray-300 mb-2">
         {isCrafts ? 'Selected Base Skin' : 'Selected Item'}
       </label>
 
-      {/* Item preview with image and basic info */}
       <div className="flex items-center space-x-3 mb-3">
         {displayImage && (
           <img 
@@ -92,16 +115,16 @@ export const SelectedItemDisplay = ({
           <p className="text-gray-400 text-sm">
             {isCrafts ? 'Base skin selected' : 'Ready to add'}
           </p>
-          {/* Show current variant status (StatTrak/Souvenir) */}
+          {/* Force souvenir badge for highlights */}
           <VariantBadge 
-            stattrak={formData.stattrak || hasStatTrakInName} 
-            souvenir={formData.souvenir} 
+            stattrak={!isHighlight && (formData.stattrak || hasStatTrakInName)}
+            souvenir={isHighlight || formData.souvenir} 
           />
         </div>
       </div>
       
-      {/* StatTrak/Souvenir variant controls - hide for all music kit boxes */}
-      {!isMusicKitBox && (
+      {/* Hide variant controls for music kit boxes AND highlights */}
+      {!isMusicKitBox && !isHighlight && (
         <VariantControls
           hasStatTrak={formData.hasStatTrak}
           hasSouvenir={formData.hasSouvenir}

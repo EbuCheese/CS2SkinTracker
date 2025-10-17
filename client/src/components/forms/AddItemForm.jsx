@@ -88,6 +88,8 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
         selectedCondition={formData.condition}
         onConditionChange={handleConditionChange}
         required={true}
+        minFloat={formData.minFloat}
+        maxFloat={formData.maxFloat}
       />
 
       {/* Custom Craft Name Input - Crafts need unique names */}
@@ -142,6 +144,8 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
           selectedCondition={formData.condition}
           onConditionChange={handleConditionChange}
           required={true}
+          minFloat={formData.minFloat}
+          maxFloat={formData.maxFloat}
         />
       )}
 
