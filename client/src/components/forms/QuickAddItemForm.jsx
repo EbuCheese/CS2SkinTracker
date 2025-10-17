@@ -126,6 +126,8 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
             selectedCondition={formData.condition}
             onConditionChange={handleConditionChange}
             required={true}
+            minFloat={formData.minFloat}
+            maxFloat={formData.maxFloat}
           />
         )}
 
