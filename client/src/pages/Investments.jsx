@@ -62,7 +62,7 @@ const InvestmentsPage = ({ userSession }) => {
   );
   
   // Tab configuration and UI helpers
-  const { mainTabs, soldTab, searchPlaceholder, getAddButtonText } = usePortfolioTabs(activeTab);
+  const { mainTabs, soldTab, searchPlaceholder, getAddButtonText, getTabDisplayName } = usePortfolioTabs(activeTab);
 
   // lock scroll on add form or delete message  
   useScrollLock(showAddForm || !!itemToDelete);
@@ -729,7 +729,7 @@ const handleAddItem = useCallback((newItem) => {
                     : 'bg-gray-800 text-gray-300 hover:text-white hover:bg-gray-700'
                 }`}
               >
-                {tab}
+                {getTabDisplayName(tab)}
               </button>
             ))}
           </div>
@@ -826,7 +826,8 @@ const handleAddItem = useCallback((newItem) => {
                   ? 'Items you sell will appear here'
                   : `Add your first ${
                       activeTab === 'Graffiti' ? 'graffiti' : 
-                      activeTab === 'Patches' ? 'patch' : 
+                      activeTab === 'Patches' ? 'patch' :
+                      activeTab === 'music_kits' ? 'music kit' : 
                       activeTab.toLowerCase().slice(0, -1)
                     } to get started`
               }
