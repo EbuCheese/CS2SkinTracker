@@ -210,17 +210,22 @@ const itemSubtitle = useMemo(() => {
               <p className="text-sm text-white font-medium leading-tight" title={itemDisplayName}>
                 {itemDisplayName}
               </p>
-              <div className="flex items-center gap-1 text-xs">
-                <span className="text-gray-400">{itemSubtitle}</span>
-                <span className="text-gray-600">•</span>
-                <span className="text-gray-500">
-                  {isSoldItem ? 'Sold' : 'Added'} {formatDateInTimezone(
-                    isSoldItem ? item.sale_date : item.created_at,
-                    timezone,
-                    { month: 'short', day: 'numeric', year: 'numeric' }
-                  )}
-                </span>
-              </div>
+             <div className="flex items-center gap-1 text-xs">
+              {itemSubtitle && (
+                <>
+                  <span className="text-gray-400">{itemSubtitle}</span>
+                  <span className="text-gray-600">•</span>
+                </>
+              )}
+              <span className="text-gray-500">
+                {isSoldItem ? 'Sold' : 'Added'}{' '}
+                {formatDateInTimezone(
+                  isSoldItem ? item.sale_date : item.created_at,
+                  timezone,
+                  { month: 'short', day: 'numeric', year: 'numeric' }
+                )}
+              </span>
+            </div>
             </div>
           </div>
           </div>
