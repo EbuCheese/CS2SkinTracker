@@ -13,11 +13,36 @@ export const usePortfolioTabs = (activeTab) => {
     'Agents',     // Agent skins
     'Keychains',  // Keychain items
     'Graffiti',   // Sealed graffiti
-    'Patches'     // Collectible patches
+    'Patches',     // Collectible patches
+    'music_kits',  // Music Kits
+    'Highlights'   // Souvenir Highlight Charms Only
   ];
  
   // Special tab for sold items - kept separate for UI distinction
   const soldTab = 'Sold';
+
+  /**
+   * Converts internal tab names to display names
+  */
+  const getTabDisplayName = (tabName) => {
+    const displayMap = {
+      'music_kits': 'Music Kits',
+      'Graffiti': 'Graffiti',
+      'Patches': 'Patches'
+      // Add others if needed
+    };
+    return displayMap[tabName] || tabName;
+  };
+
+  /**
+   * Converts display names back to internal tab names
+   */
+  const getTabInternalName = (displayName) => {
+    const internalMap = {
+      'Music Kits': 'music_kits'
+    };
+    return internalMap[displayName] || displayName;
+  };
 
   /**
    * Generates appropriate search placeholder text based on current context.
@@ -47,6 +72,7 @@ export const usePortfolioTabs = (activeTab) => {
     // Special cases with different singular/plural forms
     if (activeTab === 'Graffiti') return 'Add Graffiti';
     if (activeTab === 'Patches') return 'Add Patch';
+    if (activeTab === 'music_kits') return 'Add Music Kit';
    
     // Standard case: remove 's' from plural tab name
     // e.g., "Cases" -> "Add Case", "Stickers" -> "Add Sticker"
@@ -57,6 +83,8 @@ export const usePortfolioTabs = (activeTab) => {
     mainTabs,              // Array of main category tabs
     soldTab,               // Special sold items tab
     searchPlaceholder,     // Context-appropriate search placeholder
-    getAddButtonText       // Function to format add button text
+    getAddButtonText,       // Function to format add button text
+    getTabDisplayName,      // Export display name
+    getTabInternalName      // The actual internal name
   };
 };
