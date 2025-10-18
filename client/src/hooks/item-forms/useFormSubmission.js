@@ -11,7 +11,9 @@ const TYPE_MAP = {
   'Stickers': 'sticker',
   'Keychains': 'keychain',
   'Graffiti': 'graffiti',
-  'Patches': 'patch'
+  'Patches': 'patch',
+  'Music Kits': 'music_kit',
+  'Highlights': 'highlight'
 };
 
 // Maps context data types to database types
@@ -22,7 +24,9 @@ const CONTEXT_TYPE_MAP = {
   'agents': 'agent',
   'keychains': 'keychain',
   'graffiti': 'graffiti',
-  'patches': 'patch'
+  'patches': 'patch',
+  'music_kits': 'music_kit',
+  'highlights': 'highlight'
 };
 
 // User-friendly error messages for common database errors
