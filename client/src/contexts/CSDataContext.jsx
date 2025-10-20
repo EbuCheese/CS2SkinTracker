@@ -22,12 +22,29 @@ export const CSDataProvider = ({ children }) => {
     agents: null,
     keychains: null,
     graffiti: null,
-    patches: null
+    patches: null,
+    music_kits: null,
+    highlights: null,
+    collections: null
   });
 
   // Processed search indices for efficient querying
   const [searchIndices, setSearchIndices] = useState({});
   const [unifiedSearchIndex, setUnifiedSearchIndex] = useState(null);
+
+  // Lookup maps for O(1) ID resolution
+  const [lookupMaps, setLookupMaps] = useState({
+    skinsById: new Map(),
+    casesById: new Map(),
+    collectionsById: new Map(),
+    stickersById: new Map(),
+    agentsById: new Map(),
+    keychainsById: new Map(),
+    graffitiById: new Map(),
+    patchesById: new Map(),
+    musicKitsById: new Map(),
+    highlightsById: new Map()
+  });
 
   // Loading and error states
   const [loading, setLoading] = useState(true);
@@ -50,6 +67,37 @@ export const CSDataProvider = ({ children }) => {
     Object.entries(rawData).forEach(([type, items]) => {
       if (!items || items.length === 0) return;
 
+      // Enrich keychains with highlight descriptions
+      let processedItems = items;
+      if (type === 'keychains') {
+        processedItems = items.map(keychain => {
+          if (keychain.isHighlight && keychain.highlightId) {
+            const highlight = rawData.highlights?.find(h => h.id === keychain.highlightId);
+            return {
+              ...keychain,
+              description: highlight?.description || null,
+              tournamentEvent: highlight?.tournamentEvent || null
+            };
+          }
+          return keychain;
+        });
+      }
+      
+      // Existing highlight enrichment code stays the same
+      if (type === 'highlights') {
+        processedItems = items.map(highlight => {
+          const keychainId = `highlight-${highlight.id}`;
+          const keychain = rawData.keychains?.find(k => k.id === keychainId);
+          
+          return {
+            ...highlight,
+            rarity: keychain?.rarity || null,
+            rarityColor: keychain?.rarityColor || null,
+            collections: keychain?.collections || []
+          };
+        });
+      }
+
       // Map to group items by their base characteristics
       // Key format: "baseName_category_pattern" to ensure uniqueness
       const baseItemsMap = new Map();
@@ -58,7 +106,7 @@ export const CSDataProvider = ({ children }) => {
       const searchTokens = new Set();
       
       // Process each individual item
-      items.forEach(item => {
+      processedItems.forEach(item => {
         // Extract base item information (removes StatTrak™/Souvenir prefixes)
         const baseInfo = extractBaseItemInfo(item);
         const baseKey = `${baseInfo.baseName}_${baseInfo.category}_${baseInfo.pattern}`;
@@ -70,15 +118,18 @@ export const CSDataProvider = ({ children }) => {
             baseName: baseInfo.baseName,
             category: baseInfo.category,
             pattern: baseInfo.pattern,
-            variants: new Map(), // Stores different variants (normal, StatTrak™, Souvenir)
-            searchTokens: createSearchTokens(baseInfo), // Normalized search terms
-            metadata: extractMetadata(item, type) // Additional searchable metadata
+            variants: new Map(),
+            searchTokens: createSearchTokens(baseInfo),
+            metadata: extractMetadata(item, type),
+            isNameBasedSouvenir: baseInfo.isNameBasedSouvenir
           });
         }
         
         // Add this item as a variant of the base item
         const baseItem = baseItemsMap.get(baseKey);
-        baseItem.variants.set(baseInfo.variant, item);
+        baseItem.variants.set(baseInfo.variant, {
+          ...item,  // This should include the collections array
+        });
         
         // Collect all search tokens for global autocomplete
         baseItem.searchTokens.forEach(token => searchTokens.add(token));
@@ -90,7 +141,10 @@ export const CSDataProvider = ({ children }) => {
       
       // Store processed data for this item type
       processedData[type] = {
-        items: Array.from(baseItemsMap.values()),
+        items: Array.from(baseItemsMap.values()).map(item => ({
+          ...item,
+          itemType: type
+        })),
         searchIndex,
         searchTokens: Array.from(searchTokens)
       };
@@ -100,7 +154,9 @@ export const CSDataProvider = ({ children }) => {
         itemType: type // Tag with source type
       }));
       
-      unifiedIndex.items.push(...typeItems);
+      if (type !== 'highlights' && type !== 'collections') {
+        unifiedIndex.items.push(...typeItems);
+      }
     });
 
     // Build unified search index
@@ -120,39 +176,65 @@ export const CSDataProvider = ({ children }) => {
   // Extracts base item information by removing variant prefixes and determining variant type
   const extractBaseItemInfo = (item) => {
     let baseName = item.name;
-    let variant = 'normal'; // Default variant type
+    let variant = 'normal';
     
-    // Priority 1: Check boolean properties (preferred method)
+    // Check if this is a highlight by ID pattern (most reliable)
+    const isHighlight = item.id?.startsWith('highlight-') || 
+                      baseName.startsWith('Souvenir Charm');
+    
+    if (isHighlight) {
+    // Highlights have "Souvenir" in the name but are NOT variants
+    return {
+      baseName,
+      variant: 'normal', // Database variant is normal
+      category: item.category || '',
+      pattern: item.pattern || '',
+      isNameBasedSouvenir: true // Flag for display purposes
+    };
+  }
+  
+  // Check for souvenir PACKAGE (case with souvenir in name)
+  const isSouvenirPackage = baseName.includes('Souvenir Package');
+  if (isSouvenirPackage) {
+    return {
+      baseName,
+      variant: 'normal', // Database variant is normal
+      category: item.category || '',
+      pattern: item.pattern || '',
+      isNameBasedSouvenir: true // Flag for display
+    };
+  }
+    
+    // Priority 1: Check boolean properties
     if (item.stattrak === true) {
       variant = 'stattrak';
-      // Clean the name if it still has the prefix
       if (baseName.startsWith('StatTrak™ ')) {
         baseName = baseName.replace('StatTrak™ ', '');
       }
     } else if (item.souvenir === true) {
       variant = 'souvenir';
-      // Clean the name if it still has the prefix
       if (baseName.startsWith('Souvenir ')) {
         baseName = baseName.replace('Souvenir ', '');
       }
-    } else {
-      // Priority 2: Fallback to name-based detection (backward compatibility)
-      if (baseName.startsWith('StatTrak™ ')) {
-        baseName = baseName.replace('StatTrak™ ', '');
-        variant = 'stattrak';
-      } else if (baseName.startsWith('Souvenir ')) {
-        baseName = baseName.replace('Souvenir ', '');
-        variant = 'souvenir';
-      }
+  } else {
+    // Priority 2: Fallback to name-based detection (backward compatibility)
+    if (baseName.startsWith('StatTrak™ ')) {
+      baseName = baseName.replace('StatTrak™ ', '');
+      variant = 'stattrak';
+    } else if (baseName.startsWith('Souvenir ')) {
+      baseName = baseName.replace('Souvenir ', '');
+      variant = 'souvenir';
     }
-    
-    return {
-      baseName,
-      variant,
-      category: item.category || '',
-      pattern: item.pattern || ''
-    };
+  }
+  
+  return {
+    baseName,
+    variant,
+    category: item.category || '',
+    pattern: item.pattern || '',
+    isNameBasedSouvenir: false
   };
+};
 
   // Creates normalized search tokens from item information
   const createSearchTokens = (baseInfo) => {
@@ -207,19 +289,26 @@ export const CSDataProvider = ({ children }) => {
     
     switch (type) {
       case 'skins':
-        // Weapon skins have weapon type, category, and pattern information
-        if (item.weapon) metadata.push(item.weapon);
+        // Weapon skins category
         if (item.category) metadata.push(item.category);
-        if (item.pattern) metadata.push(item.pattern);
-        break;
-      case 'agents':
-        // Agents belong to different teams (T-side, CT-side)
-        if (item.team) metadata.push(item.team);
         break;
       case 'stickers':
-        // Stickers may be associated with tournaments and teams
-        if (item.tournamentEvent) metadata.push(item.tournamentEvent);
-        if (item.tournamentTeam) metadata.push(item.tournamentTeam);
+      // Only add tournament if sticker has NO source (no collection/crate)
+      const hasSource = (item.collections?.length > 0) || (item.crates?.length > 0);
+      if (item.tournament && !hasSource) {
+        // Extract the name string from the tournament object
+        metadata.push(item.tournament.name || item.tournament);
+      }
+      break;
+      case 'highlights':
+        if (item.description) {
+          metadata.push(item.description);
+        }
+        break;
+      case 'keychains':
+        if (item.isHighlight && item.description) {
+          metadata.push(item.description);
+        }
         break;
       default:
         // Generic type information for other item categories
@@ -244,7 +333,10 @@ export const CSDataProvider = ({ children }) => {
           agents: '/data/agents.json',
           keychains: '/data/keychains.json',
           graffiti: '/data/graffiti.json',
-          patches: '/data/patches.json'
+          patches: '/data/patches.json',
+          music_kits: '/data/music_kits.json',
+          highlights: '/data/highlights.json',
+          collections: '/data/collections.json'
         };
 
         const total = Object.keys(endpoints).length;
@@ -298,11 +390,72 @@ export const CSDataProvider = ({ children }) => {
     loadAllData();
   }, [preprocessData]);
 
+  // Build lookup maps after data loads
+  useEffect(() => {
+    // Wait for data to be loaded
+    if (loading || !data.skins) return;
+
+    console.log('Building lookup maps for fast ID resolution...');
+    
+    try {
+      const maps = {
+        skinsById: new Map(data.skins?.map(item => [item.id, item]) || []),
+        casesById: new Map(data.cases?.map(item => [item.id, item]) || []),
+        collectionsById: new Map(data.collections?.map(item => [item.id, item]) || []),
+        stickersById: new Map(data.stickers?.map(item => [item.id, item]) || []),
+        agentsById: new Map(data.agents?.map(item => [item.id, item]) || []),
+        keychainsById: new Map(data.keychains?.map(item => [item.id, item]) || []),
+        graffitiById: new Map(data.graffiti?.map(item => [item.id, item]) || []),
+        patchesById: new Map(data.patches?.map(item => [item.id, item]) || []),
+        musicKitsById: new Map(data.music_kits?.map(item => [item.id, item]) || []),
+        highlightsById: new Map(data.highlights?.map(item => [item.id, item]) || []),
+        //Reverse lookup - item ID to cases that contain it
+        itemToCases: new Map()
+      };
+
+      // Build reverse lookup for all items in cases
+      data.cases?.forEach(caseItem => {
+        // Check regular contains
+        caseItem.contains?.forEach(itemId => {
+          if (!maps.itemToCases.has(itemId)) {
+            maps.itemToCases.set(itemId, []);
+          }
+          maps.itemToCases.get(itemId).push(caseItem.id);
+        });
+        
+        // Check containsRare
+        caseItem.containsRare?.forEach(itemId => {
+          if (!maps.itemToCases.has(itemId)) {
+            maps.itemToCases.set(itemId, []);
+          }
+          maps.itemToCases.get(itemId).push(caseItem.id);
+        });
+      });
+
+      setLookupMaps(maps);
+      console.log('✅ Lookup maps built successfully:', {
+        skins: maps.skinsById.size,
+        cases: maps.casesById.size,
+        collections: maps.collectionsById.size,
+        stickers: maps.stickersById.size,
+        agents: maps.agentsById.size,
+        keychains: maps.keychainsById.size,
+        graffiti: maps.graffitiById.size,
+        patches: maps.patchesById.size,
+        musicKits: maps.musicKitsById.size,
+        highlights: maps.highlightsById.size
+      });
+    } catch (err) {
+      console.error('Failed to build lookup maps:', err);
+    }
+  }, [data, loading]);
+
   return (
     <CSDataContext.Provider value={{ 
       data,
       searchIndices,
-      unifiedSearchIndex, 
+      unifiedSearchIndex,
+      lookupMaps,
       loading, 
       error, 
       loadingProgress,
@@ -354,18 +507,79 @@ export const CSDataProvider = ({ children }) => {
 
         return results;
       },
+      
       // Helper function to get raw data for a specific item type
       getDataForType: (type) => {
         // Handle special mapping: 'liquids' -> 'skins'
         const dataType = type === 'liquids' ? 'skins' : type;
         return data[dataType] || [];
       },
+      
       // Helper function to get search index for a specific item type
       getSearchIndexForType: (type) => {
         const dataType = type === 'liquids' ? 'skins' : type;
         return searchIndices[dataType] || null;
+      },
+
+      // Helper functions to resolve IDs to full objects
+      resolveCollections: (collectionIds) => {
+        if (!collectionIds || !Array.isArray(collectionIds)) return [];
+        return collectionIds
+          .map(id => lookupMaps.collectionsById.get(id))
+          .filter(Boolean);
+      },
+
+      resolveCases: (caseIds) => {
+        if (!caseIds || !Array.isArray(caseIds)) return [];
+        return caseIds
+          .map(id => lookupMaps.casesById.get(id))
+          .filter(Boolean);
+      },
+
+      resolveSkins: (skinIds) => {
+        if (!skinIds || !Array.isArray(skinIds)) return [];
+        return skinIds
+          .map(id => lookupMaps.skinsById.get(id))
+          .filter(Boolean);
+      },
+
+      resolveStickers: (stickerIds) => {
+        if (!stickerIds || !Array.isArray(stickerIds)) return [];
+        return stickerIds
+          .map(id => lookupMaps.stickersById.get(id))
+          .filter(Boolean);
+      },
+
+      // Generic resolver for any type
+      resolveById: (id, type) => {
+        const mapKey = `${type}ById`;
+        return lookupMaps[mapKey]?.get(id) || null;
+      },
+
+      // Batch resolver for multiple IDs of same type
+      resolveByIds: (ids, type) => {
+        if (!ids || !Array.isArray(ids)) return [];
+        const mapKey = `${type}ById`;
+        const map = lookupMaps[mapKey];
+        if (!map) return [];
+        return ids.map(id => map.get(id)).filter(Boolean);
+      },
+
+      // Helper for getting enriched highlight data
+      getEnrichedHighlight: (highlightId) => {
+        return lookupMaps.highlightsById.get(highlightId) || null;
+      },
+
+      // Get regular keychains (excludes highlights)
+      getRegularKeychains: () => {
+        return data.keychains?.filter(k => !k.isHighlight) || [];
+      },
+
+      // Get all keychains including highlights
+      getAllKeychains: () => {
+        return data.keychains || [];
       }
-    }}>
+      }}>
       {children}
     </CSDataContext.Provider>
   );
