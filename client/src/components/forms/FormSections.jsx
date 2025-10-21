@@ -117,14 +117,15 @@ export const SelectedItemDisplay = ({
           </p>
           {/* Force souvenir badge for highlights */}
           <VariantBadge 
-            stattrak={!isHighlight && (formData.stattrak || hasStatTrakInName)}
-            souvenir={isHighlight || formData.souvenir} 
-          />
+              stattrak={!formData.isNameBasedSouvenir && (formData.stattrak || hasStatTrakInName)}
+              souvenir={formData.isNameBasedSouvenir || formData.souvenir}
+              itemName={formData.name} 
+            />
         </div>
       </div>
       
       {/* Hide variant controls for music kit boxes AND highlights */}
-      {!isMusicKitBox && !isHighlight && (
+      {!isMusicKitBox && !formData.isNameBasedSouvenir && !formData.isNameBasedStatTrak && (
         <VariantControls
           hasStatTrak={formData.hasStatTrak}
           hasSouvenir={formData.hasSouvenir}

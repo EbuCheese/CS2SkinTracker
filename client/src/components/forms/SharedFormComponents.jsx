@@ -2,9 +2,14 @@ import React, { memo, useMemo } from 'react';
 import { Upload, Loader2, Plus, Minus } from 'lucide-react';
 
 // Displays a colored badge indicating the variant type of a CS2 item.
-export const VariantBadge = memo(({ stattrak, souvenir }) => {
+export const VariantBadge = memo(({ stattrak, souvenir, itemName }) => {
+  // Check for name-based variants
+  const isNameBasedStatTrak = itemName?.startsWith('StatTrak™ Music Kit');
+  const isNameBasedSouvenir = itemName?.startsWith('Souvenir Charm') || 
+                             itemName?.includes('Souvenir Package');
+                             
   // StatTrak™ items get orange badge with highest priority
-  if (stattrak) {
+  if (stattrak || isNameBasedStatTrak) {
     return (
       <span className="inline-block px-2 py-0.5 bg-orange-600 text-white rounded text-xs mt-1 mr-1">
         StatTrak™
@@ -13,7 +18,7 @@ export const VariantBadge = memo(({ stattrak, souvenir }) => {
   }
   
   // Souvenir items get yellow badge with second priority
-  if (souvenir) {
+  if (souvenir || isNameBasedSouvenir) {
     return (
       <span className="inline-block px-2 py-0.5 bg-yellow-600 text-white rounded text-xs mt-1">
         Souvenir

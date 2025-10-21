@@ -824,15 +824,32 @@ const handleSoldEditFormSubmit = useCallback(async (formData) => {
           </div>
   
       {/* Variant badges */}
-      {(variant && variant !== 'normal') && (
-        <div className={`absolute -top-1 -right-1 z-10 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg ${
-          variant === 'stattrak' 
-            ? 'bg-gradient-to-r from-orange-500 to-red-500' 
-            : 'bg-gradient-to-r from-yellow-500 to-yellow-600'
-        } ${profitMetrics.isFullySold ? 'opacity-65' : ''}`}>
-          {variant === 'stattrak' ? 'ST' : 'SV'}
-        </div>
-      )}
+      {(() => {
+        // Check if item is name-based souvenir
+        const isNameBasedSouvenir = item.isNameBasedSouvenir ||
+                                    displayValues.name?.startsWith('Souvenir Charm') ||
+                                    displayValues.name?.includes('Souvenir Package');
+        
+        // Check if item is name-based StatTrak™
+        const isNameBasedStatTrak = item.isNameBasedStatTrak ||
+                                    displayValues.name?.startsWith('StatTrak™');
+        
+        // Show badges
+        const showSouvenirBadge = isNameBasedSouvenir || (variant === 'souvenir');
+        const showStatTrakBadge = isNameBasedStatTrak || (variant === 'stattrak');
+        
+        if (!showSouvenirBadge && !showStatTrakBadge) return null;
+        
+        return (
+          <div className={`absolute -top-1 -right-1 z-10 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg ${
+            showStatTrakBadge
+              ? 'bg-gradient-to-r from-orange-500 to-red-500'
+              : 'bg-gradient-to-r from-yellow-500 to-yellow-600'
+          } ${profitMetrics.isFullySold ? 'opacity-65' : ''}`}>
+            {showStatTrakBadge ? 'ST' : 'SV'}
+          </div>
+        );
+      })()}
 
       {/* Sold indicator for fully sold items */}
       {profitMetrics.isFullySold && (
