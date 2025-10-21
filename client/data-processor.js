@@ -90,7 +90,8 @@ const fieldMappings = {
     name: item.name,
     image: item.image,
     rarity: item.rarity?.name || null,
-    rarityColor: item.rarity?.color || null
+    rarityColor: item.rarity?.color || null,
+    stattrak: item.name.startsWith('StatTrak™'),
   }),
   
   highlights: (item) => ({
