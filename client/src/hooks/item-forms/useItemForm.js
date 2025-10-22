@@ -21,6 +21,10 @@ const INITIAL_FORM_DATA = {
   selectedItemId: null,         
   selectedSkinId: null,
   
+  // Float range data
+  minFloat: undefined,
+  maxFloat: undefined,
+
   // Variant flags
   stattrak: false,
   souvenir: false,
@@ -197,33 +201,50 @@ export const useItemForm = (currentCategory, selectedCategory) => {
 
   // Enhanced item selection with better state management
   const handleItemSelect = useCallback((item, categoryMap) => {
-    touchedRef.current = true;
-    
-    dispatch({
-      type: ACTION_TYPES.SET_ITEM_SELECTED,
-      payload: {
-        name: item.name,
-        image_url: item.image || '',
-        type: currentCategory?.toLowerCase(),
-        detectedCategory: currentCategory,
-        itemType: item.itemType,
-        
-        // Reset variant state to defaults
-        stattrak: false,
-        souvenir: false,
-        selectedVariant: 'normal',
-        variant: 'normal',
-        
-        // Set capability flags from item data
-        hasStatTrak: Boolean(item.hasStatTrak),
-        hasSouvenir: Boolean(item.hasSouvenir),
-        
-        // Set selection state
-        isItemSelected: true,
-        selectedItemId: item.id || item.name
-      }
-    });
-  }, [currentCategory]);
+  touchedRef.current = true;
+  
+  // Detect items with variant in name but normal database variant
+  const isNameBasedSouvenir = item.isNameBasedSouvenir || 
+                             item.id?.startsWith('highlight-') ||
+                             item.name?.startsWith('Souvenir Charm') ||
+                             item.name?.includes('Souvenir Package');
+  
+  const isNameBasedStatTrak = item.isNameBasedStatTrak ||
+                             item.name?.startsWith('StatTrak™ Music Kit');
+  
+  dispatch({
+    type: ACTION_TYPES.SET_ITEM_SELECTED,
+    payload: {
+      name: item.name,
+      image_url: item.image || '',
+      type: currentCategory?.toLowerCase(),
+      detectedCategory: currentCategory,
+      itemType: item.itemType,
+      
+      minFloat: item.minFloat,
+      maxFloat: item.maxFloat,
+
+      // For database/market lookups - always normal
+      stattrak: false,
+      souvenir: false,
+      selectedVariant: 'normal',
+      variant: 'normal',
+      
+      // For UI display
+      displayVariant: isNameBasedSouvenir ? 'souvenir' : 
+                     isNameBasedStatTrak ? 'stattrak' : 'normal',
+      isNameBasedSouvenir: isNameBasedSouvenir,
+      isNameBasedStatTrak: isNameBasedStatTrak,
+      
+      // Disable variant switching for name-based variants
+      hasStatTrak: !isNameBasedSouvenir && !isNameBasedStatTrak && Boolean(item.hasStatTrak),
+      hasSouvenir: !isNameBasedSouvenir && !isNameBasedStatTrak && Boolean(item.hasSouvenir),
+      
+      isItemSelected: true,
+      selectedItemId: item.id || item.name
+    }
+  });
+}, [currentCategory]);
 
   // Enhanced skin selection with separate action type
   const handleSkinSelect = useCallback((item) => {
@@ -235,6 +256,10 @@ export const useItemForm = (currentCategory, selectedCategory) => {
         skin_name: item.name,
         image_url: formData.custom_image_url || item.image || '',
         
+        // Store float range for condition filtering
+        minFloat: item.minFloat,
+        maxFloat: item.maxFloat,
+
         // Reset variant state
         stattrak: false,
         souvenir: false,
