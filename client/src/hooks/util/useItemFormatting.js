@@ -24,27 +24,39 @@ export const useItemFormatting = () => {
       includeCondition = false,
       format = 'full'
     } = options;
-   
+
     const itemName = item.name || item.item_name || '';
     const skinName = item.skin_name || item.item_skin_name;
     const condition = item.condition || item.item_condition;
     const variant = item.variant || item.item_variant;
-   
+    
+    // Check if this is a name-based souvenir (already has "Souvenir" in the name)
+    const isNameBasedSouvenir = item.isNameBasedSouvenir || 
+                              itemName.startsWith('Souvenir Charm') ||
+                              itemName.includes('Souvenir Package');
+
+    // Check if this is a name-based StatTrak™ (already has "StatTrak™" in the name)
+    const isNameBasedStatTrak = item.isNameBasedStatTrak ||
+                              itemName.startsWith('StatTrak™ Music Kit');
+
     const hasStarPrefix = itemName.startsWith('★');
     let displayName = '';
-   
+
     if (hasStarPrefix) {
       displayName += '★ ';
     }
-   
-    if (variant === 'souvenir') {
-      displayName += 'Souvenir ';
-    } else if (variant === 'stattrak') {
-      displayName += 'StatTrak™ ';
+
+    // Only add variant prefix if NOT a name-based variant
+    if (!isNameBasedSouvenir && !isNameBasedStatTrak) {
+      if (variant === 'souvenir') {
+        displayName += 'Souvenir ';
+      } else if (variant === 'stattrak') {
+        displayName += 'StatTrak™ ';
+      }
     }
-   
+
     const baseName = hasStarPrefix ? itemName.substring(1).trim() : itemName;
-   
+
     if (format === 'simple') {
       displayName += baseName;
       if (skinName) {
@@ -62,11 +74,11 @@ export const useItemFormatting = () => {
         displayName += ` | ${skinName}`;
       }
     }
-   
+
     if (includeCondition && condition && condition.toLowerCase() !== 'unknown') {
       displayName += ` (${condition})`;
     }
-   
+
     return displayName.trim();
   }, []);
 
