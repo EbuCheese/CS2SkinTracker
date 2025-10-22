@@ -17,7 +17,9 @@ export const usePriceLookup = (userSession) => {
       ...item,
       variant,
       condition,
-      item_variant: variant
+      item_variant: variant,
+      // Use the actual variant item's name if available
+      name: item.variants?.get(variant)?.name || item.name
     };
 
     const key = itemKey(itemConfig);
