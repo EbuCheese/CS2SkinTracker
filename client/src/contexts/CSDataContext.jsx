@@ -183,27 +183,65 @@ export const CSDataProvider = ({ children }) => {
                       baseName.startsWith('Souvenir Charm');
     
     if (isHighlight) {
-    // Highlights have "Souvenir" in the name but are NOT variants
-    return {
-      baseName,
-      variant: 'normal', // Database variant is normal
-      category: item.category || '',
-      pattern: item.pattern || '',
-      isNameBasedSouvenir: true // Flag for display purposes
-    };
-  }
-  
-  // Check for souvenir PACKAGE (case with souvenir in name)
-  const isSouvenirPackage = baseName.includes('Souvenir Package');
-  if (isSouvenirPackage) {
-    return {
-      baseName,
-      variant: 'normal', // Database variant is normal
-      category: item.category || '',
-      pattern: item.pattern || '',
-      isNameBasedSouvenir: true // Flag for display
-    };
-  }
+      return {
+        baseName,
+        variant: 'normal',
+        category: item.category || '',
+        pattern: item.pattern || '',
+        isNameBasedSouvenir: true
+      };
+    }
+    
+    // Check for souvenir PACKAGE (case with souvenir in name)
+    const isSouvenirPackage = baseName.includes('Souvenir Package');
+    if (isSouvenirPackage) {
+      return {
+        baseName,
+        variant: 'normal',
+        category: item.category || '',
+        pattern: item.pattern || '',
+        isNameBasedSouvenir: true
+      };
+    }
+
+    // Music Kit Boxes - GROUP by base name but flag for variant pre-selection
+    const isMusicKitBox = baseName.includes('Music Kit Box');
+    if (isMusicKitBox) {
+      const isStatTrak = baseName.startsWith('StatTrak™');
+      if (isStatTrak) {
+        baseName = baseName.replace('StatTrak™ ', '');
+        variant = 'stattrak';
+      }
+      
+      return {
+        baseName,
+        variant,
+        category: item.category || '',
+        pattern: item.pattern || '',
+        isMusicKitBox: true,
+        requiresVariantPreSelection: true // NEW FLAG
+      };
+    }
+
+    // Music Kits - GROUP by base name but flag for variant pre-selection
+    const isStatTrakMusicKit = baseName.startsWith('StatTrak™ Music Kit |');
+    const isNormalMusicKit = baseName.startsWith('Music Kit |');
+    
+    if (isStatTrakMusicKit || isNormalMusicKit) {
+      if (isStatTrakMusicKit) {
+        baseName = baseName.replace('StatTrak™ ', '');
+        variant = 'stattrak';
+      }
+      
+      return {
+        baseName,
+        variant,
+        category: item.category || '',
+        pattern: item.pattern || '',
+        isMusicKit: true,
+        requiresVariantPreSelection: true // NEW FLAG
+      };
+    }
     
     // Priority 1: Check boolean properties
     if (item.stattrak === true) {
@@ -216,25 +254,26 @@ export const CSDataProvider = ({ children }) => {
       if (baseName.startsWith('Souvenir ')) {
         baseName = baseName.replace('Souvenir ', '');
       }
-  } else {
-    // Priority 2: Fallback to name-based detection (backward compatibility)
-    if (baseName.startsWith('StatTrak™ ')) {
-      baseName = baseName.replace('StatTrak™ ', '');
-      variant = 'stattrak';
-    } else if (baseName.startsWith('Souvenir ')) {
-      baseName = baseName.replace('Souvenir ', '');
-      variant = 'souvenir';
+    } else {
+      // Priority 2: Fallback to name-based detection (backward compatibility)
+      if (baseName.startsWith('StatTrak™ ')) {
+        baseName = baseName.replace('StatTrak™ ', '');
+        variant = 'stattrak';
+      } else if (baseName.startsWith('Souvenir ')) {
+        baseName = baseName.replace('Souvenir ', '');
+        variant = 'souvenir';
+      }
     }
-  }
-  
-  return {
-    baseName,
-    variant,
-    category: item.category || '',
-    pattern: item.pattern || '',
-    isNameBasedSouvenir: false
+    
+    return {
+      baseName,
+      variant,
+      category: item.category || '',
+      pattern: item.pattern || '',
+      isNameBasedSouvenir: false,
+      isNameBasedStatTrak: false
+    };
   };
-};
 
   // Creates normalized search tokens from item information
   const createSearchTokens = (baseInfo) => {
