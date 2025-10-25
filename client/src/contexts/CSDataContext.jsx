@@ -121,7 +121,10 @@ export const CSDataProvider = ({ children }) => {
             variants: new Map(),
             searchTokens: createSearchTokens(baseInfo),
             metadata: extractMetadata(item, type),
-            isNameBasedSouvenir: baseInfo.isNameBasedSouvenir
+            isNameBasedSouvenir: baseInfo.isNameBasedSouvenir,
+            isMusicKit: baseInfo.isMusicKit,
+            isMusicKitBox: baseInfo.isMusicKitBox,
+            requiresVariantPreSelection: baseInfo.requiresVariantPreSelection
           });
         }
         
@@ -131,6 +134,10 @@ export const CSDataProvider = ({ children }) => {
           ...item,  // This should include the collections array
         });
         
+        if (!item.image) {
+            console.warn(`Item missing image:`, item.id, item.name);
+          }
+
         // Collect all search tokens for global autocomplete
         baseItem.searchTokens.forEach(token => searchTokens.add(token));
       });
@@ -219,7 +226,7 @@ export const CSDataProvider = ({ children }) => {
         category: item.category || '',
         pattern: item.pattern || '',
         isMusicKitBox: true,
-        requiresVariantPreSelection: true // NEW FLAG
+        requiresVariantPreSelection: true
       };
     }
 
