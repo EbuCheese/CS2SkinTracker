@@ -31,13 +31,18 @@ export const useItemFormatting = () => {
     const variant = item.variant || item.item_variant;
     
     // Check if this is a name-based souvenir (already has "Souvenir" in the name)
-    const isNameBasedSouvenir = item.isNameBasedSouvenir || 
+    const isNameBasedSouvenir = item.isNameBasedSouvenir ||
                               itemName.startsWith('Souvenir Charm') ||
                               itemName.includes('Souvenir Package');
 
     // Check if this is a name-based StatTrak™ (already has "StatTrak™" in the name)
+    // FIXED: Check for ANY music item (kit or box) with StatTrak™ prefix
     const isNameBasedStatTrak = item.isNameBasedStatTrak ||
-                              itemName.startsWith('StatTrak™ Music Kit');
+                              itemName.startsWith('StatTrak™ Music Kit') ||
+                              (itemName.startsWith('StatTrak™') && itemName.includes('Music Kit Box'));
+
+    // reliable check - ANY item with "Music Kit" in name
+    const isMusicItem = itemName.includes('Music Kit');
 
     const hasStarPrefix = itemName.startsWith('★');
     let displayName = '';
@@ -46,32 +51,38 @@ export const useItemFormatting = () => {
       displayName += '★ ';
     }
 
-    // Only add variant prefix if NOT a name-based variant
-    if (!isNameBasedSouvenir && !isNameBasedStatTrak) {
-      if (variant === 'souvenir') {
-        displayName += 'Souvenir ';
-      } else if (variant === 'stattrak') {
-        displayName += 'StatTrak™ ';
-      }
-    }
-
-    const baseName = hasStarPrefix ? itemName.substring(1).trim() : itemName;
-
-    if (format === 'simple') {
+    // For music items, ALWAYS use name as-is (they have correct variant in name already)
+    if (isMusicItem) {
+      const baseName = hasStarPrefix ? itemName.substring(1).trim() : itemName;
       displayName += baseName;
-      if (skinName) {
-        displayName += ` (${skinName})`;
+    } else {
+      // Only add variant prefix if NOT a name-based variant (for non-music items)
+      if (!isNameBasedSouvenir && !isNameBasedStatTrak) {
+        if (variant === 'souvenir') {
+          displayName += 'Souvenir ';
+        } else if (variant === 'stattrak') {
+          displayName += 'StatTrak™ ';
+        }
       }
-    } else if (format === 'compact') {
-      if (skinName) {
-        displayName += `${baseName || 'Custom'} ${skinName}`;
+
+      const baseName = hasStarPrefix ? itemName.substring(1).trim() : itemName;
+
+      if (format === 'simple') {
+        displayName += baseName;
+        if (skinName) {
+          displayName += ` (${skinName})`;
+        }
+      } else if (format === 'compact') {
+        if (skinName) {
+          displayName += `${baseName || 'Custom'} ${skinName}`;
+        } else {
+          displayName += baseName;
+        }
       } else {
         displayName += baseName;
-      }
-    } else {
-      displayName += baseName;
-      if (skinName) {
-        displayName += ` | ${skinName}`;
+        if (skinName) {
+          displayName += ` | ${skinName}`;
+        }
       }
     }
 
