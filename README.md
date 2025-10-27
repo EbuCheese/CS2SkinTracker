@@ -63,6 +63,12 @@
 - 🎓 **Learning**
     - Educational material to teach users best practices in counter-strike investing
 
+- ⛽ **Pump Indicator**
+    - Track items that may be starting to pump in price and gain traction
+
+- 💴 **Arbitrage**
+    - Find underpriced items selling for more on certain marketplaces
+
 ---
 
 ### ⚠️ Disclaimer
