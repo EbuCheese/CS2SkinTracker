@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Search, Loader2, TrendingUp, AlertTriangle  } from 'lucide-react';
 import CSItemSearch from '@/components/search/CSItemSearch';
+import { useCSData } from '@/contexts/CSDataContext';
 import { usePriceLookup } from '@/hooks/portfolio/usePriceLookup';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
 
@@ -13,12 +14,15 @@ const ITEM_TYPES = [
   { value: 'agents', label: 'Agents' },
   { value: 'keychains', label: 'Keychains' },
   { value: 'graffiti', label: 'Graffiti' },
-  { value: 'patches', label: 'Patches' }
+  { value: 'patches', label: 'Patches' },
+  { value: 'music_kits', label: 'Music Kits' },
+  { value: 'highlights', label: 'Highlights' },
 ];
 
 // pages/PricesPage.jsx - Revised UX
 const PricesPage = ({ userSession }) => {
   const location = useLocation();
+  const { lookupMaps } = useCSData();
 
   const [selectedType, setSelectedType] = useState('all');
   const [searchValue, setSearchValue] = useState('');
@@ -48,16 +52,28 @@ const PricesPage = ({ userSession }) => {
 
   // Auto-fetch on item selection
   const handleItemSelect = useCallback(async (item) => {
-    setSelectedItem(item);
-    setFilterCondition('all');
-    setFilterVariant('all');
-    
-    // AUTOMATICALLY fetch all prices
-    const result = await lookupAllPrices(item);
-    if (result.success) {
-      setAllPrices(result.results);
-    }
-  }, [lookupAllPrices]);
+  setSelectedItem(item);
+  
+  const requiresVariantPreSelection = item.requiresVariantPreSelection || false;
+  
+  let initialVariant = 'all';
+  
+  // For items that require variant pre-selection (music items), lock to selected variant
+  if (requiresVariantPreSelection && item.actualSelectedVariant) {
+    initialVariant = item.actualSelectedVariant;
+  } else if (item.actualSelectedVariant) {
+    // For other items, still respect pre-selection but allow changing
+    initialVariant = item.actualSelectedVariant;
+  }
+  
+  setFilterCondition('all');
+  setFilterVariant(initialVariant);
+  
+  const result = await lookupAllPrices(item);
+  if (result.success) {
+    setAllPrices(result.results);
+  }
+}, [lookupAllPrices]);
 
   // Item stat calculations
   // Filter results based on user selection
@@ -170,96 +186,321 @@ const filteredMarketPrices = useMemo(() =>
                   {selectedItem.baseName || selectedItem.name}
                 </h3>
                 
-                {/* Multi-line stats */}
-                <div className="space-y-1 text-xs">
-                <div className="flex justify-between text-gray-400">
-                  <span>Market prices:</span>
-                  <span className="text-white font-medium">{filteredMarketPrices}</span>
-                </div>    
-                {showFilters && (
-                  <>
-                    {hasConditions && (
-                      <div className="flex justify-between text-gray-400">
-                        <span>Conditions:</span>
-                        <span className="text-white font-medium">
-                          {new Set(filteredPrices.map(p => p.condition).filter(Boolean)).size}
-                        </span>
+                {/* Primary Stats Section */}
+                <div className="space-y-1 text-xs mt-3 pb-3 border-b border-gray-700">
+                  <div className="flex justify-between text-gray-400">
+                    <span>Market prices:</span>
+                    <span className="text-white font-medium">{filteredMarketPrices}</span>
+                  </div>    
+                  {showFilters && (
+                    <>
+                      {hasConditions && (
+                        <div className="flex justify-between text-gray-400">
+                          <span>Conditions:</span>
+                          <span className="text-white font-medium">
+                            {new Set(filteredPrices.map(p => p.condition).filter(Boolean)).size}
+                          </span>
+                        </div>
+                      )}
+                    
+                      {hasVariants && (
+                        <div className="flex justify-between text-gray-400">
+                          <span>Variants:</span>
+                          <span className="text-white font-medium">
+                            {new Set(filteredPrices.map(p => p.variant)).size}
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                
+                  {(filterCondition !== 'all' || filterVariant !== 'all') && (
+                    <div className="flex justify-between text-gray-400 pt-1 border-t border-gray-700/50">
+                      <span>Filtered from:</span>
+                      <span className="text-gray-500 font-medium">{totalMarketPrices} total</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Secondary Info Section - Context */}
+                <div className="mt-3 space-y-2">
+                  {/* Float Range */}
+                  {selectedItem.minFloat !== undefined && selectedItem.maxFloat !== undefined && (
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">Float range:</div>
+                      <div className="text-xs text-gray-400">
+                        {selectedItem.minFloat.toFixed(2)} - {selectedItem.maxFloat.toFixed(2)}
                       </div>
-                    )}
-                  
-                    {hasVariants && (
-                      <div className="flex justify-between text-gray-400">
-                        <span>Variants:</span>
-                        <span className="text-white font-medium">
-                          {new Set(filteredPrices.map(p => p.variant)).size}
-                        </span>
+                    </div>
+                  )}
+
+                  {/* Tournament (for stickers) */}
+                  {selectedItem.tournament && (
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">Tournament:</div>
+                      <div className="text-xs text-blue-400">
+                        {selectedItem.tournament.name || selectedItem.tournament}
                       </div>
-                    )}
-                  </>
-                )}
-              
-                {(filterCondition !== 'all' || filterVariant !== 'all') && (
-                  <div className="flex justify-between text-gray-400 pt-1 border-t border-gray-700">
-                    <span>Filtered from:</span>
-                    <span className="text-gray-500 font-medium">{totalMarketPrices} total</span>
-                  </div>
-                )}
-              </div>
+                    </div>
+                  )}
+
+                  {/* Show Found in - Collections/Cases */}
+                  {(() => {
+                    const displaySources = [];
+                    
+                    // Track which collections we've already handled via their cases
+                    const handledCollectionIds = new Set();
+                    
+                    // Process cases first
+                    const caseIds = new Set();
+                    
+                    // Gather case IDs from item's crates
+                    if (selectedItem.crates?.length > 0) {
+                      selectedItem.crates.forEach(id => caseIds.add(id));
+                    }
+                    
+                    // Reverse lookup for patches/music_kits
+                    if (lookupMaps.itemToCases?.has(selectedItem.id)) {
+                      lookupMaps.itemToCases.get(selectedItem.id).forEach(id => caseIds.add(id));
+                    }
+                    
+                    // For each case, find its associated collection
+                    caseIds.forEach(caseId => {
+                      const caseItem = lookupMaps.casesById.get(caseId);
+                      if (!caseItem) return;
+                      
+                      // Find collection that references this case
+                      let associatedCollection = null;
+                      if (selectedItem.collections?.length > 0) {
+                        for (const collectionId of selectedItem.collections) {
+                          const collection = lookupMaps.collectionsById.get(collectionId);
+                          if (collection?.crates?.includes(caseId)) {
+                            associatedCollection = collection;
+                            handledCollectionIds.add(collectionId);
+                            break;
+                          }
+                        }
+                      }
+                      
+                      displaySources.push({
+                        type: 'case',
+                        primary: caseItem,
+                        secondary: associatedCollection
+                      });
+                    });
+                    
+                    // Add drop-only collections (no associated case)
+                    if (selectedItem.collections?.length > 0) {
+                      selectedItem.collections.forEach(collectionId => {
+                        if (handledCollectionIds.has(collectionId)) return;
+                        
+                        const collection = lookupMaps.collectionsById.get(collectionId);
+                        if (!collection) return;
+                        
+                        // Only add if collection has no cases (drop-only)
+                        if (!collection.crates || collection.crates.length === 0) {
+                          displaySources.push({
+                            type: 'collection',
+                            primary: collection,
+                            secondary: null
+                          });
+                        }
+                      });
+                    }
+                    
+                    if (displaySources.length === 0) return null;
+                    
+                    return (
+                      <div>
+                        <div className="text-xs text-gray-500 mb-1">Found in:</div>
+                        <div className="space-y-1">
+                          {(() => {
+                            // Filter based on selected variant
+                            let sourcesToShow = displaySources;
+                            
+                            if (filterVariant === 'normal' || filterVariant === 'stattrak') {
+                              sourcesToShow = displaySources.filter(s => 
+                                !s.primary.name?.includes('Souvenir Package')
+                              );
+                            } else if (filterVariant === 'souvenir') {
+                              sourcesToShow = displaySources.filter(s => 
+                                s.primary.name?.includes('Souvenir Package')
+                              );
+                            }
+                            
+                            return sourcesToShow.map((source, idx) => (
+                              <div key={idx} className="text-xs text-gray-400 flex items-center gap-1">
+                                <span className="w-1 h-1 bg-orange-500 rounded-full"></span>
+                                <span>
+                                  {source.primary.name}
+                                  {source.secondary && (
+                                    <span className="text-gray-500"> ({source.secondary.name})</span>
+                                  )}
+                                </span>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Metadata (category, etc.) */}
+                  {selectedItem.metadata?.length > 0 && (
+                    <div>
+                      <div className="text-xs text-gray-500 mb-1">Category:</div>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedItem.metadata.slice(0, 2).map((meta, idx) => (
+                          <span key={idx} className="text-xs text-gray-400 px-2 py-0.5 bg-gray-700 rounded">
+                            {meta}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Filters (only show if item has options) */}
               {showFilters && (
                 <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
-                  <h4 className="text-white font-semibold mb-3 text-sm">Filters</h4>
-                  
-                  {/* Condition Filter */}
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-white font-semibold text-sm">Filters</h4>
+                    
+                    {/* Clear Filters Button - Top Right */}
+                    {(filterCondition !== 'all' || filterVariant !== 'all') && (
+                      <button
+                        onClick={() => {
+                          setFilterCondition('all');
+                          setFilterVariant('all');
+                        }}
+                        className="text-xs text-orange-400 hover:text-orange-300 transition-colors"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+    
+                  {/* Condition Filter - Compact Buttons */}
                   {hasConditions && (
                     <div className="mb-4">
                       <label className="block text-xs text-gray-400 mb-2">Condition</label>
-                      <select
-                        value={filterCondition}
-                        onChange={(e) => setFilterCondition(e.target.value)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:border-orange-500 focus:outline-none"
-                      >
-                        <option value="all">All Conditions</option>
-                        <option value="Factory New">Factory New</option>
-                        <option value="Minimal Wear">Minimal Wear</option>
-                        <option value="Field-Tested">Field-Tested</option>
-                        <option value="Well-Worn">Well-Worn</option>
-                        <option value="Battle-Scarred">Battle-Scarred</option>
-                      </select>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          onClick={() => setFilterCondition('all')}
+                          className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                            filterCondition === 'all'
+                              ? 'bg-orange-500 text-white'
+                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          }`}
+                        >
+                          All
+                        </button>
+                        {[
+                          { value: 'Factory New', label: 'FN', min: 0.00, max: 0.07 },
+                          { value: 'Minimal Wear', label: 'MW', min: 0.07, max: 0.15 },
+                          { value: 'Field-Tested', label: 'FT', min: 0.15, max: 0.37 },
+                          { value: 'Well-Worn', label: 'WW', min: 0.37, max: 0.44 },
+                          { value: 'Battle-Scarred', label: 'BS', min: 0.44, max: 1.00 }
+                        ].map(({ value, label, min, max }) => {
+                          // Validate if condition is available for this item
+                          const isAvailable = selectedItem.minFloat === undefined || 
+                                            selectedItem.maxFloat === undefined ||
+                                            (min < selectedItem.maxFloat && max > selectedItem.minFloat);
+                          
+                          return (
+                            <button
+                              key={value}
+                              onClick={() => isAvailable && setFilterCondition(value)}
+                              disabled={!isAvailable}
+                              className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                                filterCondition === value
+                                  ? 'bg-blue-500 text-white'
+                                  : isAvailable
+                                  ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                  : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                              }`}
+                              title={!isAvailable ? 'Not available for this item' : value}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 
-                  {/* Variant Filter */}
-                  {hasVariants && (
-                    <div className="mb-4">
-                      <label className="block text-xs text-gray-400 mb-2">Variant</label>
-                      <select
-                        value={filterVariant}
-                        onChange={(e) => setFilterVariant(e.target.value)}
-                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:border-orange-500 focus:outline-none"
-                      >
-                        <option value="all">All Variants</option>
-                        <option value="normal">Normal</option>
-                        {selectedItem.hasStatTrak && <option value="stattrak">StatTrak™</option>}
-                        {selectedItem.hasSouvenir && <option value="souvenir">Souvenir</option>}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Clear Filters */}
-                  {(filterCondition !== 'all' || filterVariant !== 'all') && (
+              {/* Variant Filter - Compact Buttons */}
+              {hasVariants && !selectedItem.requiresVariantPreSelection && (
+                <div>
+                  <label className="block text-xs text-gray-400 mb-2">Variant</label>
+                  <div className="flex flex-wrap gap-1.5">
                     <button
-                      onClick={() => {
-                        setFilterCondition('all');
-                        setFilterVariant('all');
-                      }}
-                      className="w-full text-xs text-orange-400 hover:text-orange-300 transition-colors"
+                      onClick={() => setFilterVariant('all')}
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                        filterVariant === 'all'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
                     >
-                      Clear Filters
+                      All
                     </button>
-                  )}
+                    <button
+                      onClick={() => setFilterVariant('normal')}
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                        filterVariant === 'normal'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      Normal
+                    </button>
+                    {selectedItem.hasStatTrak && (
+                      <button
+                        onClick={() => setFilterVariant('stattrak')}
+                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                          filterVariant === 'stattrak'
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        StatTrak™
+                      </button>
+                    )}
+                    {selectedItem.hasSouvenir && (
+                      <button
+                        onClick={() => setFilterVariant('souvenir')}
+                        className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                          filterVariant === 'souvenir'
+                            ? 'bg-yellow-600 text-white'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        Souvenir
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Show locked variant indicator for music items */}
+              {selectedItem.requiresVariantPreSelection && (
+                <div className="mt-3 pt-3 border-t border-gray-600">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-400">Showing prices for:</span>
+                    <span className={`px-2 py-1 rounded font-medium ${
+                      selectedItem.actualSelectedVariant === 'stattrak' 
+                        ? 'bg-orange-600 text-white' 
+                        : 'bg-blue-600 text-white'
+                    }`}>
+                      {selectedItem.actualSelectedVariant === 'stattrak' ? 'StatTrak™' : 'Normal'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Search again to view {selectedItem.actualSelectedVariant === 'stattrak' ? 'Normal' : 'StatTrak™'} prices
+                  </p>
+                </div>
+              )}
                 </div>
               )}
             </div>
@@ -271,8 +512,15 @@ const filteredMarketPrices = useMemo(() =>
                   {/* Group by variant */}
                   {Object.entries(
                     filteredPrices.reduce((acc, config) => {
+                      // detect name based variant
+                      const isNameBasedSouvenir = selectedItem.name?.startsWith('Souvenir Charm') ||
+                               selectedItem.name?.includes('Souvenir Package');
+
                       const variantLabel = config.variant === 'stattrak' ? 'StatTrak™' : 
-                                          config.variant === 'souvenir' ? 'Souvenir' : 'Normal';
+                        config.variant === 'souvenir' ? 'Souvenir' :
+                        isNameBasedSouvenir ? 'Souvenir' : // Override for name-based
+                        'Normal';
+
                       if (!acc[variantLabel]) acc[variantLabel] = [];
                       acc[variantLabel].push(config);
                       return acc;
