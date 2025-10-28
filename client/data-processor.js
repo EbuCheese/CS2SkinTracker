@@ -13,6 +13,7 @@ const fieldMappings = {
     rarity: item.rarity?.name || null,
     rarityColor: item.rarity?.color || null,
     pattern: item.pattern?.name || null,
+    phase: item.phase || null,
     minFloat: item.min_float,
     maxFloat: item.max_float,
     stattrak: item.stattrak || false,
@@ -51,22 +52,14 @@ const fieldMappings = {
     collections: item.collections?.map(c => c.id) || [],
   }),
  
-  keychains: (item) => {
-  const isHighlight = item.id.startsWith('highlight-');
-  
-  return {
+  keychains: (item) => ({
     id: item.id,
     name: item.name,
     image: item.image,
     rarity: item.rarity?.name || null,
     rarityColor: item.rarity?.color || null,
     collections: item.collections?.map(c => c.id) || [],
-    isHighlight: isHighlight,
-    souvenir: isHighlight,
-    // Will be enriched with description during preprocessing in CSDataContext
-    highlightId: isHighlight ? item.id.replace('highlight-', '') : null
-  };
-},
+}),
  
   graffiti: (item) => ({
     id: item.id,
@@ -105,7 +98,6 @@ const fieldMappings = {
     team1: item.team1,
     stage: item.stage,
     map: item.map,
-    keychainId: `highlight-${item.id}`,
     souvenir: true
   }),
   
