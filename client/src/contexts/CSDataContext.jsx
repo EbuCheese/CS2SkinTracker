@@ -69,35 +69,7 @@ export const CSDataProvider = ({ children }) => {
 
       // Enrich keychains with highlight descriptions
       let processedItems = items;
-      if (type === 'keychains') {
-        processedItems = items.map(keychain => {
-          if (keychain.isHighlight && keychain.highlightId) {
-            const highlight = rawData.highlights?.find(h => h.id === keychain.highlightId);
-            return {
-              ...keychain,
-              description: highlight?.description || null,
-              tournamentEvent: highlight?.tournamentEvent || null
-            };
-          }
-          return keychain;
-        });
-      }
       
-      // Existing highlight enrichment code stays the same
-      if (type === 'highlights') {
-        processedItems = items.map(highlight => {
-          const keychainId = `highlight-${highlight.id}`;
-          const keychain = rawData.keychains?.find(k => k.id === keychainId);
-          
-          return {
-            ...highlight,
-            rarity: keychain?.rarity || null,
-            rarityColor: keychain?.rarityColor || null,
-            collections: keychain?.collections || []
-          };
-        });
-      }
-
       // Map to group items by their base characteristics
       // Key format: "baseName_category_pattern" to ensure uniqueness
       const baseItemsMap = new Map();
@@ -116,6 +88,8 @@ export const CSDataProvider = ({ children }) => {
           baseItemsMap.set(baseKey, {
             id: baseKey,
             baseName: baseInfo.baseName,
+            hasStatTrak: false,
+            hasSouvenir: false, 
             category: baseInfo.category,
             pattern: baseInfo.pattern,
             variants: new Map(),
@@ -134,6 +108,13 @@ export const CSDataProvider = ({ children }) => {
           ...item,  // This should include the collections array
         });
         
+        if (baseInfo.variant === 'stattrak') {
+          baseItem.hasStatTrak = true;
+        }
+        if (baseInfo.variant === 'souvenir') {
+          baseItem.hasSouvenir = true;
+        }
+
         if (!item.image) {
             console.warn(`Item missing image:`, item.id, item.name);
           }
@@ -161,7 +142,7 @@ export const CSDataProvider = ({ children }) => {
         itemType: type // Tag with source type
       }));
       
-      if (type !== 'highlights' && type !== 'collections') {
+      if (type !== 'collections') {
         unifiedIndex.items.push(...typeItems);
       }
     });
@@ -184,20 +165,6 @@ export const CSDataProvider = ({ children }) => {
   const extractBaseItemInfo = (item) => {
     let baseName = item.name;
     let variant = 'normal';
-    
-    // Check if this is a highlight by ID pattern (most reliable)
-    const isHighlight = item.id?.startsWith('highlight-') || 
-                      baseName.startsWith('Souvenir Charm');
-    
-    if (isHighlight) {
-      return {
-        baseName,
-        variant: 'normal',
-        category: item.category || '',
-        pattern: item.pattern || '',
-        isNameBasedSouvenir: true
-      };
-    }
     
     // Check for souvenir PACKAGE (case with souvenir in name)
     const isSouvenirPackage = baseName.includes('Souvenir Package');
@@ -284,31 +251,42 @@ export const CSDataProvider = ({ children }) => {
 
   // Creates normalized search tokens from item information
   const createSearchTokens = (baseInfo) => {
-    const tokens = new Set();
-    
-    // Normalizes text for consistent searching
-    const normalizeText = (text) => text.toLowerCase()
-      .replace(/[★]/g, 'star')
-      .replace(/[|]/g, ' ')
-      .replace(/[^\w\s\-]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    // Add full name as a searchable token
-    const fullName = normalizeText(baseInfo.baseName);
-    tokens.add(fullName);
-    
-    // Add individual words as tokens (minimum 2 characters to avoid noise)
-    fullName.split(/[\s\-]+/)
-      .filter(word => word.length >= 2)
-      .forEach(word => tokens.add(word));
-    
-    // Add category and pattern as additional searchable terms
-    if (baseInfo.category) tokens.add(normalizeText(baseInfo.category));
-    if (baseInfo.pattern) tokens.add(normalizeText(baseInfo.pattern));
-    
-    return Array.from(tokens);
-  };
+  const tokens = new Set();
+  
+  const normalizeText = (text) => text.toLowerCase()
+    .replace(/[★]/g, 'star')
+    .replace(/[|]/g, ' ')
+    .replace(/[^\w\s\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  const fullName = normalizeText(baseInfo.baseName);
+  
+  // Add full name (highest priority)
+  tokens.add(fullName);
+  
+  // Add individual words with word boundary markers
+  fullName.split(/[\s\-]+/)
+    .filter(word => word.length >= 2)
+    .forEach(word => {
+      tokens.add(word); // Exact word
+      tokens.add(`^${word}`); // Word starts with
+    });
+  
+  if (baseInfo.category) {
+    const cat = normalizeText(baseInfo.category);
+    tokens.add(cat);
+    tokens.add(`^${cat}`);
+  }
+  
+  if (baseInfo.pattern) {
+    const pat = normalizeText(baseInfo.pattern);
+    tokens.add(pat);
+    tokens.add(`^${pat}`);
+  }
+  
+  return Array.from(tokens);
+};
 
   // Creates an inverted index for efficient text searching
   const createInvertedIndex = (items) => {
@@ -348,11 +326,6 @@ export const CSDataProvider = ({ children }) => {
       break;
       case 'highlights':
         if (item.description) {
-          metadata.push(item.description);
-        }
-        break;
-      case 'keychains':
-        if (item.isHighlight && item.description) {
           metadata.push(item.description);
         }
         break;
@@ -609,21 +582,6 @@ export const CSDataProvider = ({ children }) => {
         const map = lookupMaps[mapKey];
         if (!map) return [];
         return ids.map(id => map.get(id)).filter(Boolean);
-      },
-
-      // Helper for getting enriched highlight data
-      getEnrichedHighlight: (highlightId) => {
-        return lookupMaps.highlightsById.get(highlightId) || null;
-      },
-
-      // Get regular keychains (excludes highlights)
-      getRegularKeychains: () => {
-        return data.keychains?.filter(k => !k.isHighlight) || [];
-      },
-
-      // Get all keychains including highlights
-      getAllKeychains: () => {
-        return data.keychains || [];
       }
       }}>
       {children}
