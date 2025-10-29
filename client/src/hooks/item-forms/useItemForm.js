@@ -212,6 +212,12 @@ export const useItemForm = (currentCategory, selectedCategory) => {
   const isNameBasedStatTrak = item.isNameBasedStatTrak ||
                              item.name?.startsWith('StatTrak™ Music Kit');
   
+  
+  const hasStatTrakVariant = !isNameBasedSouvenir && !isNameBasedStatTrak && 
+                            (item.hasStatTrak || item.variants?.has('stattrak'));
+  const hasSouvenirVariant = !isNameBasedSouvenir && !isNameBasedStatTrak && 
+                            (item.hasSouvenir || item.variants?.has('souvenir'));
+  
   dispatch({
     type: ACTION_TYPES.SET_ITEM_SELECTED,
     payload: {
@@ -236,9 +242,9 @@ export const useItemForm = (currentCategory, selectedCategory) => {
       isNameBasedSouvenir: isNameBasedSouvenir,
       isNameBasedStatTrak: isNameBasedStatTrak,
       
-      // Disable variant switching for name-based variants
-      hasStatTrak: !isNameBasedSouvenir && !isNameBasedStatTrak && Boolean(item.hasStatTrak),
-      hasSouvenir: !isNameBasedSouvenir && !isNameBasedStatTrak && Boolean(item.hasSouvenir),
+      // Use computed flags that check both properties
+      hasStatTrak: hasStatTrakVariant,
+      hasSouvenir: hasSouvenirVariant,
       
       isItemSelected: true,
       selectedItemId: item.id || item.name
