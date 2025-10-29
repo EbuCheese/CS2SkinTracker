@@ -5,10 +5,26 @@ import { useCSData } from '@/contexts/CSDataContext';
 import { useAdvancedDebounce } from '@/hooks/util';
 import { ImageWithLoading } from '@/components/ui';
 
+const getTypeDisplayName = (type) => {
+  const displayMap = {
+    'music_kits': 'Music Kits',
+    'liquids': 'Liquids',
+    'cases': 'Cases',
+    'stickers': 'Stickers',
+    'agents': 'Agents',
+    'keychains': 'Keychains',
+    'graffiti': 'Graffiti',
+    'patches': 'Patches',
+    'highlights': 'Highlights',
+    'all': 'items'
+  };
+  return displayMap[type] || type;
+};
+
 // CSItemSearch Component - Advanced search interface for CS2 items
 const CSItemSearch = ({ 
   type = 'all', 
-  placeholder = 'Search items...', 
+  placeholder, 
   onSelect, 
   value = '',
   onChange,
@@ -25,110 +41,151 @@ const CSItemSearch = ({
   const [isOpen, setIsOpen] = useState(false); // Dropdown visibility
   const [selectedVariant, setSelectedVariant] = useState({}); // Variant selection per item
 
+  const defaultPlaceholder = placeholder || `Search ${getTypeDisplayName(type)}...`;
+
   // Process and filter data for the current item type
   const typeData = useMemo(() => {
-    if (type === 'all') {
-      return unifiedSearchIndex; // Use unified index
-    }
-
-    const rawData = getSearchIndexForType(type);
+  if (type === 'all') {
+    // Add null check for unifiedSearchIndex
+    if (!unifiedSearchIndex) return null;
     
-    // Return unfiltered data if no filtering needed
-    if (!rawData || !excludeSpecialItems) {
-      return rawData;
-    }
-
-    // Filter out knives and gloves (items starting with ★)
-    const filteredItems = rawData.items.filter(item => {
-      // Validate item structure
-      if (!item || typeof item !== 'object') return false;
-      
-      const baseName = item.baseName || '';
-      const name = item.name || '';
-      
-      // Filter out items that start with ★ (knives and gloves)
-      return !baseName.startsWith('★') && !name.startsWith('★');
-    });
-
-    // Rebuild the search index with filtered items
-    const newSearchIndex = new Map();
-    filteredItems.forEach((item, index) => {
+    // Filter out collections from unified search
+    const filteredUnifiedIndex = {
+      items: unifiedSearchIndex.items.filter(item => item.itemType !== 'collections'),
+      searchIndex: new Map()
+    };
+    
+    // Rebuild search index without collections
+    filteredUnifiedIndex.items.forEach((item, index) => {
       item.searchTokens.forEach(token => {
-        if (!newSearchIndex.has(token)) {
-          newSearchIndex.set(token, []);
+        if (!filteredUnifiedIndex.searchIndex.has(token)) {
+          filteredUnifiedIndex.searchIndex.set(token, []);
         }
-        newSearchIndex.get(token).push(index);
+        filteredUnifiedIndex.searchIndex.get(token).push(index);
       });
     });
+    
+    return filteredUnifiedIndex;
+  }
 
-    return {
-      items: filteredItems,
-      searchIndex: newSearchIndex
-    };
-  }, [type, searchIndices, unifiedSearchIndex, getSearchIndexForType, excludeSpecialItems]);
+  const rawData = getSearchIndexForType(type);
+  
+  // Return null if no data (will show loading state)
+  if (!rawData) return null;
+  
+  // Return unfiltered data if no filtering needed
+  if (!excludeSpecialItems) {
+    return rawData;
+  }
+
+  // Filter out knives and gloves (items starting with ★)
+  const filteredItems = rawData.items.filter(item => {
+    // Validate item structure
+    if (!item || typeof item !== 'object') return false;
+    
+    const baseName = item.baseName || '';
+    const name = item.name || '';
+    
+    // Filter out items that start with ★ (knives and gloves)
+    return !baseName.startsWith('★') && !name.startsWith('★');
+  });
+
+  // Rebuild the search index with filtered items
+  const newSearchIndex = new Map();
+  filteredItems.forEach((item, index) => {
+    item.searchTokens.forEach(token => {
+      if (!newSearchIndex.has(token)) {
+        newSearchIndex.set(token, []);
+      }
+      newSearchIndex.get(token).push(index);
+    });
+  });
+
+  return {
+    items: filteredItems,
+    searchIndex: newSearchIndex
+  };
+}, [type, searchIndices, unifiedSearchIndex, getSearchIndexForType, excludeSpecialItems]);
 
   // Enhanced search function using preprocessed inverted index
   const performSearch = useCallback((query) => {
-    if (!query || !typeData || query.length < 2) {
-      setResults([]);
-      setIsOpen(false);
-      return;
-    }
+  if (!query || !typeData || query.length < 2) {
+    setResults([]);
+    setIsOpen(false);
+    return;
+  }
 
-    // Normalize query for consistent searching
-    const normalizedQuery = query.toLowerCase()
-      .replace(/[★]/g, 'star')
-      .replace(/[|]/g, ' ')
-      .replace(/[^\w\s\-]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+  const normalizedQuery = query.toLowerCase()
+    .replace(/[★]/g, 'star')
+    .replace(/[|]/g, ' ')
+    .replace(/[^\w\s\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-    // Split into individual search terms (minimum 2 characters)
-    const queryWords = normalizedQuery.split(/\s+/).filter(w => w.length >= 2);
-    const { items, searchIndex } = typeData;
-    let matchingIndices = [];
+  const queryWords = normalizedQuery.split(/\s+/).filter(w => w.length >= 2);
+  const { items, searchIndex } = typeData;
+  
+  const itemScores = new Map();
 
-    // Use the inverted index for efficient searching
-    queryWords.forEach((word, wordIndex) => {
-      const wordMatches = [];
+  // PHASE 1: Direct name matching for phrase queries
+  if (queryWords.length > 1) { // Multi-word query
+    items.forEach((item, idx) => {
+      // Check baseName and all variant names
+      const namesToCheck = [
+        item.baseName?.toLowerCase(),
+        item.name?.toLowerCase(),
+        ...Array.from(item.variants?.values() || []).map(v => v.name?.toLowerCase())
+      ].filter(Boolean);
       
-      // Look for exact matches and partial matches in the inverted index
-      for (let [token, indices] of searchIndex) {
-        if (token === word) {
-          // Exact match - highest priority
-          wordMatches.push(...indices);
-        } else if (token.includes(word) || word.includes(token)) {
-          // Partial match - lower priority
-          wordMatches.push(...indices);
+      namesToCheck.forEach(name => {
+        // Exact phrase match in name
+        if (name.includes(normalizedQuery)) {
+          const currentScore = itemScores.get(idx) || 0;
+          // Add score based on how early in the name the match appears
+          const matchPosition = name.indexOf(normalizedQuery);
+          const positionBonus = matchPosition === 0 ? 200 : 100; // Boost if starts with query
+          itemScores.set(idx, currentScore + 500 + positionBonus);
         }
+      });
+    });
+  }
+
+  // PHASE 2: Token-based matching for individual words
+  queryWords.forEach((word, wordIndex) => {
+    
+    for (let [token, indices] of searchIndex) {
+      let score = 0;
+      
+      if (token === word) {
+        score = 100; // Exact match
+      } else if (token === `^${word}`) {
+        score = 90; // Word starts with
+      } else if (token.startsWith(word)) {
+        score = 50; // Token starts with query
+      } else if (token.includes(word)) {
+        score = 20; // Partial match
       }
       
-      if (wordIndex === 0) {
-        matchingIndices = wordMatches;
-      } else {
-        // For multiple words, find intersection
-        matchingIndices = matchingIndices.filter(idx => wordMatches.includes(idx));
+      if (score > 0) {
+        indices.forEach(idx => {
+          const currentScore = itemScores.get(idx) || 0;
+          itemScores.set(idx, currentScore + score);
+        });
       }
-    });
+    }
+  });
 
-    // Remove duplicates and get actual items
-    const uniqueIndices = [...new Set(matchingIndices)];
-    const searchResults = uniqueIndices
-      .slice(0, maxResults)
-      .map(idx => items[idx])
-      .filter(Boolean);
+  // Sort by score descending and take top results
+  const rankedResults = Array.from(itemScores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, maxResults)
+    .map(([idx]) => items[idx])
+    .filter(Boolean);
 
-    // Sort results by relevance (exact matches first)
-    searchResults.sort((a, b) => {
-      const aExact = a.searchTokens.some(token => token === normalizedQuery) ? 1 : 0;
-      const bExact = b.searchTokens.some(token => token === normalizedQuery) ? 1 : 0;
-      return bExact - aExact;
-    });
-
-    console.log(`Search for "${query}" returned ${searchResults.length} results`);
-    setResults(searchResults);
-    setIsOpen(searchResults.length > 0);
-  }, [typeData, maxResults]);
+  console.log(`Search for "${query}" returned ${rankedResults.length} results`);
+  setResults(rankedResults);
+  setIsOpen(rankedResults.length > 0);
+}, [typeData, maxResults]);
 
   // Debounced search function to prevent excessive API calls
   const { debouncedFunction: debouncedSearch } = useAdvancedDebounce(
@@ -146,30 +203,38 @@ const CSItemSearch = ({
   }, [onChange, debouncedSearch]);
 
   // Handle item selection with variant support
-const handleItemSelect = useCallback((item, variant = 'normal') => {
-  // Get the appropriate variant item from the Map
-  const selectedItem = item.variants.get(variant) || item.variants.get('normal') || Array.from(item.variants.values())[0];
-  
-  // Check if this is any music kit box (normal or StatTrak)
-  const isMusicKitBox = selectedItem.name?.includes('Music Kit Box');
-  
-  // Add variant info to the selected item for form handling
-  const itemWithVariant = {
-    ...selectedItem,
-    selectedVariant: variant,
-    hasStatTrak: item.variants.has('stattrak') && !isMusicKitBox, // Disable variants for all music kit boxes
-    hasSouvenir: item.variants.has('souvenir') && !isMusicKitBox, // Disable variants for all music kit boxes
-    baseName: item.baseName,
-    itemType: item.itemType
-  };
-  
-  onSelect?.(itemWithVariant);
+  const handleItemSelect = useCallback((item, variant = 'normal') => {
+    const isHighlight = item.itemType === 'highlights';
+    const requiresVariantPreSelection = item.requiresVariantPreSelection || false;
+    
+    const finalVariant = isHighlight ? 'souvenir' : variant;
+    
+    const selectedItem = item.variants.get(finalVariant) || 
+                        item.variants.get('normal') || 
+                        Array.from(item.variants.values())[0];
 
-  // Close dropdown and clear results
-  setIsOpen(false);
-  setResults([]);
-  setSelectedVariant({});
-}, [onSelect]);
+    const itemWithVariant = {
+      ...selectedItem,
+      // CRITICAL: Ensure the name is the full variant name from the database
+      name: selectedItem.name, // This includes "StatTrak™" prefix if stattrak
+      selectedVariant: finalVariant,
+      hasStatTrak: !isHighlight && !requiresVariantPreSelection && Boolean(item.hasStatTrak),
+      hasSouvenir: !isHighlight && !requiresVariantPreSelection && Boolean(item.hasSouvenir),
+      baseName: item.baseName,
+      itemType: item.itemType,
+      actualSelectedVariant: finalVariant,
+      requiresVariantPreSelection: requiresVariantPreSelection,
+      isMusicKit: item.isMusicKit,
+      isMusicKitBox: item.isMusicKitBox,
+      // NEW: Pass the variant-specific ID
+      id: selectedItem.id
+    };
+    
+    onSelect?.(itemWithVariant);
+    setIsOpen(false);
+    setResults([]);
+    setSelectedVariant({});
+  }, [onSelect]);
 
   // Handle variant selection for individual items
   const handleVariantChange = useCallback((itemId, variant) => {
@@ -239,7 +304,7 @@ const handleItemSelect = useCallback((item, variant = 'normal') => {
         <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
         <input
           type="text"
-          placeholder={placeholder}
+          placeholder={defaultPlaceholder}
           value={value}
           onChange={handleInputChange}
           onFocus={handleFocus}
@@ -290,56 +355,148 @@ const OptimizedSearchResultItem = React.memo(({
   onClick, 
   showLargeView = false, 
 }) => {
-  const currentVariant = selectedVariant || 'normal';
+  const { lookupMaps } = useCSData();
   
-  // Get the current variant item from the Map
+  const currentVariant = selectedVariant || 'normal';
   const currentVariantItem = item.variants.get(currentVariant) || 
                            item.variants.get('normal') || 
                            Array.from(item.variants.values())[0];
 
-  // Get rarity color with fallback
   const getRarityColor = (rarity, rarityColor) => {
     return rarityColor || '#6B7280';
   };
 
-  // Extract metadata and set responsive sizing
   const metadata = item.metadata || [];
   const imageSize = showLargeView ? 'w-16 h-16' : 'w-12 h-12';
   const paddingSize = showLargeView ? 'p-4' : 'p-3';
-
-  // Get available variants from the Map
   const availableVariants = Array.from(item.variants.keys());
 
-  // Event handlers
-  const handleVariantButtonClick = useCallback((e, variant) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onVariantChange(variant);
-  }, [onVariantChange]);
+  // Check if this is a skin
+  const isSkin = item.itemType === 'skins' || 
+                 currentVariantItem?.category === 'Rifles' || 
+                 currentVariantItem?.category === 'Pistols' ||
+                 currentVariantItem?.category === 'SMGs' ||
+                 currentVariantItem?.category === 'Heavy' ||
+                 currentVariantItem?.category === 'Knives' ||
+                 currentVariantItem?.category === 'Gloves';
+  
+  // Check if this is a knife or glove (special items that come from cases, not collections)
+  const isKnifeOrGlove = currentVariantItem?.category === 'Knives' || 
+                         currentVariantItem?.category === 'Gloves';
+  
+  // Resolve collections and crates for regular skins
+  const sources = useMemo(() => {
+    if (!isSkin || isKnifeOrGlove) {
+      return { items: [], all: [], total: 0 };
+    }
+    
+    const allSources = [];
+    
+    // Prioritize cases (most actionable info)
+    if (currentVariantItem?.crates?.length > 0) {
+      currentVariantItem.crates.forEach(id => {
+        const crate = lookupMaps.casesById.get(id);
+        if (crate) {
+          allSources.push({ type: 'case', data: crate });
+        }
+      });
+    }
+    
+    // Only add drop-only collections (collections without cases)
+    if (allSources.length === 0 && currentVariantItem?.collections?.length > 0) {
+      currentVariantItem.collections.forEach(id => {
+        const collection = lookupMaps.collectionsById.get(id);
+        // Only show if it's a drop-only collection
+        if (collection && (!collection.crates || collection.crates.length === 0)) {
+          allSources.push({ type: 'collection', data: collection });
+        }
+      });
+    }
+    
+    return {
+      items: allSources.slice(0, 1),
+      all: allSources,
+      total: allSources.length
+    };
+  }, [isSkin, isKnifeOrGlove, currentVariantItem?.collections, currentVariantItem?.crates, lookupMaps]);
 
-  // Use onMouseDown and attach to the entire container, not just flex div
+// Enhanced source resolver for all item types (non-skins)
+const itemSource = useMemo(() => {
+  if (isSkin || !currentVariantItem) return null;
+
+  let sources = [];
+
+  // Prioritize cases
+  if (currentVariantItem.crates?.length > 0) {
+    sources = currentVariantItem.crates
+      .map(id => lookupMaps.casesById.get(id))
+      .filter(Boolean);
+  }
+
+  // Reverse lookup for patches/music_kits
+  if (sources.length === 0 && lookupMaps.itemToCases?.has(currentVariantItem.id)) {
+    const caseIds = lookupMaps.itemToCases.get(currentVariantItem.id);
+    sources = caseIds
+      .map(id => lookupMaps.casesById.get(id))
+      .filter(Boolean);
+  }
+
+  // Only check collections if no cases found
+  if (sources.length === 0 && currentVariantItem.collections?.length > 0) {
+    sources = currentVariantItem.collections
+      .map(id => lookupMaps.collectionsById.get(id))
+      .filter(Boolean)
+      // Only show drop-only collections
+      .filter(col => !col.crates || col.crates.length === 0);
+  }
+
+  if (sources.length === 0) return null;
+
+  return {
+    primaryName: sources[0]?.name,
+    allNames: sources.map(s => s.name),
+    total: sources.length
+  };
+}, [isSkin, currentVariantItem, lookupMaps]);
+
+  // Resolve cases for knives/gloves (they're in containsRare)
+  const cases = useMemo(() => {
+    if (!isKnifeOrGlove || !currentVariantItem?.crates?.length) {
+      return { items: [], all: [], total: 0 };
+    }
+    const allCases = currentVariantItem.crates
+      .map(id => lookupMaps.casesById.get(id))
+      .filter(Boolean);
+    
+    return {
+      items: allCases.slice(0, 1),
+      all: allCases,  // Keep all for tooltip
+      total: allCases.length
+    };
+  }, [isKnifeOrGlove, currentVariantItem?.crates, lookupMaps.casesById]);
+
+
+  const requiresVariantPreSelection = item.requiresVariantPreSelection || false;
+
+  // For music items, clicking should use the currently selected variant
   const handleItemMouseDown = useCallback((e) => {
-    // Only trigger if we're not clicking on a variant button
     if (!e.target.closest('button')) {
       e.preventDefault();
-      onClick(currentVariant);
+      // For music items, pass the selected variant; for others, pass current
+      onClick(requiresVariantPreSelection ? currentVariant : currentVariant);
     }
-  }, [onClick, currentVariant]);
+  }, [onClick, currentVariant, requiresVariantPreSelection]);
 
-  // Skip rendering if no variant item found
   if (!currentVariantItem) {
     return null;
   }
 
   return (
-    // Move the mouseDown handler to the entire container
     <div 
       className={`${paddingSize} hover:bg-gray-700 cursor-pointer transition-colors border-b border-gray-700 last:border-b-0`}
       onMouseDown={handleItemMouseDown}
     >
-      {/* Main item content - Remove the mouseDown handler from here */}
       <div className="flex items-center">
-        {/* Item Image */}
         <div className={`relative ${imageSize} ${showLargeView ? 'mr-4' : 'mr-3'} flex-shrink-0 bg-gray-700 rounded overflow-hidden`}>
           <ImageWithLoading
             src={currentVariantItem?.image}
@@ -353,27 +510,108 @@ const OptimizedSearchResultItem = React.memo(({
           />
         </div>
 
-        {/* Item Information */}
         <div className="flex-1 min-w-0">
-          {/* Item Name */}
           <p className={`text-white font-medium truncate ${showLargeView ? 'text-base' : 'text-sm'}`}>
             {currentVariantItem.name}
           </p>
 
-          {/* Item Metadata */}
-          {metadata.length > 0 && (
+          {/* Show category AND collection/case for skins */}
+          {(isSkin || metadata.length > 0 || itemSource) && (
             <div className={`flex items-center space-x-2 ${showLargeView ? 'text-sm mt-1' : 'text-xs'}`}>
-              {metadata.map((text, index) => (
-                <React.Fragment key={`${text}-${index}`}>
-                  {index > 0 && <span className="text-gray-500">•</span>}
-                  <span className="text-gray-400">{text}</span>
-                </React.Fragment>
-              ))}
+              {isSkin ? (
+                <>
+                  {/* Show category first */}
+                  {currentVariantItem.category && (
+                    <span className="text-gray-400">{currentVariantItem.category}</span>
+                  )}
+                  
+                  {/* Knives/gloves show cases */}
+                  {isKnifeOrGlove ? (
+                    cases.items.length > 0 && (
+                      <>
+                        <span className="text-gray-500">•</span>
+                        <span 
+                          className="text-gray-400 truncate" 
+                          title={
+                            cases.total > 1
+                              ? cases.all.map(c => c.name).join('\n')
+                              : cases.items[0].name
+                          }
+                        >
+                          {cases.items[0].name}
+                          {cases.total > 1 && (
+                            <span className="text-gray-500 ml-1">+{cases.total - 1}</span>
+                          )}
+                        </span>
+                      </>
+                    )
+                  ) : (
+                    /* Regular skins show collections AND crates */
+                    sources.items.length > 0 && (
+                      <>
+                        <span className="text-gray-500">•</span>
+                        <span 
+                          className="text-gray-400 truncate" 
+                          title={
+                            sources.total > 1
+                              ? sources.all.map(s => s.data.name).join('\n')
+                              : sources.items[0].data.name
+                          }
+                        >
+                          {sources.items[0].data.name}
+                          {sources.total > 1 && (
+                            <span className="text-gray-500 ml-1">+{sources.total - 1}</span>
+                          )}
+                        </span>
+                      </>
+                    )
+                  )}
+                </>
+              ): (
+                <>
+                  {/* Show regular metadata with tooltip for long text */}
+                  {metadata.map((text, index) => {
+                    // Check if this is a long description (likely from highlights)
+                    const isLongDescription = text.length > 60;
+                    
+                    return (
+                      <React.Fragment key={`${text}-${index}`}>
+                        {index > 0 && <span className="text-gray-500">•</span>}
+                        <span 
+                          className="text-gray-400 truncate" 
+                          title={isLongDescription ? text : undefined}
+                        >
+                          {text}
+                        </span>
+                      </React.Fragment>
+                    );
+                  })}
+                  
+                  {/* Then show source (collection/case) */}
+                  {itemSource && (
+                    <>
+                      {metadata.length > 0 && <span className="text-gray-500">•</span>}
+                      <span
+                        className="text-gray-400 truncate"
+                        title={
+                          itemSource.total > 1
+                            ? itemSource.allNames.join('\n') 
+                            : itemSource.primaryName
+                        }
+                      >
+                        {itemSource.primaryName}
+                        {itemSource.total > 1 && (
+                          <span className="text-gray-500 ml-1">+{itemSource.total - 1}</span>
+                        )}
+                      </span>
+                    </>
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>
 
-        {/* Rarity Badge */}
         {currentVariantItem.rarity && (
           <div className="flex-shrink-0 ml-2">
             <span 
@@ -388,29 +626,49 @@ const OptimizedSearchResultItem = React.memo(({
         )}
       </div>
 
-      {/* Variant Selection Buttons */}
+      {/* Variant Selection Buttons - ALWAYS show if variants exist */}
       {availableVariants.length > 1 && (
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-600">
-          <span className="text-xs text-gray-400 mr-2">Variant:</span>
-          {availableVariants.map(variant => (
-            <button
-              key={variant}
-              onMouseDown={(e) => handleVariantButtonClick(e, variant)}
-              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                currentVariant === variant
-                  ? variant === 'stattrak' 
-                    ? 'bg-orange-600 text-white' 
-                    : variant === 'souvenir'
-                    ? 'bg-yellow-600 text-white'
-                    : 'bg-blue-600 text-white'
-                  : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-              }`}
-            >
-              {variant === 'normal' ? 'Normal' : 
-               variant === 'stattrak' ? 'StatTrak™' : 
-               'Souvenir'}
-            </button>
-          ))}
+          <span className="text-xs text-gray-400 mr-2">
+            {requiresVariantPreSelection ? 'Select:' : 'Variant:'}
+          </span>
+          {availableVariants.map(variant => {
+            const variantItem = item.variants.get(variant);
+            
+            let variantLabel = variant === 'normal' ? 'Normal' : 
+                              variant === 'stattrak' ? 'StatTrak™' : 
+                              'Souvenir';
+                        
+            return (
+              <button
+                key={variant}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (requiresVariantPreSelection) {
+                    // For music items, selecting variant should immediately trigger selection
+                    onVariantChange(variant);
+                    // Small delay to ensure state updates
+                    setTimeout(() => onClick(variant), 50);
+                  } else {
+                    // For regular items, just update the preview
+                    onVariantChange(variant);
+                  }
+                }}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  currentVariant === variant
+                    ? variant === 'stattrak' 
+                      ? 'bg-orange-600 text-white' 
+                      : variant === 'souvenir'
+                      ? 'bg-yellow-600 text-white'
+                      : 'bg-blue-600 text-white'
+                    : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                }`}
+              >
+                {variantLabel}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
