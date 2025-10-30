@@ -5,7 +5,7 @@ import { supabase } from '@/supabaseClient';
 import { ItemCard } from '@/components/item-display';
 import { AddItemForm } from '@/components/forms'
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
-import { useScrollLock, useAdvancedDebounce } from '@/hooks/util';
+import { useScrollLock, useAdvancedDebounce, useItemFormatting } from '@/hooks/util';
 import { usePortfolioData, usePortfolioFiltering, usePortfolioSummary, usePortfolioTabs, useSingleItemPrice } from '@/hooks/portfolio';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -47,6 +47,9 @@ const InvestmentsPage = ({ userSession }) => {
 
   // Investment data from hook
   const { investments, soldItems, portfolioSummary, loading, error, errorDetails, refetch, retry, setInvestments, setSoldItems } = usePortfolioData(userSession);
+
+  // displayName for toasts
+  const { displayName } = useItemFormatting();
 
   // Single price data hook
   const { refreshSingleItemPrice } = useSingleItemPrice();
@@ -107,35 +110,21 @@ const InvestmentsPage = ({ userSession }) => {
 
   // helper for building item name
   const buildDetailedItemName = (item) => {
-  let displayName = '';
-  
-  // Handle different field names for sold items vs active investments
-  const variant = item.item_variant || item.variant;
-  const name = item.item_name || item.name;
-  const skinName = item.item_skin_name || item.skin_name;
-  const condition = item.item_condition || item.condition;
-  
-  // Add variant prefix
-  if (variant === 'souvenir') {
-    displayName += 'Souvenir ';
-  } else if (variant === 'stattrak') {
-    displayName += 'StatTrak™ ';
-  }
-  
-  // Add base name and skin name
-  if (skinName) {
-    displayName += `${name || 'Custom'} ${skinName}`;
-  } else {
-    displayName += name;
-  }
-  
-  // Add condition in parentheses if present
-  if (condition) {
-    displayName += ` (${condition})`;
-  }
-  
-  return displayName;
-};
+    // Use the formatting hook instead of manual construction
+    const normalizedItem = {
+      name: item.item_name || item.name,
+      skin_name: item.item_skin_name || item.skin_name,
+      condition: item.item_condition || item.condition,
+      variant: item.item_variant || item.variant,
+      isNameBasedSouvenir: item.isNameBasedSouvenir,
+      isNameBasedStatTrak: item.isNameBasedStatTrak
+    };
+    
+    return displayName(normalizedItem, { 
+      includeCondition: true, 
+      format: 'full'
+    });
+  };
 
 // Helper function to update item state
 const updateItemState = useCallback((itemId, updates) => {
