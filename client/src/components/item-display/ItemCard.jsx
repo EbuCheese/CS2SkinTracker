@@ -236,12 +236,28 @@ const salesSummary = useMemo(() => {
   baseMetrics.quantity
 ]);
 
-const displayValues = useMemo(() => ({
-  name: isSoldItem ? item.item_name : item.name,
-  skinName: isSoldItem ? item.item_skin_name : item.skin_name,
-  condition: isSoldItem ? item.item_condition : item.condition,
-  variant: isSoldItem ? item.item_variant : item.variant
-}), [
+const displayValues = useMemo(() => {
+  const rawName = isSoldItem ? item.item_name : item.name;
+  const skinName = isSoldItem ? item.item_skin_name : item.skin_name;
+  const condition = isSoldItem ? item.item_condition : item.condition;
+  const variant = isSoldItem ? item.item_variant : item.variant;
+  
+  // Check if this is a music kit item
+  const isMusicKit = rawName?.includes('Music Kit');
+  
+  // For music kits, strip the StatTrak™ prefix if present
+  let formattedName = rawName;
+  if (isMusicKit && formattedName?.startsWith('StatTrak™ ')) {
+    formattedName = formattedName.replace('StatTrak™ ', '');
+  }
+  
+  return {
+    name: formattedName,
+    skinName: skinName,
+    condition: condition,
+    variant: variant
+  };
+}, [
   isSoldItem,
   item.item_name,
   item.name,
@@ -825,16 +841,20 @@ const handleSoldEditFormSubmit = useCallback(async (formData) => {
   
       {/* Variant badges */}
       {(() => {
+        // Get the raw name (before we stripped the prefix for display)
+        const rawName = isSoldItem ? item.item_name : item.name;
+        
         // Check if item is name-based souvenir
         const isNameBasedSouvenir = item.isNameBasedSouvenir ||
-                                    displayValues.name?.startsWith('Souvenir Charm') ||
-                                    displayValues.name?.includes('Souvenir Package');
+                                    rawName?.startsWith('Souvenir Charm') ||
+                                    rawName?.includes('Souvenir Package');
         
-        // Check if item is name-based StatTrak™
+        // Check if item is name-based StatTrak™ (check the RAW name, not displayValues.name)
         const isNameBasedStatTrak = item.isNameBasedStatTrak ||
-                                    displayValues.name?.startsWith('StatTrak™');
+                                    rawName?.startsWith('StatTrak™ Music Kit') ||
+                                    (rawName?.startsWith('StatTrak™') && rawName?.includes('Music Kit Box'));
         
-        // Show badges
+        // Show badges based on EITHER the variant field OR name-based detection
         const showSouvenirBadge = isNameBasedSouvenir || (variant === 'souvenir');
         const showStatTrakBadge = isNameBasedStatTrak || (variant === 'stattrak');
         
