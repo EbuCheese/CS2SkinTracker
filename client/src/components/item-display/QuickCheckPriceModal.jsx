@@ -5,27 +5,69 @@ import { usePriceLookup } from '@/hooks/portfolio/usePriceLookup';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
 import { useScrollLock } from '@/hooks/util';
 
+const CONDITION_OPTIONS = [
+  { short: 'FN', full: 'Factory New', minFloat: 0.00, maxFloat: 0.07 },
+  { short: 'MW', full: 'Minimal Wear', minFloat: 0.07, maxFloat: 0.15 },
+  { short: 'FT', full: 'Field-Tested', minFloat: 0.15, maxFloat: 0.37 },
+  { short: 'WW', full: 'Well-Worn', minFloat: 0.37, maxFloat: 0.44 },
+  { short: 'BS', full: 'Battle-Scarred', minFloat: 0.44, maxFloat: 1.00 }
+];
+
 const QuickCheckPriceModal = ({ 
   isOpen, 
   onClose, 
   userSession,
-  onViewFullDetails // Callback to navigate to Prices page with selected item
+  onViewFullDetails
 }) => {
-  // Apply scroll lock when modal is open
   useScrollLock(isOpen);
 
   const [searchValue, setSearchValue] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
   const [priceData, setPriceData] = useState(null);
+  const [fetchAttempted, setFetchAttempted] = useState(false);
   
+  const [selectedVariant, setSelectedVariant] = useState('normal');
+  const [selectedCondition, setSelectedCondition] = useState('');
+
   const { lookupAllPrices, loading, error } = usePriceLookup(userSession);
   const { settings } = useUserSettings();
 
-  // Calculate best price based on user's marketplace preference
-  const bestPrice = useMemo(() => {
-    if (!priceData) return null;
+  // Determine if item needs condition selection
+  const needsCondition = useMemo(() => {
+    return selectedItem?.itemType === 'skins' && 
+           selectedItem?.minFloat !== undefined && 
+           selectedItem?.maxFloat !== undefined;
+  }, [selectedItem]);
+  
+  // Determine if item needs variant selection
+  const needsVariant = useMemo(() => {
+    if (!selectedItem || selectedItem.requiresVariantPreSelection) return false;
+    return selectedItem.hasStatTrak || selectedItem.hasSouvenir;
+  }, [selectedItem]);
+
+  // Get available conditions for this item
+  const availableConditions = useMemo(() => {
+    if (!needsCondition || !selectedItem) return [];
     
-    // First, try to get price from user's preferred marketplace
+    const minFloat = selectedItem.minFloat;
+    const maxFloat = selectedItem.maxFloat;
+    
+    return CONDITION_OPTIONS.filter(condition => 
+      condition.minFloat < maxFloat && condition.maxFloat > minFloat
+    );
+  }, [needsCondition, selectedItem]);
+
+  // Check if we can fetch prices
+  const canFetchPrice = useMemo(() => {
+    if (!selectedItem) return false;
+    if (needsCondition && !selectedCondition) return false;
+    return true;
+  }, [selectedItem, needsCondition, selectedCondition]);
+
+  // Calculate best price
+  const bestPrice = useMemo(() => {
+    if (!priceData || Object.keys(priceData).length === 0) return null;
+    
     const preferredMarket = settings.marketplacePriority?.[0];
     const preferredPrice = priceData[preferredMarket]?.[0];
     
@@ -37,7 +79,6 @@ const QuickCheckPriceModal = ({
       };
     }
     
-    // Fallback: Find lowest non-bid price across all marketplaces
     const allPrices = Object.entries(priceData)
       .flatMap(([mp, prices]) => 
         prices
@@ -46,7 +87,6 @@ const QuickCheckPriceModal = ({
       );
     
     if (allPrices.length === 0) {
-      // If all prices are bid-only, return the preferred marketplace's bid price
       if (preferredPrice) {
         return {
           ...preferredPrice,
@@ -54,7 +94,6 @@ const QuickCheckPriceModal = ({
           isPreferred: true
         };
       }
-      // Last resort: return any price
       const anyPrice = Object.entries(priceData)[0];
       return anyPrice ? {
         ...anyPrice[1][0],
@@ -70,7 +109,7 @@ const QuickCheckPriceModal = ({
     };
   }, [priceData, settings.marketplacePriority]);
 
-  // Get comparison prices (other marketplaces)
+  // Get comparison prices
   const comparisonPrices = useMemo(() => {
     if (!priceData || !bestPrice) return [];
     
@@ -85,20 +124,64 @@ const QuickCheckPriceModal = ({
       .sort((a, b) => a.price - b.price);
   }, [priceData, bestPrice]);
 
-  const handleItemSelect = useCallback(async (item) => {
+  // Extracted fetch logic to reuse
+  const fetchPriceForItem = useCallback(async (item, variant, condition) => {
+    setFetchAttempted(true);
+    
+    const itemToLookup = {
+      ...item,
+      variant: variant,
+      condition: condition || undefined
+    };
+    
+    const result = await lookupAllPrices(itemToLookup);
+    if (result.success && result.results.length > 0) {
+      const filtered = result.results.filter(config => {
+        if (variant !== 'all' && config.variant !== variant) return false;
+        if (condition && config.condition !== condition) return false;
+        return true;
+      });
+      
+      if (filtered.length > 0) {
+        setPriceData(filtered[0].prices);
+      } else {
+        setPriceData({}); // No results
+      }
+    } else {
+      setPriceData({}); // No results
+    }
+  }, [lookupAllPrices]);
+
+  const handleItemSelect = useCallback((item) => {
     setSelectedItem(item);
     setPriceData(null);
     setSearchValue('');
+    setFetchAttempted(false);
     
-    // Use lookupAllPrices like PricesPage does
-    const result = await lookupAllPrices(item);
+    // For items with requiresVariantPreSelection, preserve their variant
+    const itemVariant = item.actualSelectedVariant || item.selectedVariant || 'normal';
+    setSelectedVariant(itemVariant);
+    setSelectedCondition('');
     
-    if (result.success && result.results.length > 0) {
-        // Get the first result's prices (normal variant, first condition)
-        const firstConfig = result.results[0];
-        setPriceData(firstConfig.prices);
+    // Check if options are needed
+    const needsCond = item.itemType === 'skins' && 
+                     item.minFloat !== undefined && 
+                     item.maxFloat !== undefined;
+    const needsVar = !item.requiresVariantPreSelection && 
+                    (item.hasStatTrak || item.hasSouvenir);
+    
+    // Auto-fetch if no options needed
+    if (!needsCond && !needsVar) {
+      setTimeout(() => {
+        fetchPriceForItem(item, itemVariant, '');
+      }, 100);
     }
-    }, [lookupAllPrices]);
+  }, [fetchPriceForItem]);
+
+  const handleFetchPrice = useCallback(async () => {
+    if (!canFetchPrice) return;
+    await fetchPriceForItem(selectedItem, selectedVariant, selectedCondition);
+  }, [canFetchPrice, selectedItem, selectedVariant, selectedCondition, fetchPriceForItem]);
 
   const handleViewFullDetails = () => {
     if (onViewFullDetails && selectedItem) {
@@ -130,10 +213,9 @@ const QuickCheckPriceModal = ({
       className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onClick={handleBackdropClick}
     >
-      {/* Modal content container */}
       <div className="bg-gradient-to-br from-gray-900 to-slate-900 p-6 rounded-xl border border-orange-500/20 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         
-        {/* Header - matching QuickAddItemForm */}
+        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-xl font-semibold text-white flex items-center">
             <Search className="w-5 h-5 mr-2 mt-1" />
@@ -150,34 +232,34 @@ const QuickCheckPriceModal = ({
         {/* Content */}
         <div className="space-y-6">
           
-        {/* Search */}
-        <div className={`relative ${selectedItem ? '' : 'min-h-[450px]'}`}>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-            Search for an item
-        </label>
-        <CSItemSearch
-            type="all"
-            onSelect={handleItemSelect}
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            maxResults={30}
-            showLargeView={true}
-            maxHeight="500px"
-        />
-        
-        {/* Empty State - positioned to avoid label */}
-        {!selectedItem && !loading && (
-            <div className="absolute top-12 left-0 right-0 bottom-0 flex items-center justify-center pointer-events-none">
-            <div className="text-center">
-                <Search className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <p className="text-gray-400 text-lg mb-2">Search for an item</p>
-                <p className="text-gray-500 text-sm">
-                Get instant price information from your preferred marketplace
-                </p>
-            </div>
-            </div>
-        )}
-        </div>
+          {/* Search */}
+          <div className={`relative ${selectedItem ? '' : 'min-h-[450px]'}`}>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Search for an item
+            </label>
+            <CSItemSearch
+              type="all"
+              onSelect={handleItemSelect}
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              maxResults={30}
+              showLargeView={true}
+              maxHeight="500px"
+            />
+            
+            {/* Empty State */}
+            {!selectedItem && !loading && (
+              <div className="absolute top-12 left-0 right-0 bottom-0 flex items-center justify-center pointer-events-none">
+                <div className="text-center">
+                  <Search className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                  <p className="text-gray-400 text-lg mb-2">Search for an item</p>
+                  <p className="text-gray-500 text-sm">
+                    Get instant price information from your preferred marketplace
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Loading State */}
           {loading && (
@@ -194,28 +276,109 @@ const QuickCheckPriceModal = ({
             </div>
           )}
 
-          {/* Selected Item Display */}
-          {selectedItem && !loading && (
-            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-              <div className="flex items-center space-x-4">
-                <img 
-                  src={selectedItem.image} 
-                  alt={selectedItem.name}
-                  className="w-20 h-20 object-contain bg-gray-700 rounded"
-                />
-                <div className="flex-1">
-                  <h3 className="text-white font-semibold text-base">
-                    {selectedItem.baseName || selectedItem.name}
-                  </h3>
-                  {selectedItem.skin_name && (
-                    <p className="text-gray-400 text-sm">{selectedItem.skin_name}</p>
-                  )}
-                  {selectedItem.condition && (
-                    <p className="text-gray-500 text-xs mt-1">{selectedItem.condition}</p>
-                  )}
+          {/* Selected Item Display + Options (only show if not loading and no price yet) */}
+          {selectedItem && !loading && !bestPrice && (needsCondition || needsVariant) && (
+            <>
+              {/* Item Display */}
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                <div className="flex items-center space-x-4">
+                  <img 
+                    src={selectedItem.image} 
+                    alt={selectedItem.name}
+                    className="w-20 h-20 object-contain bg-gray-700 rounded"
+                  />
+                  <div className="flex-1">
+                    <h3 className="text-white font-semibold text-base">
+                      {selectedItem.baseName || selectedItem.name}
+                    </h3>
+                    {selectedItem.metadata?.length > 0 && (
+                      <p className="text-gray-400 text-sm">{selectedItem.metadata[0]}</p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+
+              {/* Condition Selector */}
+              {needsCondition && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Select Condition <span className="text-red-400">*</span>
+                  </label>
+                  <div className="flex gap-2 flex-wrap">
+                    {availableConditions.map(({ short, full }) => (
+                      <button
+                        key={full}
+                        onClick={() => setSelectedCondition(full)}
+                        className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
+                          selectedCondition === full
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        {short}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Variant Selector */}
+              {needsVariant && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Select Variant
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setSelectedVariant('normal')}
+                      className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
+                        selectedVariant === 'normal'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      Normal
+                    </button>
+                    {selectedItem.hasStatTrak && (
+                      <button
+                        onClick={() => setSelectedVariant('stattrak')}
+                        className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
+                          selectedVariant === 'stattrak'
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        StatTrak™
+                      </button>
+                    )}
+                    {selectedItem.hasSouvenir && (
+                      <button
+                        onClick={() => setSelectedVariant('souvenir')}
+                        className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
+                          selectedVariant === 'souvenir'
+                            ? 'bg-yellow-600 text-white'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        }`}
+                      >
+                        Souvenir
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}  
+
+              {/* Fetch button */}
+              <button
+                onClick={handleFetchPrice}
+                disabled={!canFetchPrice || loading}
+                className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-2.5 rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {!canFetchPrice && needsCondition && !selectedCondition 
+                  ? 'Select a condition to continue'
+                  : 'Check Price'
+                }
+              </button>
+            </>
           )}
 
           {/* Best Price Display */}
@@ -253,7 +416,6 @@ const QuickCheckPriceModal = ({
                   </div>
                 </div>
 
-                {/* Additional Price Info */}
                 {bestPrice.marketplace === 'steam' && bestPrice.price_last_7d && (
                   <div className="pt-4 border-t border-gray-700">
                     <div className="flex items-center justify-between text-sm">
@@ -325,8 +487,8 @@ const QuickCheckPriceModal = ({
             </div>
           )}
 
-          {/* No Price Data State */}
-          {selectedItem && !loading && !bestPrice && !error && (
+          {/* No Price Data State - only show AFTER fetch attempt */}
+          {selectedItem && !loading && !bestPrice && !error && fetchAttempted && (
             <div className="text-center py-12">
               <AlertTriangle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
               <p className="text-gray-400 text-lg mb-2">No price data available</p>
