@@ -386,39 +386,97 @@ const OptimizedSearchResultItem = React.memo(({
   
   // Resolve collections and crates for regular skins
   const sources = useMemo(() => {
-    if (!isSkin || isKnifeOrGlove) {
-      return { items: [], all: [], total: 0 };
-    }
+  if (!isSkin || isKnifeOrGlove) {
+    return { items: [], all: [], total: 0 };
+  }
+  
+  const allSources = [];
+  
+  // Helper to check if collection name matches case name (e.g., "Falchion Collection" vs "Falchion Case")
+  const isRedundantCollectionCase = (collectionName, caseName) => {
+    const collectionBase = collectionName.replace(/\s*(Collection|Set)$/i, '').toLowerCase();
+    const caseBase = caseName.replace(/\s*(Case|Package)$/i, '').toLowerCase();
+    return collectionBase === caseBase;
+  };
+  
+  // STEP 1: Process collections
+  if (currentVariantItem?.collections?.length > 0) {
+    currentVariantItem.collections.forEach(collectionId => {
+      const collection = lookupMaps.collectionsById.get(collectionId);
+      if (!collection) return;
+      
+      // Find all cases/packages that contain this collection
+      const relatedCases = [];
+      let hasRedundantCase = false;
+      
+      if (currentVariantItem.crates?.length > 0) {
+        currentVariantItem.crates.forEach(crateId => {
+          const crate = lookupMaps.casesById.get(crateId);
+          if (crate && collection.crates?.includes(crateId)) {
+            relatedCases.push(crate);
+            
+            // Check if this case is redundant with collection name
+            if (isRedundantCollectionCase(collection.name, crate.name)) {
+              hasRedundantCase = true;
+            }
+          }
+        });
+      }
+      
+      // If collection has only one case and they have the same name, skip the collection
+      // and just show the case instead
+      if (hasRedundantCase && relatedCases.length === 1) {
+        allSources.push({
+          type: 'case',
+          data: relatedCases[0],
+          isRedundantWithCollection: true
+        });
+      } else {
+        // Show collection
+        const isDropOnly = !collection.crates || collection.crates.length === 0;
+        allSources.push({
+          type: 'collection',
+          data: collection,
+          relatedCases: relatedCases,
+          isDropOnly: isDropOnly
+        });
+      }
+    });
+  }
+  
+  // STEP 2: Add any cases that aren't already accounted for
+  if (currentVariantItem?.crates?.length > 0) {
+    const accountedCaseIds = new Set();
     
-    const allSources = [];
+    // Mark all cases we already included
+    allSources.forEach(source => {
+      if (source.type === 'collection' && source.relatedCases) {
+        source.relatedCases.forEach(crate => accountedCaseIds.add(crate.id));
+      } else if (source.type === 'case' && source.isRedundantWithCollection) {
+        accountedCaseIds.add(source.data.id);
+      }
+    });
     
-    // Prioritize cases (most actionable info)
-    if (currentVariantItem?.crates?.length > 0) {
-      currentVariantItem.crates.forEach(id => {
-        const crate = lookupMaps.casesById.get(id);
+    // Add any remaining cases
+    currentVariantItem.crates.forEach(crateId => {
+      if (!accountedCaseIds.has(crateId)) {
+        const crate = lookupMaps.casesById.get(crateId);
         if (crate) {
-          allSources.push({ type: 'case', data: crate });
+          allSources.push({
+            type: 'case',
+            data: crate
+          });
         }
-      });
-    }
-    
-    // Only add drop-only collections (collections without cases)
-    if (allSources.length === 0 && currentVariantItem?.collections?.length > 0) {
-      currentVariantItem.collections.forEach(id => {
-        const collection = lookupMaps.collectionsById.get(id);
-        // Only show if it's a drop-only collection
-        if (collection && (!collection.crates || collection.crates.length === 0)) {
-          allSources.push({ type: 'collection', data: collection });
-        }
-      });
-    }
-    
-    return {
-      items: allSources.slice(0, 1),
-      all: allSources,
-      total: allSources.length
-    };
-  }, [isSkin, isKnifeOrGlove, currentVariantItem?.collections, currentVariantItem?.crates, lookupMaps]);
+      }
+    });
+  }
+  
+  return {
+    items: allSources.slice(0, 1),
+    all: allSources,
+    total: allSources.length
+  };
+}, [isSkin, isKnifeOrGlove, currentVariantItem?.collections, currentVariantItem?.crates, lookupMaps]);
 
 // Enhanced source resolver for all item types (non-skins)
 const itemSource = useMemo(() => {
@@ -548,23 +606,56 @@ const itemSource = useMemo(() => {
                   ) : (
                     /* Regular skins show collections AND crates */
                     sources.items.length > 0 && (
-                      <>
-                        <span className="text-gray-500">•</span>
-                        <span 
-                          className="text-gray-400 truncate" 
-                          title={
-                            sources.total > 1
-                              ? sources.all.map(s => s.data.name).join('\n')
-                              : sources.items[0].data.name
+                    <>
+                      <span className="text-gray-500">•</span>
+                      <span 
+                        className="text-gray-400 truncate" 
+                        title={(() => {
+                          const firstSource = sources.items[0];
+                          
+                          // For drop-only collections, no tooltip needed
+                          if (firstSource.type === 'collection' && firstSource.isDropOnly) {
+                            return firstSource.data.name;
                           }
-                        >
-                          {sources.items[0].data.name}
-                          {sources.total > 1 && (
-                            <span className="text-gray-500 ml-1">+{sources.total - 1}</span>
-                          )}
-                        </span>
-                      </>
-                    )
+                          
+                          // For collections with cases, show "Found in:" tooltip
+                          if (firstSource.type === 'collection' && firstSource.relatedCases?.length > 0) {
+                            return `Found in:\n• ${firstSource.relatedCases.map(c => c.name).join('\n• ')}`;
+                          }
+                          
+                          // For multiple sources, show all
+                          if (sources.total > 1) {
+                            return `Found in:\n• ${sources.all.map(s => s.data.name).join('\n• ')}`;
+                          }
+                          
+                          // Single case/source
+                          return firstSource.data.name;
+                        })()}
+                      >
+                        {(() => {
+                          const firstSource = sources.items[0];
+                          
+                          if (firstSource.type === 'collection') {
+                            let displayText = firstSource.data.name;
+                            
+                            // Only show +X if there are related cases (don't count for drop-only)
+                            if (firstSource.relatedCases && firstSource.relatedCases.length > 0) {
+                              displayText += ` +${firstSource.relatedCases.length}`;
+                            }
+                            
+                            return displayText;
+                          } else {
+                            // Case (either standalone or redundant with collection)
+                            let displayText = firstSource.data.name;
+                            if (sources.total > 1) {
+                              displayText += ` +${sources.total - 1}`;
+                            }
+                            return displayText;
+                          }
+                        })()}
+                      </span>
+                    </>
+                  )
                   )}
                 </>
               ): (
