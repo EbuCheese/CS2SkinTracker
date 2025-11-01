@@ -56,13 +56,11 @@ const PricesPage = ({ userSession }) => {
   
   const requiresVariantPreSelection = item.requiresVariantPreSelection || false;
   
+  // Default to 'all' for most items
   let initialVariant = 'all';
   
-  // For items that require variant pre-selection (music items), lock to selected variant
+  // ONLY lock variant for items that require pre-selection (music items)
   if (requiresVariantPreSelection && item.actualSelectedVariant) {
-    initialVariant = item.actualSelectedVariant;
-  } else if (item.actualSelectedVariant) {
-    // For other items, still respect pre-selection but allow changing
     initialVariant = item.actualSelectedVariant;
   }
   
@@ -244,103 +242,91 @@ const filteredMarketPrices = useMemo(() =>
                     </div>
                   )}
 
-                  {/* Show Found in - Collections/Cases */}
+                  {/* Show Collections and Cases separately */}
                   {(() => {
-                    const displaySources = [];
+                    // Gather unique collections
+                    const collections = new Set();
+                    const casesWithoutCollection = [];
                     
-                    // Track which collections we've already handled via their cases
-                    const handledCollectionIds = new Set();
+                    if (selectedItem.collections?.length > 0) {
+                      selectedItem.collections.forEach(collectionId => {
+                        const collection = lookupMaps.collectionsById.get(collectionId);
+                        if (collection) {
+                          collections.add(collection);
+                        }
+                      });
+                    }
                     
-                    // Process cases first
-                    const caseIds = new Set();
-                    
-                    // Gather case IDs from item's crates
+                    // Gather cases
+                    const allCases = [];
                     if (selectedItem.crates?.length > 0) {
-                      selectedItem.crates.forEach(id => caseIds.add(id));
+                      selectedItem.crates.forEach(crateId => {
+                        const crate = lookupMaps.casesById.get(crateId);
+                        if (crate) {
+                          allCases.push(crate);
+                        }
+                      });
                     }
                     
                     // Reverse lookup for patches/music_kits
                     if (lookupMaps.itemToCases?.has(selectedItem.id)) {
-                      lookupMaps.itemToCases.get(selectedItem.id).forEach(id => caseIds.add(id));
+                      const caseIds = lookupMaps.itemToCases.get(selectedItem.id);
+                      caseIds.forEach(crateId => {
+                        const crate = lookupMaps.casesById.get(crateId);
+                        if (crate && !allCases.find(c => c.id === crateId)) {
+                          allCases.push(crate);
+                        }
+                      });
                     }
                     
-                    // For each case, find its associated collection
-                    caseIds.forEach(caseId => {
-                      const caseItem = lookupMaps.casesById.get(caseId);
-                      if (!caseItem) return;
-                      
-                      // Find collection that references this case
-                      let associatedCollection = null;
-                      if (selectedItem.collections?.length > 0) {
-                        for (const collectionId of selectedItem.collections) {
-                          const collection = lookupMaps.collectionsById.get(collectionId);
-                          if (collection?.crates?.includes(caseId)) {
-                            associatedCollection = collection;
-                            handledCollectionIds.add(collectionId);
-                            break;
-                          }
+                    // Check which cases are orphaned (no collection link)
+                    allCases.forEach(crate => {
+                      let hasCollection = false;
+                      collections.forEach(collection => {
+                        if (collection.crates?.includes(crate.id)) {
+                          hasCollection = true;
                         }
-                      }
-                      
-                      displaySources.push({
-                        type: 'case',
-                        primary: caseItem,
-                        secondary: associatedCollection
                       });
+                      if (!hasCollection) {
+                        casesWithoutCollection.push(crate);
+                      }
                     });
                     
-                    // Add drop-only collections (no associated case)
-                    if (selectedItem.collections?.length > 0) {
-                      selectedItem.collections.forEach(collectionId => {
-                        if (handledCollectionIds.has(collectionId)) return;
-                        
-                        const collection = lookupMaps.collectionsById.get(collectionId);
-                        if (!collection) return;
-                        
-                        // Only add if collection has no cases (drop-only)
-                        if (!collection.crates || collection.crates.length === 0) {
-                          displaySources.push({
-                            type: 'collection',
-                            primary: collection,
-                            secondary: null
-                          });
-                        }
-                      });
-                    }
-                    
-                    if (displaySources.length === 0) return null;
+                    if (collections.size === 0 && allCases.length === 0) return null;
                     
                     return (
                       <div>
-                        <div className="text-xs text-gray-500 mb-1">Found in:</div>
-                        <div className="space-y-1">
-                          {(() => {
-                            // Filter based on selected variant
-                            let sourcesToShow = displaySources;
-                            
-                            if (filterVariant === 'normal' || filterVariant === 'stattrak') {
-                              sourcesToShow = displaySources.filter(s => 
-                                !s.primary.name?.includes('Souvenir Package')
-                              );
-                            } else if (filterVariant === 'souvenir') {
-                              sourcesToShow = displaySources.filter(s => 
-                                s.primary.name?.includes('Souvenir Package')
-                              );
-                            }
-                            
-                            return sourcesToShow.map((source, idx) => (
-                              <div key={idx} className="text-xs text-gray-400 flex items-center gap-1">
-                                <span className="w-1 h-1 bg-orange-500 rounded-full"></span>
-                                <span>
-                                  {source.primary.name}
-                                  {source.secondary && (
-                                    <span className="text-gray-500"> ({source.secondary.name})</span>
-                                  )}
-                                </span>
-                              </div>
-                            ));
-                          })()}
-                        </div>
+                        {/* Collections Section */}
+                        {collections.size > 0 && (
+                          <div className="mb-3">
+                            <div className="text-xs text-gray-500 mb-1">Collection:</div>
+                            <div className="space-y-1">
+                              {Array.from(collections).map((collection, idx) => (
+                                <div key={idx} className="text-xs text-gray-400 flex items-center gap-1">
+                                  <span className="w-1 h-1 bg-blue-500 rounded-full"></span>
+                                  <span>{collection.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Cases/Packages Section */}
+                        {allCases.length > 0 && (
+                          <div>
+                            <div className="text-xs text-gray-500 mb-1">
+                              {collections.size > 0 ? 'Found in:' : 'Cases:'}
+                            </div>
+                            <div className="space-y-1">
+                              {allCases.map((crate, idx) => (
+                                <div key={idx} className="text-xs text-gray-400 flex items-center gap-1">
+                                  <span className="w-1 h-1 bg-orange-500 rounded-full"></span>
+                                  <span>{crate.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
