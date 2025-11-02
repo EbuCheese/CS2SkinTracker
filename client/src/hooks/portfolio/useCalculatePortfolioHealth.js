@@ -3,9 +3,11 @@ import { useMemo, useCallback } from 'react';
 // Shared formatting helper
 const formatDisplayName = (name) => {
   if (!name) return 'Unknown';
-  return name.split(' ').map(word => 
-    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-  ).join(' ');
+  return name
+    .replace(/_/g, ' ')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
 };
 
 // Updated consolidateItems function with better case handling and metadata support
@@ -233,7 +235,7 @@ const aggregatePortfolioData = (investments) => {
       }
     }
     
-    // NEW: Determine display type for grouping - separate liquid items
+    // Determine display type for grouping - separate liquid items
     let displayType = formatDisplayName(itemType);
     
     // Override for liquid items to show specific categories (singular for Type view)
