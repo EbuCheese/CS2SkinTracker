@@ -56,12 +56,14 @@ const PricesPage = ({ userSession }) => {
   
   const requiresVariantPreSelection = item.requiresVariantPreSelection || false;
   
-  // Default to 'all' for most items
+  // For music items, keep filterVariant at 'all' showing all data for that variant
+  // For other items, default to 'all'
   let initialVariant = 'all';
   
-  // ONLY lock variant for items that require pre-selection (music items)
-  if (requiresVariantPreSelection && item.actualSelectedVariant) {
-    initialVariant = item.actualSelectedVariant;
+  // Only set a specific variant if it's NOT a pre-selection item
+  // (Pre-selection items already have the variant baked into the data)
+  if (!requiresVariantPreSelection) {
+    initialVariant = 'all';
   }
   
   setFilterCondition('all');
@@ -181,7 +183,7 @@ const filteredMarketPrices = useMemo(() =>
                   className="w-full h-32 object-contain bg-gray-700 rounded mb-3"
                 />
                 <h3 className="text-white font-bold text-sm mb-1 leading-tight">
-                  {selectedItem.baseName || selectedItem.name}
+                  {selectedItem.name}
                 </h3>
                 
                 {/* Primary Stats Section */}
