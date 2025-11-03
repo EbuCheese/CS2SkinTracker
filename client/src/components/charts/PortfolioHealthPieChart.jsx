@@ -461,16 +461,26 @@ const processedData = useMemo(() => {
 });
 
 const buildItemDisplayName = (item) => {
-  let fullName = item.name || 'Unknown Item';
+  let baseName = item.name || 'Unknown Item';
   let prefixes = '';
   
-  // Build prefixes
+  // Handle star prefix for knives/gloves - extract it from the name
+  let hasStar = false;
+  if (baseName.startsWith('★')) {
+    hasStar = true;
+    baseName = baseName.substring(2).trim(); // Remove '★ ' from base name
+  }
+  
+  // Build other prefixes
   if (item.variant === 'stattrak' || (item.stattrak && item.stattrak !== 'false')) {
     prefixes += 'StatTrak™ ';
   }
   if (item.variant === 'souvenir' || (item.souvenir && item.souvenir !== 'false')) {
     prefixes += 'Souvenir ';
   }
+  
+  // Reconstruct full name with star first, then other prefixes
+  let fullName = (hasStar ? '★ ' : '') + prefixes + baseName;
   
   // Add skin/variant
   const skinName = item.variant && 
@@ -490,8 +500,6 @@ const buildItemDisplayName = (item) => {
   if (skinName) {
     fullName += ` | ${skinName}`;
   }
-  
-  fullName = prefixes + fullName;
   
   // Add condition
   if (item.condition && item.condition !== 'Unknown') {

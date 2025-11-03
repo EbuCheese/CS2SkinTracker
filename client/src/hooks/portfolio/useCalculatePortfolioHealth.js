@@ -30,7 +30,7 @@ const consolidateItems = (() => {
   
   // Pre-compiled regex patterns for name-based detection (compiled once)
   const namePatterns = [
-    { pattern: /souvenir package|souvenir/i, result: 'Souvenir Packages' },
+    { pattern: /souvenir package/i, result: 'Souvenir Packages' },
     { pattern: /sticker capsule/i, result: 'Sticker Capsules' },
     { pattern: /autograph capsule/i, result: 'Autograph Capsules' },
     { pattern: /pins capsule/i, result: 'Pins Capsules' },
@@ -39,6 +39,7 @@ const consolidateItems = (() => {
     { pattern: /sticker/i, result: 'Stickers' },
     { pattern: /patch/i, result: 'Patches' },
     { pattern: /sealed graffiti/i, result: 'Graffiti' },
+    { pattern: /souvenir.*charm|charm.*souvenir/i, result: 'Highlight Charms' },
     { pattern: /charm/i, result: 'Charms' }
   ];
   
