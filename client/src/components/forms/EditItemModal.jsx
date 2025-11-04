@@ -3,6 +3,7 @@ import { X, Save, Info } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useItemFormatting, formatDateInTimezone } from '@/hooks/util';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { useCSData } from '@/contexts/CSDataContext';
 
 const CONDITION_OPTIONS = [
   { value: '', label: 'Select condition' },
@@ -19,6 +20,56 @@ const VARIANT_OPTIONS = [
   { value: 'souvenir', label: 'Souvenir' }
 ];
 
+const getAvailableConditions = (minFloat, maxFloat) => {
+  if (minFloat === undefined || maxFloat === undefined) {
+    return []; // No conditions available (e.g., non-skin items)
+  }
+
+  const floatRanges = {
+    'Factory New': [0.00, 0.07],
+    'Minimal Wear': [0.07, 0.15],
+    'Field-Tested': [0.15, 0.38],
+    'Well-Worn': [0.38, 0.45],
+    'Battle-Scarred': [0.45, 1.00]
+  };
+
+  return CONDITION_OPTIONS.filter(option => {
+    if (option.value === '') return true; // Keep the "Select condition" option
+    
+    const [condMin, condMax] = floatRanges[option.value];
+    // Check if there's any overlap between item's float range and condition's range
+    return minFloat < condMax && maxFloat > condMin;
+  });
+};
+
+// Helper to get available variants
+const getAvailableVariants = (item) => {
+  const variants = [{ value: 'normal', label: 'Normal' }];
+  
+  // Check for name-based variants (highlights, souvenir packages, music kits)
+  const isNameBasedSouvenir = item.isNameBasedSouvenir || 
+                             item.item_name?.startsWith('Souvenir Charm') ||
+                             item.item_name?.includes('Souvenir Package');
+  
+  const isNameBasedStatTrak = item.isNameBasedStatTrak ||
+                             item.item_name?.startsWith('StatTrak™ Music Kit');
+  
+  // If it's a name-based variant item, only show normal
+  if (isNameBasedSouvenir || isNameBasedStatTrak) {
+    return variants;
+  }
+  
+  // Otherwise check the flags
+  if (item.hasStatTrak) {
+    variants.push({ value: 'stattrak', label: 'StatTrak™' });
+  }
+  if (item.hasSouvenir) {
+    variants.push({ value: 'souvenir', label: 'Souvenir' });
+  }
+  
+  return variants;
+};
+
 const EditItemModal = ({ 
   isOpen, 
   onClose, 
@@ -28,12 +79,61 @@ const EditItemModal = ({
   isLoading = false 
 }) => {
   const { timezone } = useUserSettings();
+  const { lookupMaps, data } = useCSData();
 
   const [formData, setFormData] = useState({});
   const [errors, setErrors] = useState({});
 
+  const csItemData = useMemo(() => {
+    if (!item || isSoldItem) return null;
+    
+    // Determine the item type
+    const itemType = item.type; // 'liquid', 'case', 'sticker', etc.
+    
+    // Map database types to CS data types
+    const typeMap = {
+      'liquid': 'skins',
+      'case': 'cases',
+      'sticker': 'stickers',
+      'agent': 'agents',
+      'keychain': 'keychains',
+      'graffiti': 'graffiti',
+      'patch': 'patches',
+      'music_kit': 'music_kits',
+      'highlight': 'highlights'
+    };
+    
+    const csDataType = typeMap[itemType] || itemType;
+    const csData = data[csDataType];
+    
+    if (!csData) return null;
+    
+    // Find matching item in CS data
+    // For skins, need to match both name and skin_name
+    const matchingItem = csData.find(csItem => {
+      if (itemType === 'liquid' || itemType === 'skins') {
+        // Match weapon name and skin name
+        return csItem.name === item.name && 
+               (!item.skin_name || csItem.pattern === item.skin_name);
+      } else {
+        // For other items, just match the name
+        return csItem.name === item.name;
+      }
+    });
+    
+    if (!matchingItem) return null;
+    
+    return {
+      minFloat: matchingItem.minFloat,
+      maxFloat: matchingItem.maxFloat,
+      hasStatTrak: matchingItem.stattrak === true,
+      hasSouvenir: matchingItem.souvenir === true
+    };
+  }, [item, isSoldItem, data]);
+
   // name format hook
   const { displayName: formatDisplayName, subtitle: formatSubtitle } = useItemFormatting();
+
   const itemDisplayName = useMemo(() => {
   // Create a normalized item object that works for both sold and active items
   const normalizedItem = {
@@ -57,6 +157,41 @@ const itemSubtitle = useMemo(() => {
     conditionField: 'condition'
   });
 }, [item, formatSubtitle]);
+
+  const availableConditions = useMemo(() => {
+    // Use CS data if available, otherwise show all conditions if item has a condition
+    if (csItemData?.minFloat !== undefined && csItemData?.maxFloat !== undefined) {
+      return getAvailableConditions(csItemData.minFloat, csItemData.maxFloat);
+    }
+    // Fallback: if item has a condition, show all conditions
+    if (item?.condition) {
+      return CONDITION_OPTIONS;
+    }
+    return [];
+  }, [csItemData, item?.condition]);
+
+  const availableVariants = useMemo(() => {
+    // Build item object with CS data
+    const itemWithCSData = {
+      ...item,
+      hasStatTrak: csItemData?.hasStatTrak,
+      hasSouvenir: csItemData?.hasSouvenir,
+      isNameBasedSouvenir: item.isNameBasedSouvenir,
+      isNameBasedStatTrak: item.isNameBasedStatTrak,
+      item_name: item.item_name || item.name
+    };
+    
+    const variants = getAvailableVariants(itemWithCSData);
+    
+    // Fallback: if only normal but item has a variant, show all variants
+    if (variants.length === 1 && item?.variant && item.variant !== 'normal') {
+      return VARIANT_OPTIONS;
+    }
+    return variants;
+  }, [csItemData, item]);
+
+  const showConditionSelector = !isSoldItem && availableConditions.length > 1;
+  const showVariantSelector = !isSoldItem && availableVariants.length > 1;
 
   // Helper to get available marketplaces
   const getAvailableMarketplaces = useCallback(() => {
@@ -297,40 +432,48 @@ const itemSubtitle = useMemo(() => {
           ) : (
             // ACTIVE ITEM FORM
             <>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Condition
-                  </label>
-                  <select
-                    value={formData.condition || ''}
-                    onChange={(e) => handleChange('condition', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                  >
-                    {CONDITION_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+              {/* Only show if filters produced results */}
+              {showConditionSelector || showVariantSelector ? (
+                <div className="grid grid-cols-2 gap-4">
+                  {showConditionSelector && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Condition
+                      </label>
+                      <select
+                        value={formData.condition || ''}
+                        onChange={(e) => handleChange('condition', e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                      >
+                        {availableConditions.map(option => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  
+                  {showVariantSelector && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Variant
+                      </label>
+                      <select
+                        value={formData.variant || 'normal'}
+                        onChange={(e) => handleChange('variant', e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+                      >
+                        {availableVariants.map(option => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Variant
-                  </label>
-                  <select
-                    value={formData.variant || 'normal'}
-                    onChange={(e) => handleChange('variant', e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                  >
-                    {VARIANT_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              ) : null}
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
