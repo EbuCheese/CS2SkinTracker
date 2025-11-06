@@ -15,15 +15,15 @@ import { useUserSettings } from '@/contexts/UserSettingsContext';
 
 const ITEM_TYPES = [
   { value: 'all', label: 'All' },
-  { value: 'liquid', label: 'Liquids' },
-  { value: 'case', label: 'Cases' },
-  { value: 'sticker', label: 'Stickers' },
-  { value: 'agent', label: 'Agents' },
-  { value: 'keychain', label: 'Keychains' },
+  { value: 'skins', label: 'Skins' },
+  { value: 'cases', label: 'Cases' },
+  { value: 'stickers', label: 'Stickers' },
+  { value: 'agents', label: 'Agents' },
+  { value: 'keychains', label: 'Keychains' },
   { value: 'graffiti', label: 'Graffiti' },
-  { value: 'patch', label: 'Patches' },
-  { value: 'music_kit', label: 'Music Kits' },
-  { value: 'highlight', label: 'Highlights' },
+  { value: 'patches', label: 'Patches' },
+  { value: 'music_kits', label: 'Music Kits' },
+  { value: 'highlights', label: 'Highlights' },
 ];
 
 const SORT_OPTIONS = [
@@ -131,7 +131,7 @@ const WatchlistPage = ({ userSession }) => {
     }
   };
 
-  // Stats
+  // Stats - Recalculate whenever watchlist changes
   const stats = useMemo(() => {
     let totalGaining = 0;
     let totalLosing = 0;
@@ -139,9 +139,9 @@ const WatchlistPage = ({ userSession }) => {
     let totalInitialValue = 0;
 
     watchlist.forEach(item => {
-      if (item.current_price) {
-        totalValue += item.current_price;
-        totalInitialValue += item.initial_price;
+      if (item.current_price && item.price_change !== null) {
+        totalValue += parseFloat(item.current_price);
+        totalInitialValue += parseFloat(item.initial_price);
         
         if (item.price_change > 0) totalGaining++;
         if (item.price_change < 0) totalLosing++;
@@ -384,99 +384,193 @@ const WatchlistPage = ({ userSession }) => {
 
 // Watchlist Row Component
 const WatchlistRow = ({ item, isSelected, onToggleSelect, onRemove }) => {
+  const [showAllPrices, setShowAllPrices] = useState(false);
   const priceChange = item.price_change || 0;
   const priceChangePercent = item.price_change_percent || 0;
   const isGaining = priceChange > 0;
   const hasPrice = item.current_price && item.price_source !== 'none';
+  
+  // Parse available prices
+  const availablePrices = useMemo(() => {
+    if (!item.available_prices) return [];
+    try {
+      return typeof item.available_prices === 'string' 
+        ? JSON.parse(item.available_prices)
+        : item.available_prices;
+    } catch {
+      return [];
+    }
+  }, [item.available_prices]);
 
   return (
-    <tr className="border-t border-gray-700 hover:bg-gray-700/30 transition-colors">
-      <td className="p-3">
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={onToggleSelect}
-          className="w-4 h-4 rounded bg-gray-600 border-gray-500 cursor-pointer"
-        />
-      </td>
-      <td className="p-3">
-        <div className="flex items-center space-x-3">
-          {item.image_url && (
-            <img
-              src={item.image_url}
-              alt={item.full_name}
-              className="w-12 h-12 object-contain bg-gray-700 rounded"
-            />
+    <>
+      <tr className="border-t border-gray-700 hover:bg-gray-700/30 transition-colors">
+        <td className="p-3">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onToggleSelect}
+            className="w-4 h-4 rounded bg-gray-600 border-gray-500 cursor-pointer"
+          />
+        </td>
+        <td className="p-3">
+          <div className="flex items-center space-x-3">
+            {item.image_url && (
+              <img
+                src={item.image_url}
+                alt={item.full_name}
+                className="w-12 h-12 object-contain bg-gray-700 rounded"
+              />
+            )}
+            <div>
+              <div className="text-white font-medium">{item.full_name}</div>
+              {item.notes && (
+                <div className="text-gray-500 text-xs mt-0.5 truncate max-w-xs" title={item.notes}>
+                  {item.notes}
+                </div>
+              )}
+            </div>
+          </div>
+        </td>
+        <td className="p-3 text-center">
+          <div className="text-white font-medium">${item.initial_price.toFixed(2)}</div>
+          <div className="text-gray-500 text-xs">{item.initial_marketplace.toUpperCase()}</div>
+        </td>
+        <td className="p-3 text-center">
+          {hasPrice ? (
+            <div>
+              <div className="text-white font-medium">${item.current_price.toFixed(2)}</div>
+              {item.is_bid_price && (
+                <div className="flex items-center justify-center space-x-1 text-yellow-400 text-xs">
+                  <AlertCircle className="w-3 h-3" />
+                  <span>Bid</span>
+                </div>
+              )}
+              {/* Show all prices button */}
+              {availablePrices.length > 1 && (
+                <button
+                  onClick={() => setShowAllPrices(!showAllPrices)}
+                  className="text-xs text-blue-400 hover:text-blue-300 mt-1"
+                >
+                  {showAllPrices ? 'Hide' : `+${availablePrices.length - 1} more`}
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="text-gray-500 text-sm">N/A</div>
           )}
-          <div>
-            <div className="text-white font-medium">{item.full_name}</div>
-            {item.notes && (
-              <div className="text-gray-500 text-xs mt-0.5 truncate max-w-xs" title={item.notes}>
-                {item.notes}
+        </td>
+        <td className="p-3 text-center">
+          {hasPrice ? (
+            <div className="flex flex-col items-center">
+              <div className={`font-bold flex items-center ${
+                isGaining ? 'text-green-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-400'
+              }`}>
+                {isGaining ? <TrendingUp className="w-4 h-4 mr-1" /> : 
+                 priceChange < 0 ? <TrendingDown className="w-4 h-4 mr-1" /> : null}
+                {isGaining ? '+' : ''}{priceChangePercent.toFixed(2)}%
               </div>
-            )}
-          </div>
-        </div>
-      </td>
-      <td className="p-3 text-center">
-        <div className="text-white font-medium">${item.initial_price.toFixed(2)}</div>
-        <div className="text-gray-500 text-xs">{item.initial_marketplace.toUpperCase()}</div>
-      </td>
-      <td className="p-3 text-center">
-        {hasPrice ? (
-          <div>
-            <div className="text-white font-medium">${item.current_price.toFixed(2)}</div>
-            {item.is_bid_price && (
-              <div className="flex items-center justify-center space-x-1 text-yellow-400 text-xs">
-                <AlertCircle className="w-3 h-3" />
-                <span>Bid</span>
+              <div className={`text-xs ${
+                isGaining ? 'text-green-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-400'
+              }`}>
+                {priceChange >= 0 ? '+' : '-'}${Math.abs(priceChange).toFixed(2)}
               </div>
-            )}
-          </div>
-        ) : (
-          <div className="text-gray-500 text-sm">N/A</div>
-        )}
-      </td>
-      <td className="p-3 text-center">
-        {hasPrice ? (
-          <div className="flex flex-col items-center">
-            <div className={`font-bold flex items-center ${
-              isGaining ? 'text-green-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-400'
-            }`}>
-              {isGaining ? <TrendingUp className="w-4 h-4 mr-1" /> : 
-               priceChange < 0 ? <TrendingDown className="w-4 h-4 mr-1" /> : null}
-              {isGaining ? '+' : ''}{priceChangePercent.toFixed(2)}%
             </div>
-            <div className={`text-xs ${
-              isGaining ? 'text-green-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-400'
-            }`}>
-              {isGaining ? '+' : ''}${priceChange.toFixed(2)}
-            </div>
+          ) : (
+            <div className="text-gray-500 text-sm">—</div>
+          )}
+        </td>
+        <td className="p-3 text-center">
+          <div className="text-gray-400 text-sm uppercase">
+            {hasPrice ? item.price_source : '—'}
           </div>
-        ) : (
-          <div className="text-gray-500 text-sm">—</div>
-        )}
-      </td>
-      <td className="p-3 text-center">
-        <div className="text-gray-400 text-sm uppercase">
-          {hasPrice ? item.price_source : '—'}
-        </div>
-      </td>
-      <td className="p-3 text-center">
-        <div className="text-gray-400 text-sm">
-          {new Date(item.created_at).toLocaleDateString()}
-        </div>
-      </td>
-      <td className="p-3 text-center">
-        <button
-          onClick={onRemove}
-          className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded transition-colors"
-          title="Remove from watchlist"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </td>
-    </tr>
+        </td>
+        <td className="p-3 text-center">
+          <div className="text-gray-400 text-sm">
+            {new Date(item.created_at).toLocaleDateString()}
+          </div>
+        </td>
+        <td className="p-3 text-center">
+          <button
+            onClick={onRemove}
+            className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded transition-colors"
+            title="Remove from watchlist"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </td>
+      </tr>
+      
+      {/* Expanded row showing all marketplace prices */}
+      {showAllPrices && availablePrices.length > 1 && (
+        <tr className="bg-gray-700/20">
+          <td colSpan="8" className="p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {availablePrices.map((priceData) => {
+                const marketplaceChange = priceData.price - item.initial_price;
+                const marketplaceChangePercent = (marketplaceChange / item.initial_price) * 100;
+                const isMarketGaining = marketplaceChange > 0;
+                const isCurrent = priceData.marketplace === item.price_source;
+                
+                return (
+                  <div 
+                    key={priceData.marketplace} 
+                    className={`bg-gray-800/50 rounded-lg p-3 border ${
+                      isCurrent ? 'border-orange-500/50' : 'border-gray-600/30'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-300 uppercase font-medium">
+                        {priceData.marketplace}
+                      </span>
+                      {isCurrent && (
+                        <span className="text-xs bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded">
+                          Current
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="text-lg font-bold text-white mb-1">
+                      ${priceData.price.toFixed(2)}
+                    </div>
+                    
+                    <div className={`text-xs font-medium ${
+                      isMarketGaining ? 'text-green-400' : marketplaceChange < 0 ? 'text-red-400' : 'text-gray-400'
+                    }`}>
+                      {marketplaceChange >= 0 ? '+' : '-'}{Math.abs(marketplaceChangePercent).toFixed(2)}% 
+                      ({marketplaceChange >= 0 ? '+' : '-'}${Math.abs(marketplaceChange).toFixed(2)})
+                    </div>
+                    
+                    {priceData.is_bid_price && (
+                      <div className="flex items-center space-x-1 text-yellow-400 text-xs mt-1">
+                        <AlertCircle className="w-3 h-3" />
+                        <span>Bid only</span>
+                      </div>
+                    )}
+                    
+                    {/* Steam specific data */}
+                    {priceData.marketplace === 'steam' && priceData.price_last_7d && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        7d: ${priceData.price_last_7d.toFixed(2)}
+                      </div>
+                    )}
+                    
+                    {/* Buff163 specific data */}
+                    {priceData.marketplace === 'buff163' && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        {priceData.highest_order_price && (
+                          <div>Bid: ${priceData.highest_order_price.toFixed(2)}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 };
 
@@ -485,7 +579,8 @@ const AddToWatchlistModal = ({ userSession, onClose, onAdd }) => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [searchValue, setSearchValue] = useState('');
   const [searchType, setSearchType] = useState('all');
-  const [selectedMarketplace, setSelectedMarketplace] = useState('csfloat');
+  const [selectedMarketplace, setSelectedMarketplace] = useState('');
+  const [allMarketplacePrices, setAllMarketplacePrices] = useState({});
   const [targetPrice, setTargetPrice] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
@@ -529,49 +624,67 @@ const AddToWatchlistModal = ({ userSession, onClose, onAdd }) => {
     // Reset form state
     setSelectedCondition('');
     setSelectedVariant(currentVariantKey);
+    setAllMarketplacePrices({});
+    
+    // Use user's preferred marketplace as default
+    const preferredMarket = settings.marketplacePriority?.[0] || 'csfloat';
+    setSelectedMarketplace(preferredMarket);
 
     // Check if this item needs condition using the variant item's category
     const requiresCondition = ['Rifles', 'Pistols', 'SMGs', 'Heavy', 'Knives', 'Gloves'].includes(
       currentVariantItem.category || item.category || item.metadata?.[0]
     );
 
-    // Use user's preferred marketplace or default
-    const preferredMarket = settings.marketplacePriority?.[0] || 'csfloat';
-    setSelectedMarketplace(preferredMarket);
-
-    // If item doesn't need condition, fetch price immediately
+    // If item doesn't need condition, fetch prices immediately
     if (!requiresCondition) {
-      setLoading(true);
-      try {
-        const result = await lookupSinglePrice(
-          item,
-          currentVariantKey,
-          null
-        );
-
-        if (result.success) {
-          const marketPrice = result.data[preferredMarket]?.[0];
-          if (marketPrice) {
-            setSelectedItem({
-              ...item,
-              initialPrice: marketPrice.price,
-              marketplace: preferredMarket,
-              condition: null,
-              variant: currentVariantKey
-            });
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching price:', err);
-      } finally {
-        setLoading(false);
-      }
+      await fetchAllMarketplacePrices(item, currentVariantKey, null, preferredMarket);
     } else {
-      // For items that need condition, just set the item without price
+      // For items that need condition, just set the item without prices
       setSelectedItem({
         ...item,
         marketplace: preferredMarket
       });
+    }
+  };
+  
+  // Fetch prices from all marketplaces
+  const fetchAllMarketplacePrices = async (item, variant, condition, defaultMarket) => {
+    setLoading(true);
+    try {
+      const result = await lookupSinglePrice(item, variant, condition);
+
+      if (result.success && result.data) {
+        setAllMarketplacePrices(result.data);
+        
+        // Set initial price from preferred marketplace or first available
+        const preferredPrice = result.data[defaultMarket]?.[0];
+        const firstAvailableMarket = Object.keys(result.data).find(m => result.data[m]?.length > 0);
+        const firstAvailablePrice = firstAvailableMarket ? result.data[firstAvailableMarket][0] : null;
+        
+        if (preferredPrice) {
+          setSelectedItem(prev => ({
+            ...prev || item,
+            initialPrice: preferredPrice.price,
+            marketplace: defaultMarket,
+            condition: condition,
+            variant: variant
+          }));
+          setSelectedMarketplace(defaultMarket);
+        } else if (firstAvailablePrice) {
+          setSelectedItem(prev => ({
+            ...prev || item,
+            initialPrice: firstAvailablePrice.price,
+            marketplace: firstAvailableMarket,
+            condition: condition,
+            variant: variant
+          }));
+          setSelectedMarketplace(firstAvailableMarket);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching prices:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -582,34 +695,8 @@ const AddToWatchlistModal = ({ userSession, onClose, onAdd }) => {
     let isCancelled = false;
     
     const fetchPrice = async () => {
-      setLoading(true);
-      try {
-        const result = await lookupSinglePrice(
-          selectedItem,
-          selectedVariant,
-          selectedCondition
-        );
-
-        if (!isCancelled && result.success) {
-          const marketPrice = result.data[selectedMarketplace]?.[0];
-          if (marketPrice) {
-            setSelectedItem(prev => ({
-              ...prev,
-              initialPrice: marketPrice.price,
-              condition: selectedCondition,
-              variant: selectedVariant
-            }));
-          }
-        }
-      } catch (err) {
-        if (!isCancelled) {
-          console.error('Error fetching price:', err);
-        }
-      } finally {
-        if (!isCancelled) {
-          setLoading(false);
-        }
-      }
+      const preferredMarket = settings.marketplacePriority?.[0] || 'csfloat';
+      await fetchAllMarketplacePrices(selectedItem, selectedVariant, selectedCondition, preferredMarket);
     };
 
     // Small delay to prevent rapid successive calls
@@ -619,7 +706,7 @@ const AddToWatchlistModal = ({ userSession, onClose, onAdd }) => {
       isCancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [selectedCondition, selectedVariant, needsCondition, selectedItem?.id, selectedMarketplace, lookupSinglePrice]);
+  }, [selectedCondition, selectedVariant, needsCondition, selectedItem?.id, settings.marketplacePriority]);
 
   const handleAdd = async () => {
     if (!isFormComplete) return;
@@ -642,7 +729,7 @@ const AddToWatchlistModal = ({ userSession, onClose, onAdd }) => {
       className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-gradient-to-br from-gray-900 to-slate-900 rounded-xl border border-orange-500/20 w-full max-w-3xl h-[90vh] flex flex-col">
+      <div className="bg-gradient-to-br from-gray-900 to-slate-900 rounded-xl border border-orange-500/20 w-full max-w-3xl h-[85vh] flex flex-col">
         {/* Fixed Header */}
         <div className="flex justify-between items-center p-6 pb-4 border-b border-gray-700">
           <h3 className="text-xl font-semibold text-white">Add to Watchlist</h3>
@@ -692,6 +779,7 @@ const AddToWatchlistModal = ({ userSession, onClose, onAdd }) => {
           {/* Selected Item */}
           {selectedItem && (
             <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 space-y-4">
+              {/* Item Preview */}
               <div className="flex items-center space-x-3">
                 {selectedItem.image && (
                   <img
@@ -705,21 +793,25 @@ const AddToWatchlistModal = ({ userSession, onClose, onAdd }) => {
                   {loading ? (
                     <div className="flex items-center space-x-2 mt-1">
                       <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
-                      <span className="text-gray-400 text-sm">Fetching price...</span>
+                      <span className="text-gray-400 text-sm">Fetching prices...</span>
                     </div>
                   ) : selectedItem.initialPrice ? (
                     <p className="text-green-400 text-sm mt-1">
-                      Initial Price: ${selectedItem.initialPrice.toFixed(2)} ({selectedItem.marketplace.toUpperCase()})
+                      Initial Price: ${selectedItem.initialPrice.toFixed(2)} ({selectedMarketplace.toUpperCase()})
                     </p>
-                  ) : needsCondition ? (
+                  ) : needsCondition && !selectedCondition ? (
                     <p className="text-yellow-400 text-sm mt-1">
-                      Select condition to get price
+                      Select condition to get prices
                     </p>
-                  ) : null}
+                  ) : (
+                    <p className="text-gray-400 text-sm mt-1">
+                      Fetching prices...
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {/* Condition Selector - Only show for items that need it */}
+              {/* Condition Selector - Show FIRST (before prices) */}
               {needsCondition && currentVariantItem && (
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -733,7 +825,6 @@ const AddToWatchlistModal = ({ userSession, onClose, onAdd }) => {
                       { short: 'WW', full: 'Well-Worn', minFloat: 0.37, maxFloat: 0.44 },
                       { short: 'BS', full: 'Battle-Scarred', minFloat: 0.44, maxFloat: 1.00 }
                     ].map(({ short, full, minFloat: condMin, maxFloat: condMax }) => {
-                      // Use currentVariantItem's float range for validation
                       const itemMinFloat = currentVariantItem.minFloat;
                       const itemMaxFloat = currentVariantItem.maxFloat;
                       
@@ -772,7 +863,7 @@ const AddToWatchlistModal = ({ userSession, onClose, onAdd }) => {
                 </div>
               )}
 
-              {/* Variant Selector - Only show if item has variants AND not pre-selected */}
+              {/* Variant Selector */}
               {hasVariants && !selectedItem.requiresVariantPreSelection && (
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -820,7 +911,7 @@ const AddToWatchlistModal = ({ userSession, onClose, onAdd }) => {
                 </div>
               )}
 
-              {/* Show locked variant indicator for music items */}
+              {/* Locked variant indicator */}
               {selectedItem.requiresVariantPreSelection && (
                 <div className="pt-2 border-t border-gray-600">
                   <div className="flex items-center gap-2 text-xs">
@@ -836,6 +927,83 @@ const AddToWatchlistModal = ({ userSession, onClose, onAdd }) => {
                   <p className="text-xs text-gray-500 mt-1">
                     This variant was pre-selected during search
                   </p>
+                </div>
+              )}
+
+              {/* Marketplace Price Selector - Show AFTER condition/variant selected and prices fetched */}
+              {!loading && Object.keys(allMarketplacePrices).length > 0 && (
+                <div className="pt-3 border-t border-gray-600">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Initial Marketplace & Price <span className="text-red-400">*</span>
+                  </label>
+                  <p className="text-xs text-gray-400 mb-3">
+                    Choose which marketplace to track from. Your primary marketplace ({(settings.marketplacePriority?.[0] || 'csfloat').toUpperCase()}) is selected by default. Current prices will use your primary marketplace setting.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.entries(allMarketplacePrices).map(([marketplace, prices]) => {
+                      if (!prices || prices.length === 0) return null;
+                      const price = prices[0];
+                      const isSelected = selectedMarketplace === marketplace;
+                      const isPrimary = marketplace === (settings.marketplacePriority?.[0] || 'csfloat');
+                      
+                      return (
+                        <button
+                          key={marketplace}
+                          type="button"
+                          onClick={() => {
+                            setSelectedMarketplace(marketplace);
+                            setSelectedItem(prev => ({
+                              ...prev,
+                              initialPrice: price.price,
+                              marketplace: marketplace
+                            }));
+                          }}
+                          className={`p-2.5 rounded-lg border-2 transition-all text-left ${
+                            isSelected
+                              ? 'border-orange-500 bg-orange-500/10'
+                              : 'border-gray-600 bg-gray-700/30 hover:border-gray-500'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-white uppercase">
+                              {marketplace}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              {isPrimary && (
+                                <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">
+                                  Primary
+                                </span>
+                              )}
+                              {isSelected && (
+                                <span className="text-xs bg-orange-500 text-white px-1.5 py-0.5 rounded">
+                                  Selected
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-base font-bold text-white mb-0.5">
+                            ${price.price.toFixed(2)}
+                          </div>
+                          {price.is_bid_price && (
+                            <div className="flex items-center space-x-1 text-yellow-400 text-xs">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>Bid only</span>
+                            </div>
+                          )}
+                          {marketplace === 'steam' && price.price_last_7d && (
+                            <div className="text-xs text-gray-400">
+                              7d: ${price.price_last_7d.toFixed(2)}
+                            </div>
+                          )}
+                          {marketplace === 'buff163' && price.highest_order_price && (
+                            <div className="text-xs text-gray-400">
+                              Bid: ${price.highest_order_price.toFixed(2)}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
