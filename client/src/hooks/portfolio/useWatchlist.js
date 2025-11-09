@@ -168,6 +168,75 @@ export const useWatchlist = (userSession) => {
     }
   }, [userSession, toast, fetchWatchlist]);
 
+  const switchMarketplace = useCallback(async (id, marketplace) => {
+    if (!userSession?.id) return { success: false };
+
+    try {
+      const { data, error } = await supabase.rpc('switch_watchlist_marketplace', {
+        p_watchlist_id: id,
+        p_user_id: userSession.id,
+        p_new_marketplace: marketplace
+      });
+
+      if (error) throw error;
+
+      await fetchWatchlist();
+      toast.success(`Switched to ${marketplace.toUpperCase()}`, 'Updated');
+
+      return { success: true, data };
+    } catch (err) {
+      console.error('Error switching marketplace:', err);
+      toast.error('Failed to switch marketplace', 'Error');
+      return { success: false, error: err.message };
+    }
+  }, [userSession, toast, fetchWatchlist]);
+
+   const resetBaseline = useCallback(async (id) => {
+    if (!userSession?.id) return { success: false };
+
+    try {
+      const { data, error } = await supabase.rpc('reset_watchlist_baseline', {
+        p_watchlist_id: id,
+        p_user_id: userSession.id
+      });
+
+      if (error) throw error;
+
+      await fetchWatchlist();
+      toast.success('Baseline reset to current price', 'Updated');
+
+      return { success: true, data };
+    } catch (err) {
+      console.error('Error resetting baseline:', err);
+      toast.error('Failed to reset baseline', 'Error');
+      return { success: false, error: err.message };
+    }
+  }, [userSession, toast, fetchWatchlist]);
+
+  // ADD: Edit baseline
+  const editBaseline = useCallback(async (id, newBaseline) => {
+    if (!userSession?.id) return { success: false };
+
+    try {
+      const { data, error } = await supabase.rpc('edit_watchlist_baseline', {
+        p_watchlist_id: id,
+        p_user_id: userSession.id,
+        p_new_baseline: parseFloat(newBaseline)
+      });
+
+      if (error) throw error;
+
+      await fetchWatchlist();
+      toast.success('Baseline updated', 'Updated');
+
+      return { success: true, data };
+    } catch (err) {
+      console.error('Error editing baseline:', err);
+      toast.error('Failed to edit baseline', 'Error');
+      return { success: false, error: err.message };
+    }
+  }, [userSession, toast, fetchWatchlist]);
+
   // Bulk remove items using RPC function
   const bulkRemove = useCallback(async (ids) => {
     if (!userSession?.id) return { success: false };
@@ -206,6 +275,9 @@ export const useWatchlist = (userSession) => {
     removeFromWatchlist,
     updateWatchlistItem,
     bulkRemove,
-    refreshWatchlist: fetchWatchlist
+    refreshWatchlist: fetchWatchlist,
+    switchMarketplace,
+    resetBaseline,
+    editBaseline
   };
 };
