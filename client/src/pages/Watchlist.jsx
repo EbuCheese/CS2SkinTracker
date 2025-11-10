@@ -7,6 +7,7 @@ import {
   Plus,
   Loader2,
   RefreshCw,
+  RotateCcw,
   Eraser,
   BrushCleaning,
   AlertCircle,
@@ -17,10 +18,11 @@ import {
   Target
 } from 'lucide-react';
 import CSItemSearch from '@/components/search/CSItemSearch';
+import PopupManager from '@/components/ui/PopupManager';
 import { usePriceLookup, useWatchlist } from '@/hooks/portfolio';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
-import { supabase } from '@/supabaseClient';
 import { useToast } from '@/contexts/ToastContext';
+import { useScrollLock, formatDateInTimezone } from '@/hooks/util';
 
 const ITEM_TYPES = [
   { value: 'all', label: 'All' },
@@ -66,6 +68,18 @@ const WatchlistPage = ({ userSession }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [editingBaselines, setEditingBaselines] = useState({});
   const [switchingMarketplace, setSwitchingMarketplace] = useState(null);
+
+  const [popupState, setPopupState] = useState({
+    isOpen: false,
+    type: 'confirm',
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    onConfirm: null
+  });
+
+  useScrollLock(showAddModal);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -182,13 +196,37 @@ const WatchlistPage = ({ userSession }) => {
     }
   };
 
+  const handleRequestRemove = (itemId, itemName) => {
+    setPopupState({
+      isOpen: true,
+      type: 'confirm',
+      title: 'Remove Item',
+      message: `Remove "${itemName}" from watchlist?`,
+      confirmText: 'Remove',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        await removeFromWatchlist(itemId);
+        setPopupState(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+  };
+
   const handleBulkDelete = async () => {
     if (selectedItems.size === 0) return;
     
-    if (confirm(`Remove ${selectedItems.size} items from watchlist?`)) {
-      await bulkRemove(Array.from(selectedItems));
-      setSelectedItems(new Set());
-    }
+    setPopupState({
+      isOpen: true,
+      type: 'confirm',
+      title: 'Remove Items',
+      message: `Remove ${selectedItems.size} item${selectedItems.size > 1 ? 's' : ''} from watchlist?`,
+      confirmText: 'Remove',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        await bulkRemove(Array.from(selectedItems));
+        setSelectedItems(new Set());
+        setPopupState(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   const startEditingBaseline = (itemId, currentBaseline) => {
@@ -222,9 +260,18 @@ const WatchlistPage = ({ userSession }) => {
   };
 
   const handleResetBaseline = async (itemId) => {
-    if (confirm('Reset baseline to current price? This will restart % tracking from now.')) {
-      await resetBaseline(itemId);
-    }
+    setPopupState({
+      isOpen: true,
+      type: 'confirm',
+      title: 'Reset Baseline',
+      message: 'Reset baseline to current price? This will restart % tracking from now.',
+      confirmText: 'Reset', // ADD THIS
+      cancelText: 'Cancel', // ADD THIS
+      onConfirm: async () => {
+        await resetBaseline(itemId);
+        setPopupState(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   const handleSwitchMarketplace = async (itemId, marketplace) => {
@@ -416,6 +463,7 @@ const WatchlistPage = ({ userSession }) => {
                       isSelected={selectedItems.has(item.id)}
                       onToggleSelect={() => toggleSelection(item.id)}
                       onRemove={() => removeFromWatchlist(item.id)}
+                      onRequestRemoveConfirm={handleRequestRemove}
                       editingBaseline={editingBaselines[item.id]}
                       onStartEditBaseline={startEditingBaseline}
                       onCancelEditBaseline={cancelEditingBaseline}
@@ -461,6 +509,18 @@ const WatchlistPage = ({ userSession }) => {
             )}
           </div>
         )}
+
+        <PopupManager
+          isOpen={popupState.isOpen}
+          onClose={() => setPopupState(prev => ({ ...prev, isOpen: false }))}
+          type={popupState.type}
+          title={popupState.title}
+          message={popupState.message}
+          onConfirm={popupState.onConfirm}
+          onCancel={() => setPopupState(prev => ({ ...prev, isOpen: false }))}
+          confirmText={popupState.confirmText}
+          cancelText={popupState.cancelText}
+        />
       </div>
 
       {showAddModal && (
@@ -479,6 +539,7 @@ const WatchlistRow = ({
   isSelected, 
   onToggleSelect, 
   onRemove,
+  onRequestRemoveConfirm,
   editingBaseline,
   onStartEditBaseline,
   onCancelEditBaseline,
@@ -498,6 +559,8 @@ const WatchlistRow = ({
   const isEditing = editingBaseline?.editing;
   const isShowingMarketplaceSwitch = switchingMarketplace === item.id;
   
+  const { timezone } = useUserSettings();
+
   const availablePrices = useMemo(() => {
     if (!item.available_prices) return [];
     try {
@@ -659,7 +722,11 @@ const WatchlistRow = ({
         {/* ADDED DATE */}
         <td className="p-3 text-center">
           <div className="text-gray-400 text-sm">
-            {new Date(item.created_at).toLocaleDateString()}
+            {formatDateInTimezone(item.created_at, timezone, {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric'
+            })}
           </div>
         </td>
         
@@ -697,7 +764,7 @@ const WatchlistRow = ({
                   className="p-1.5 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded transition-colors"
                   title="Reset baseline to current price"
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  <RotateCcw className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => onToggleMarketplaceSwitch(isShowingMarketplaceSwitch ? null : item.id)}
@@ -706,13 +773,13 @@ const WatchlistRow = ({
                 >
                   <TrendingUp className="w-4 h-4" />
                 </button>
-                <button
-                  onClick={onRemove}
-                  className="p-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded transition-colors"
-                  title="Remove from watchlist"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                  <button
+                    onClick={() => onRequestRemoveConfirm(item.id, item.full_name)} // CHANGE THIS
+                    className="p-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded transition-colors"
+                    title="Remove from watchlist"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
               </>
             )}
           </div>
@@ -859,6 +926,8 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
   const [selectedCondition, setSelectedCondition] = useState('');
   const [selectedVariant, setSelectedVariant] = useState('normal');
   
+  useScrollLock(true);
+
   // converts database types back to search types
   const SEARCH_TYPE_MAP = {
     'liquid': 'skins',
@@ -992,69 +1061,77 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-gradient-to-br from-gray-900 to-slate-900 rounded-xl border border-orange-500/20 w-full max-w-3xl max-h-[90vh] flex flex-col">
-        <div className="flex justify-between items-center p-6 pb-4 border-b border-gray-700">
-          <h3 className="text-xl font-semibold text-white">Add to Watchlist</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-2xl">
-            ×
-          </button>
-        </div>
+  <div
+    className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 overflow-y-auto py-8"
+    onClick={(e) => e.target === e.currentTarget && onClose()}
+  >
+    {/* Modal container - centered with dynamic height */}
+    <div className="bg-gradient-to-br from-gray-900 to-slate-900 rounded-xl border border-orange-500/20 w-full max-w-3xl">
+      
+      {/* Header */}
+      <div className="flex justify-between items-center p-6 pb-4 border-b border-gray-700">
+        <h3 className="text-xl font-semibold text-white">Add to Watchlist</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-2xl">
+          ×
+        </button>
+      </div>
 
-        <div className="overflow-y-auto flex-1 p-6 pt-4">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Item Category</label>
-              <select
-                value={searchType}
-                onChange={(e) => {
-                  setSearchType(e.target.value);
-                  setSearchValue('');
-                  setSelectedItem(null);
-                  setSelectedCondition('');
-                }}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-              >
-                {ITEM_TYPES.map(type => (
-                  <option key={type.value} value={type.value}>{type.label}</option>
-                ))}
-              </select>
-            </div>
+      {/* Content - no overflow restrictions */}
+      <div className="p-6 pt-4">
+        <div className="space-y-4">
+          
+          {/* Category select */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Item Category</label>
+            <select
+              value={searchType}
+              onChange={(e) => {
+                setSearchType(e.target.value);
+                setSearchValue('');
+                setSelectedItem(null);
+                setSelectedCondition('');
+              }}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+            >
+              {ITEM_TYPES.map(type => (
+                <option key={type.value} value={type.value}>{type.label}</option>
+              ))}
+            </select>
+          </div>
 
-            <div>
+          {/* Search - with maintained height for dropdown */}
+          {!selectedItem && (
+            <div className="min-h-[450px]">
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Search Item
               </label>
-              <div className="relative">
-                <CSItemSearch
-                  type={searchType === 'all' ? 'all' : (SEARCH_TYPE_MAP[searchType] || searchType)}
-                  value={searchValue}
-                  onChange={(e) => {
-                    setSearchValue(e.target.value);
-                    setIsSearching(e.target.value.length > 0);
-                  }}
-                  onSelect={handleItemSelect}
-                  showLargeView={true}
-                  maxHeight="400px"
-                  maxResults={30}
-                />
-                
-                {/* FIXED: Remove fixed height, use min-height instead */}
-                {hasSearchStarted && searchValue.length > 0 && !selectedItem && (
-                  <div className="mt-2 p-8 bg-gray-800/30 border border-gray-700/50 rounded-lg text-center min-h-[250px] flex flex-col items-center justify-center">
-                    <Search className="w-12 h-12 text-gray-600 mb-3" />
-                    <p className="text-gray-400 text-sm">
-                      {isSearching ? 'Search results will appear here' : 'Type to search items'}
-                    </p>
-                  </div>
-                )}
-              </div>
+              <CSItemSearch
+                type={searchType === 'all' ? 'all' : (SEARCH_TYPE_MAP[searchType] || searchType)}
+                value={searchValue}
+                onChange={(e) => {
+                  setSearchValue(e.target.value);
+                  setIsSearching(e.target.value.length > 0);
+                }}
+                onSelect={handleItemSelect}
+                showLargeView={true}
+                maxHeight="400px"
+                maxResults={30}
+              />
+              
+              {/* Empty State - shows when not searching */}
+              {!searchValue && !loading && (
+                <div className="text-center py-16 mt-10">
+                  <Search className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                  <p className="text-gray-400 text-lg mb-2">Search for an item to view prices</p>
+                  <p className="text-gray-500 text-sm">All available variants and conditions will be displayed</p>
+                </div>
+              )}
             </div>
+          )}
 
-            {selectedItem && (
+          {/* Selected item form - scrollable when showing */}
+          {selectedItem && (
+            <div className="max-h-[60vh] overflow-y-auto">
               <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 space-y-4">
                 <div className="flex items-center space-x-3 pb-3 border-b border-gray-700">
                   {selectedItem.image && (
@@ -1301,22 +1378,23 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
                     </div>
                   </div>
                 </div>
+                
+                <button
+                  onClick={handleAdd}
+                  disabled={!isFormComplete || loading}
+                  className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-5 h-5" />
+                  {loading ? 'Fetching Price...' : 'Add to Watchlist'}
+                </button>
               </div>
-            )}
-
-            <button
-              onClick={handleAdd}
-              disabled={!isFormComplete || loading}
-              className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              {loading ? 'Fetching Price...' : 'Add to Watchlist'}
-            </button>
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 };
 
 export default WatchlistPage;
