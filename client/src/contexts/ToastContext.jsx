@@ -157,6 +157,39 @@ export const ToastProvider = ({ children }) => {
   });
 };
 
+const itemRemovedFromWatchlist = (itemName, options = {}) => {
+  return addToast({
+    type: 'delete',
+    title: 'Removed from Watchlist',
+    message: itemName,
+    metadata: null, 
+    duration: 4000,
+    ...options
+  });
+};
+
+const itemAddedToWatchlist = (itemName, options = {}) => {
+  return addToast({
+    type: 'add',
+    title: 'Added to Watchlist',
+    message: itemName,
+    metadata: null, 
+    duration: 4000,
+    ...options
+  });
+};
+
+const bulkRemovedFromWatchlist = (count, options = {}) => {
+  return addToast({
+    type: 'delete',
+    title: 'Removed from Watchlist',
+    message: `${count} item${count > 1 ? 's' : ''} removed`,
+    metadata: null, 
+    duration: 4000,
+    ...options
+  });
+};
+
   // Context value with all toast functionality
   const contextValue = {
     toasts,
@@ -174,7 +207,10 @@ export const ToastProvider = ({ children }) => {
     saleRecordDeleted,
     itemUpdated,
     saleRecordUpdated,
-    saleReverted
+    saleReverted,
+    itemRemovedFromWatchlist,
+    itemAddedToWatchlist,
+    bulkRemovedFromWatchlist
   };
 
   return (
