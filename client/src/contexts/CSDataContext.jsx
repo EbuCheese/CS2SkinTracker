@@ -213,7 +213,7 @@ export const CSDataProvider = ({ children }) => {
         category: item.category || '',
         pattern: item.pattern || '',
         isMusicKit: true,
-        requiresVariantPreSelection: true // NEW FLAG
+        requiresVariantPreSelection: true
       };
     }
     

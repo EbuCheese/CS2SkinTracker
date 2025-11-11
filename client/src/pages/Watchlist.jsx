@@ -24,6 +24,7 @@ import { useUserSettings } from '@/contexts/UserSettingsContext';
 import { useToast } from '@/contexts/ToastContext';
 import { useScrollLock, formatDateInTimezone } from '@/hooks/util';
 
+// map the item types to display
 const ITEM_TYPES = [
   { value: 'all', label: 'All' },
   { value: 'liquid', label: 'Skins' },
@@ -37,6 +38,7 @@ const ITEM_TYPES = [
   { value: 'highlight', label: 'Highlights' },
 ];
 
+// sorting filters at top
 const SORT_OPTIONS = [
   { value: 'date_desc', label: 'Newest First' },
   { value: 'date_asc', label: 'Oldest First' },
@@ -87,7 +89,7 @@ const WatchlistPage = ({ userSession }) => {
     setRefreshing(false);
   };
 
-  // Better stats calculation with separate tracking
+  // stats calculations
   const stats = useMemo(() => {
     let totalGaining = 0;
     let totalLosing = 0;
@@ -188,6 +190,7 @@ const WatchlistPage = ({ userSession }) => {
     });
   };
 
+  // select all watchlist items toggle
   const toggleSelectAll = () => {
     if (selectedItems.size === filteredAndSortedWatchlist.length) {
       setSelectedItems(new Set());
@@ -196,6 +199,7 @@ const WatchlistPage = ({ userSession }) => {
     }
   };
 
+  // handle the individual removal of items
   const handleRequestRemove = (itemId, itemName) => {
     setPopupState({
       isOpen: true,
@@ -211,6 +215,7 @@ const WatchlistPage = ({ userSession }) => {
     });
   };
 
+  // handle the bulk remove of items
   const handleBulkDelete = async () => {
     if (selectedItems.size === 0) return;
     
@@ -229,6 +234,7 @@ const WatchlistPage = ({ userSession }) => {
     });
   };
 
+  // edit the baseline price we are tracking from
   const startEditingBaseline = (itemId, currentBaseline) => {
     setEditingBaselines({
       ...editingBaselines,
@@ -239,12 +245,14 @@ const WatchlistPage = ({ userSession }) => {
     });
   };
 
+  // cancel editing of the baseline 
   const cancelEditingBaseline = (itemId) => {
     const newEditing = { ...editingBaselines };
     delete newEditing[itemId];
     setEditingBaselines(newEditing);
   };
 
+  // save the new baseline
   const saveBaseline = async (itemId) => {
     const editData = editingBaselines[itemId];
     if (!editData) return;
@@ -259,14 +267,15 @@ const WatchlistPage = ({ userSession }) => {
     cancelEditingBaseline(itemId);
   };
 
+  // reset the baseline to current price
   const handleResetBaseline = async (itemId) => {
     setPopupState({
       isOpen: true,
       type: 'confirm',
       title: 'Reset Baseline',
       message: 'Reset baseline to current price? This will restart % tracking from now.',
-      confirmText: 'Reset', // ADD THIS
-      cancelText: 'Cancel', // ADD THIS
+      confirmText: 'Reset',
+      cancelText: 'Cancel',
       onConfirm: async () => {
         await resetBaseline(itemId);
         setPopupState(prev => ({ ...prev, isOpen: false }));
@@ -274,6 +283,7 @@ const WatchlistPage = ({ userSession }) => {
     });
   };
 
+  // switch the tracking to a different marketplace
   const handleSwitchMarketplace = async (itemId, marketplace) => {
     await switchMarketplace(itemId, marketplace);
     setSwitchingMarketplace(null);
@@ -365,6 +375,7 @@ const WatchlistPage = ({ userSession }) => {
             </div>
           )}
 
+          {/* Filtering section */}
           <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Item Type</label>
@@ -928,7 +939,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
   
   useScrollLock(true);
 
-  // converts database types back to search types
+  // converts database types back to searchable types
   const SEARCH_TYPE_MAP = {
     'liquid': 'skins',
     'case': 'cases',
@@ -944,8 +955,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
   const { settings } = useUserSettings();
   const { lookupSinglePrice } = usePriceLookup(userSession);
 
-  const hasSearchStarted = searchValue.length > 0 || isSearching;
-
+  // get info based on item
   const needsCondition = selectedItem && ['Rifles', 'Pistols', 'SMGs', 'Heavy', 'Knives', 'Gloves'].includes(
     selectedItem.category || selectedItem.metadata?.[0]
   );
@@ -993,6 +1003,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
     }
   };
   
+  // get all of the market price for items
   const fetchAllMarketplacePrices = async (item, variant, condition, defaultMarket) => {
     setLoading(true);
     try {
@@ -1065,7 +1076,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
     className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 overflow-y-auto py-8"
     onClick={(e) => e.target === e.currentTarget && onClose()}
   >
-    {/* Modal container - centered with dynamic height */}
+    {/* Modal container */}
     <div className="bg-gradient-to-br from-gray-900 to-slate-900 rounded-xl border border-orange-500/20 w-full max-w-3xl">
       
       {/* Header */}
@@ -1076,7 +1087,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
         </button>
       </div>
 
-      {/* Content - no overflow restrictions */}
+      {/* Main Content */}
       <div className="p-6 pt-4">
         <div className="space-y-4">
           
@@ -1099,7 +1110,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
             </select>
           </div>
 
-          {/* Search - with maintained height for dropdown */}
+          {/* Search Section */}
           {!selectedItem && (
             <div className="min-h-[450px]">
               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -1129,7 +1140,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
             </div>
           )}
 
-          {/* Selected item form - scrollable when showing */}
+          {/* Selected item form */}
           {selectedItem && (
             <div className="max-h-[60vh] overflow-y-auto">
               <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 space-y-4">

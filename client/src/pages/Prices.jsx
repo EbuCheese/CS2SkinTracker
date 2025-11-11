@@ -19,7 +19,6 @@ const ITEM_TYPES = [
   { value: 'highlights', label: 'Highlights' },
 ];
 
-// pages/PricesPage.jsx - Revised UX
 const PricesPage = ({ userSession }) => {
   const location = useLocation();
   const { lookupMaps } = useCSData();
@@ -30,7 +29,7 @@ const PricesPage = ({ userSession }) => {
   const [allPrices, setAllPrices] = useState([]);
   
   // Filter states (only used if item has options)
-  const [filterCondition, setFilterCondition] = useState('all'); // 'all' or specific
+  const [filterCondition, setFilterCondition] = useState('all');
   const [filterVariant, setFilterVariant] = useState('all'); // 'all', 'normal', 'stattrak', 'souvenir'
 
   const { lookupAllPrices, loading, error } = usePriceLookup(userSession);
@@ -105,7 +104,7 @@ const filteredMarketPrices = useMemo(() =>
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 p-4">
-      <div className="max-w-7xl mx-auto"> {/* Wider for filters */}
+      <div className="max-w-7xl mx-auto"> 
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent mb-2">
@@ -563,6 +562,7 @@ const filteredMarketPrices = useMemo(() =>
   );
 };
 
+// un-used for now
 const MarketplacePriceCard = ({ marketplace, prices }) => {
   const mainPrice = prices[0];
   
@@ -656,7 +656,6 @@ const PriceComparisonTable = ({ variantLabel, configs }) => {
       <div className="overflow-x-auto -mx-6 lg:mx-0">
         <div className="inline-block min-w-full align-middle px-6 lg:px-0">
         <table className="w-full min-w-[600px]">
-          {/* Update the table header to show preference */}
           <thead>
             <tr className="border-b border-gray-700">
               {configs[0]?.condition && (

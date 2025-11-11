@@ -36,7 +36,7 @@ export const useItemFormatting = () => {
                               itemName.includes('Souvenir Package');
 
     // Check if this is a name-based StatTrak™ (already has "StatTrak™" in the name)
-    // FIXED: Check for ANY music item (kit or box) with StatTrak™ prefix
+    // Check for ANY music item (kit or box) with StatTrak™ prefix
     const isNameBasedStatTrak = item.isNameBasedStatTrak ||
                               itemName.startsWith('StatTrak™ Music Kit') ||
                               (itemName.startsWith('StatTrak™') && itemName.includes('Music Kit Box'));

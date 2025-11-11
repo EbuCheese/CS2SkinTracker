@@ -151,7 +151,7 @@ export const useWatchlist = (userSession) => {
   if (!userSession?.id) return { success: false };
 
   try {
-    // ADD THIS: Find the item before updating
+    // Find the item before updating
     const item = watchlist.find(w => w.id === id);
     
     const { data, error: updateError } = await supabase.rpc('update_watchlist_with_context', {
@@ -163,7 +163,7 @@ export const useWatchlist = (userSession) => {
     if (updateError) throw updateError;
 
     await fetchWatchlist();
-    toast.itemUpdated(item?.full_name || 'Item'); // Now item is defined
+    toast.itemUpdated(item?.full_name || 'Item'); 
 
     return { success: true, data };
   } catch (err) {
@@ -229,7 +229,6 @@ const resetBaseline = useCallback(async (id) => {
   }
 }, [userSession, toast, fetchWatchlist, watchlist]);
 
-// And editBaseline:
 const editBaseline = useCallback(async (id, newBaseline) => {
   if (!userSession?.id) return { success: false };
 

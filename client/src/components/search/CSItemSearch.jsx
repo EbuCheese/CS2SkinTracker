@@ -1,4 +1,3 @@
-// CSItemSearch.jsx - Updated to use custom useAdvancedDebounce hook
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Search } from 'lucide-react';
 import { useCSData } from '@/contexts/CSDataContext';
@@ -46,7 +45,7 @@ const CSItemSearch = ({
   // Process and filter data for the current item type
   const typeData = useMemo(() => {
   if (type === 'all') {
-    // Add null check for unifiedSearchIndex
+    // null check for unifiedSearchIndex
     if (!unifiedSearchIndex) return null;
     
     // Filter out collections from unified search
@@ -215,7 +214,7 @@ const CSItemSearch = ({
 
     const itemWithVariant = {
       ...selectedItem,
-      // CRITICAL: Ensure the name is the full variant name from the database
+      // Ensure the name is the full variant name from the database
       name: selectedItem.name, // This includes "StatTrak™" prefix if stattrak
       selectedVariant: finalVariant,
       hasStatTrak: !isHighlight && !requiresVariantPreSelection && Boolean(item.hasStatTrak),
@@ -226,7 +225,6 @@ const CSItemSearch = ({
       requiresVariantPreSelection: requiresVariantPreSelection,
       isMusicKit: item.isMusicKit,
       isMusicKitBox: item.isMusicKitBox,
-      // NEW: Pass the variant-specific ID
       id: selectedItem.id
     };
     
