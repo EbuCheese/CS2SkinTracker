@@ -1144,6 +1144,24 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
           {selectedItem && (
             <div className="max-h-[60vh] overflow-y-auto">
               <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-gray-700">
+                  <button
+                    onClick={() => {
+                      setSelectedItem(null);
+                      setSelectedCondition('');
+                      setSelectedVariant('normal');
+                      setAllMarketplacePrices({});
+                      setTargetPrice('');
+                      setNotes('');
+                    }}
+                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    <span className="text-sm font-medium">Back to Search</span>
+                  </button>
+                </div>
                 <div className="flex items-center space-x-3 pb-3 border-b border-gray-700">
                   {selectedItem.image && (
                     <img
