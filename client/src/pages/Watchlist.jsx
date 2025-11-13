@@ -680,14 +680,19 @@ const WatchlistRow = ({
                   <span className="text-yellow-400 ml-1">(Bid)</span>
                 )}
               </div>
-              {availablePrices.length > 1 && (
-                <button
-                  onClick={() => setShowAllPrices(!showAllPrices)}
-                  className="text-xs text-blue-400 hover:text-blue-300 mt-1"
-                >
-                  {showAllPrices ? 'Hide' : `+${availablePrices.length - 1} more`}
-                </button>
-              )}
+              {/* Add this placeholder to match the "X days ago" in baseline */}
+              <div className="text-gray-500 text-xs mt-0.5 h-[16px]">
+                {availablePrices.length > 1 ? (
+                  <button
+                    onClick={() => setShowAllPrices(!showAllPrices)}
+                    className="text-blue-400 hover:text-blue-300 pr-1"
+                  >
+                    {showAllPrices ? 'Hide' : `+${availablePrices.length - 1} more`}
+                  </button>
+                ) : (
+                  <span className="invisible">placeholder</span>
+                )}
+              </div>
             </div>
           ) : (
             <div className="text-gray-500 text-sm">No price</div>
@@ -858,7 +863,7 @@ const WatchlistRow = ({
                     key={priceData.marketplace} 
                     className={`bg-gray-800/50 rounded-lg p-3 border ${
                       isCurrent ? 'border-orange-500/50' : 'border-gray-600/30'
-                    }`}
+                    } flex flex-col`} 
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm text-gray-300 uppercase font-medium">
@@ -883,24 +888,26 @@ const WatchlistRow = ({
                       {priceData.change_percent.toFixed(2)}% vs baseline
                     </div>
                     
-                    {priceData.is_bid_price && (
-                      <div className="flex items-center space-x-1 text-yellow-400 text-xs mt-1">
-                        <AlertCircle className="w-3 h-3" />
-                        <span>Bid only</span>
-                      </div>
-                    )}
-                    
-                    {priceData.marketplace === 'steam' && priceData.price_last_7d && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        7d: ${priceData.price_last_7d.toFixed(2)}
-                      </div>
-                    )}
-                    
-                    {priceData.marketplace === 'buff163' && priceData.highest_order_price && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        Bid: ${priceData.highest_order_price.toFixed(2)}
-                      </div>
-                    )}
+                    <div className="flex-grow">
+                      {priceData.is_bid_price && (
+                        <div className="flex items-center space-x-1 text-yellow-400 text-xs mt-1">
+                          <AlertCircle className="w-3 h-3" />
+                          <span>Bid only</span>
+                        </div>
+                      )}
+                      
+                      {priceData.marketplace === 'steam' && priceData.price_last_7d && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          7d: ${priceData.price_last_7d.toFixed(2)}
+                        </div>
+                      )}
+                      
+                      {priceData.marketplace === 'buff163' && priceData.highest_order_price && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          Bid: ${priceData.highest_order_price.toFixed(2)}
+                        </div>
+                      )}
+                    </div>
                     
                     {!isCurrent && (
                       <button
