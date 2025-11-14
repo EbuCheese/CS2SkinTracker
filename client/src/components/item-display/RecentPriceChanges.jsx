@@ -10,10 +10,12 @@ const InvestmentItem = React.memo(({
   displayName,
   subtitle,
   isNew = false,
-  isPriceLoading = false
+  isPriceLoading = false,
+  isWatchlistItem = false 
 }) => {
   return (
-    <div className={`flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-colors duration-200 ${isNew ? 'animate-slide-in-from-top' : ''}`}>      {/* Left side: Image and item details */}
+    <div className={`flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-colors duration-200 ${isNew ? 'animate-slide-in-from-top' : ''}`}>
+      {/* Left side: Image and item details */}
       <div className="flex items-center space-x-4">
         {/* Image container with loading states */}
         <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 relative">
@@ -34,24 +36,34 @@ const InvestmentItem = React.memo(({
           <h3 className="font-medium text-white truncate">
             {displayName(investment)}
           </h3>
-          {/* Condition, variant, and quantity information */}
+          {/*  Conditional subtitle based on item type */}
           <p className="text-sm text-gray-400">
-            {subtitle(investment)}
+            {isWatchlistItem ? (
+              // Watchlist subtitle: show condition and marketplace
+              <>
+                {investment.condition && <span>{investment.condition}</span>}
+                {investment.condition && investment.current_marketplace && <span> • </span>}
+                {investment.current_marketplace && (
+                  <span className="text-blue-400">{investment.current_marketplace.toUpperCase()}</span>
+                )}
+              </>
+            ) : (
+              // Portfolio subtitle: existing logic with quantity
+              subtitle(investment)
+            )}
           </p>
         </div>
       </div>
       
-      {/* Right side: Price information and trend indicator */}
+      {/* Right side */}
       <div className="text-right flex-shrink-0">
         <div className="flex items-center space-x-2">
-          {/* Current price with loading indicator */}
           <span className="text-white font-medium flex items-center space-x-1">
             {isPriceLoading ? (
               <span className="text-gray-400 text-sm">Loading...</span>
             ) : (
               <span>{formatPrice(investment.current_price)}</span>
             )}
-            {/* Price loading indicator for recently added items */}
             {isPriceLoading && (
               <div className="relative group">
                 <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
@@ -62,34 +74,31 @@ const InvestmentItem = React.memo(({
             )}
           </span>
           
-          {/* Trend indicator with percentage change - only show if not loading and valid data */}
           {!isPriceLoading && !isNaN(investment.changePercent) && (
             <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${
               investment.trend === 'up'
                 ? 'bg-green-500/20 text-green-400'
                 : 'bg-red-500/20 text-red-400'
             }`}>
-              {/* Trend icon */}
               {investment.trend === 'up' ? (
                 <TrendingUp className="w-3 h-3" />
               ) : (
                 <TrendingDown className="w-3 h-3" />
               )}
-              {/* Percentage change (always show absolute value) */}
               <span>{Math.abs(investment.changePercent).toFixed(1)}%</span>
             </div>
           )}
           
-          {/* Loading indicator for trend when price is loading */}
           {isPriceLoading && (
             <div className="flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-500/20 text-gray-400">
               <span>---%</span>
             </div>
           )}
         </div>
-        {/* Original purchase price */}
+        {/* Label based on item type */}
         <p className="text-sm text-gray-400">
           from {formatPrice(investment.buy_price)}
+          {isWatchlistItem && <span className="text-gray-500"> (baseline)</span>}
         </p>
       </div>
     </div>
@@ -169,11 +178,20 @@ const PaginationControls = React.memo(({
 });
 
 // Main component that displays recent price changes for investments
-const RecentPriceChanges = React.memo(({ investments = [], itemStates = new Map() }) => {
+const RecentPriceChanges = React.memo(({ 
+  investments = [], 
+  watchlist = [],
+  itemStates = new Map(),
+  viewMode = 'portfolio',
+  onViewModeChange }) => {
+
   const [currentPage, setCurrentPage] = useState(0); // pagination state
   const [showAll, setShowAll] = useState(false); // toggle state for top 10 vs all items
   const [sortOrder, setSortOrder] = useState('most'); // state for sorting by 'most' or 'least'
   
+  // Determine which data to use based on view mode
+  const activeData = viewMode === 'portfolio' ? investments : watchlist;
+
   const { displayName, subtitle } = useItemFormatting();
 
   // Configuration constants
@@ -194,44 +212,71 @@ const RecentPriceChanges = React.memo(({ investments = [], itemStates = new Map(
   }, [priceFormatter]);
 
   // Get recent price changes with sorting - optimized for early exit on filtering
-  const priceChanges = useMemo(() => {
-  if (!investments.length) return [];
-  
-  const changes = [];
-  
-  for (let i = 0; i < investments.length; i++) {
-    const inv = investments[i];
-    const quantity = parseFloat(inv.quantity);
+    const priceChanges = useMemo(() => {
+    if (!activeData.length) return [];
     
-    // Skip items with quantity <= 0
-    if (quantity <= 0) continue;
+    const changes = [];
     
-    // Skip items without valid current price data
-    const currentPrice = parseFloat(inv.current_price);
-    const buyPrice = parseFloat(inv.buy_price);
-    
-    if (!currentPrice || currentPrice <= 0 || !buyPrice || buyPrice <= 0) {
-      continue; // Skip items without valid price data
+    if (viewMode === 'portfolio') {
+      // portfolio logic
+      for (let i = 0; i < activeData.length; i++) {
+        const inv = activeData[i];
+        const quantity = parseFloat(inv.quantity);
+        
+        if (quantity <= 0) continue;
+        
+        const currentPrice = parseFloat(inv.current_price);
+        const buyPrice = parseFloat(inv.buy_price);
+        
+        if (!currentPrice || currentPrice <= 0 || !buyPrice || buyPrice <= 0) continue;
+        
+        const changePercent = ((currentPrice - buyPrice) / buyPrice) * 100;
+        
+        changes.push({
+          ...inv,
+          changePercent,
+          changeAmount: currentPrice - buyPrice,
+          trend: changePercent >= 0 ? 'up' : 'down'
+        });
+      }
+    } else {
+      // Watchlist logic
+      for (let i = 0; i < activeData.length; i++) {
+        const item = activeData[i];
+        
+        const currentPrice = parseFloat(item.current_price);
+        const baselinePrice = parseFloat(item.baseline_price);
+        
+        if (!currentPrice || !baselinePrice || currentPrice <= 0 || baselinePrice <= 0) continue;
+        
+        const changePercent = parseFloat(item.price_change_percent) || 0;
+        
+        changes.push({
+          id: item.id,
+          name: item.name,
+          skin_name: item.skin_name || null,
+          image_url: item.image_url,
+          current_price: currentPrice,
+          buy_price: baselinePrice,
+          quantity: 1,
+          changePercent,
+          changeAmount: parseFloat(item.price_change) || 0,
+          trend: changePercent >= 0 ? 'up' : 'down',
+          condition: item.condition,
+          variant: item.variant,
+          current_marketplace: item.current_marketplace, 
+          isWatchlistItem: true 
+        });
+      }
     }
     
-    const changePercent = ((currentPrice - buyPrice) / buyPrice) * 100;
-    
-    changes.push({
-      ...inv,
-      changePercent,
-      changeAmount: currentPrice - buyPrice,
-      trend: changePercent >= 0 ? 'up' : 'down'
+    changes.sort((a, b) => {
+      const comparison = Math.abs(b.changePercent) - Math.abs(a.changePercent);
+      return sortOrder === 'most' ? comparison : -comparison;
     });
-  }
-  
-  // Sort by absolute change percentage
-  changes.sort((a, b) => {
-    const comparison = Math.abs(b.changePercent) - Math.abs(a.changePercent);
-    return sortOrder === 'most' ? comparison : -comparison;
-  });
-  
-  return changes.slice(0, maxItemsToShow);
-}, [investments, maxItemsToShow, sortOrder]);
+    
+    return changes.slice(0, maxItemsToShow);
+  }, [activeData, viewMode, maxItemsToShow, sortOrder]);
 
   // Calculate pagination data separately to avoid recalculating when only page changes
   // Determines total pages needed and items to show on current page
@@ -278,9 +323,36 @@ const RecentPriceChanges = React.memo(({ investments = [], itemStates = new Map(
 
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl mb-8 p-6 border border-gray-700/50 h-[700px] flex flex-col">
-      {/* Header section with title, item count, and controls */}
+      {/* Header with new toggle */}
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-white">Recent Price Changes</h2>
+        <div className="flex items-center space-x-4">
+          <h2 className="text-xl font-semibold text-white">Recent Price Changes</h2>
+          
+          {/* View Mode Toggle */}
+          <div className="flex bg-gray-700/50 rounded-lg p-1 border border-gray-600/50">
+            <button
+              onClick={() => onViewModeChange('portfolio')}
+              className={`px-3 py-1.5 rounded text-sm font-medium transition-all duration-200 ${
+                viewMode === 'portfolio'
+                  ? 'bg-orange-500 text-white shadow-lg'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Portfolio
+            </button>
+            <button
+              onClick={() => onViewModeChange('watchlist')}
+              className={`px-3 py-1.5 rounded text-sm font-medium transition-all duration-200 ${
+                viewMode === 'watchlist'
+                  ? 'bg-orange-500 text-white shadow-lg'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Watchlist
+            </button>
+          </div>
+        </div>
+        
         <div className="flex items-center space-x-3">
           {/* Active items counter */}
           <div className="text-sm text-gray-400">
@@ -362,6 +434,7 @@ const RecentPriceChanges = React.memo(({ investments = [], itemStates = new Map(
                     subtitle={subtitle}
                     isNew={itemState.isNew}
                     isPriceLoading={itemState.isPriceLoading}
+                    isWatchlistItem={investment.isWatchlistItem || false}
                   />
                 );
               })}
