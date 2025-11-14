@@ -7,7 +7,7 @@ import { QuickAddItemForm, QuickSellModal } from '@/components/forms';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { supabase } from '@/supabaseClient';
 import { formatPrice, useItemFormatting } from '@/hooks/util';
-import { useCalculatePortfolioHealth, useChartData, usePortfolioData, useQuickActions, useRecentActivity, usePortfolioSummary, useSingleItemPrice } from '@/hooks/portfolio';
+import { useCalculatePortfolioHealth, useChartData, usePortfolioData, useQuickActions, useRecentActivity, usePortfolioSummary, useSingleItemPrice, useWatchlist } from '@/hooks/portfolio';
 import { useToast } from '@/contexts/ToastContext';
 
 // Main InvestmentDashboard component
@@ -21,6 +21,9 @@ const InvestmentDashboard = ({ userSession }) => {
   // Get Portfolio Data hook
   const { investments, soldItems, portfolioSummary, loading, error, errorDetails, refetch, retry, setInvestments, setSoldItems } = usePortfolioData(userSession);
   
+  // Get watchlist data
+  const { watchlist } = useWatchlist(userSession);
+
   // single price data hook
   const { refreshSingleItemPrice } = useSingleItemPrice();
 
@@ -41,9 +44,13 @@ const InvestmentDashboard = ({ userSession }) => {
   const [showQuickPrice, setShowQuickPrice] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showQuickSell, setShowQuickSell] = useState(false);
+  const [showQuickWatchlistAdd, setShowQuickWatchlistAdd] = useState(false);
 
   // track the new added item states
   const [itemStates, setItemStates] = useState(new Map());
+
+  // track price changes view mode
+  const [priceChangesView, setPriceChangesView] = useState('portfolio');
 
   // Calculate portfolio health metrics using custom hook
   const portfolioHealth = useCalculatePortfolioHealth(investments);
@@ -59,7 +66,7 @@ const InvestmentDashboard = ({ userSession }) => {
   };
 
   // current quick actions
-  const quickActions = useQuickActions(setShowQuickPrice, setShowQuickAdd, setShowQuickSell);
+  const quickActions = useQuickActions(setShowQuickPrice, setShowQuickAdd, setShowQuickSell, setShowQuickWatchlistAdd);
   
   // Reset optimistic updates when data is refetched
   useEffect(() => {
@@ -474,8 +481,11 @@ const portfolioMetrics = useMemo(() => {
               onRetry={() => refetch()}
             >
               <RecentPriceChanges 
-                investments={investments}
-                itemStates={itemStates} 
+                investments={priceChangesView === 'portfolio' ? investments : []}
+                watchlist={priceChangesView === 'watchlist' ? watchlist : []}
+                itemStates={itemStates}
+                viewMode={priceChangesView}
+                onViewModeChange={setPriceChangesView}
               />
             </ErrorBoundary>
           </div>
@@ -583,6 +593,18 @@ const portfolioMetrics = useMemo(() => {
               supabase={supabase}
             />
           </div>
+        )}
+
+        {/* Quick Watchlist Add Modal */}
+        {showQuickWatchlistAdd && (
+          <QuickAddToWatchlistModal
+            userSession={userSession}
+            onClose={() => setShowQuickWatchlistAdd(false)}
+            onAdd={async (item, price, marketplace, options) => {
+              await addToWatchlist(item, price, marketplace, options);
+              setShowQuickWatchlistAdd(false);
+            }}
+          />
         )}
 
         {/* Portfolio Health */}
