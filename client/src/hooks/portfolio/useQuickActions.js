@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Search, Plus, DollarSign, Eye, TrendingUp } from 'lucide-react';
 
-export const useQuickActions = (setShowQuickPrice, setShowQuickAdd, setShowQuickSell) => {
+export const useQuickActions = (setShowQuickPrice, setShowQuickAdd, setShowQuickSell, setShowQuickWatchlistAdd) => {
   return useMemo(() => [
     {
       title: 'Check Prices',
@@ -28,11 +28,12 @@ export const useQuickActions = (setShowQuickPrice, setShowQuickAdd, setShowQuick
       onClick: () => setShowQuickSell(true)
     },
     {
-      title: 'View Watchlist',
-      description: 'Monitor items you\'re tracking',
+      title: 'Track New Item',
+      description: 'Add to your price watchlist',
       icon: Eye,
       color: 'from-orange-500 to-red-600',
       hoverColor: 'hover:from-orange-600 hover:to-red-700',
+      onClick: () => setShowQuickWatchlistAdd(true)
     },
     {
       title: 'Market Trends',
@@ -41,5 +42,5 @@ export const useQuickActions = (setShowQuickPrice, setShowQuickAdd, setShowQuick
       color: 'from-rose-500 to-pink-600',
       hoverColor: 'hover:from-rose-600 hover:to-pink-700',
     },
-  ], [setShowQuickAdd, setShowQuickAdd, setShowQuickSell]);
+  ], [setShowQuickAdd, setShowQuickAdd, setShowQuickSell, setShowQuickWatchlistAdd]);
 };
