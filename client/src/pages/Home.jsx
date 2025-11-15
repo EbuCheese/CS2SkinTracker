@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { TrendingUp, Plus, DollarSign, Activity, Loader2 } from 'lucide-react';
 import { PortfolioPerformanceChart, PortfolioHealthPieChart } from '@/components/charts';
 import { RecentPriceChanges, RecentActivity, QuickCheckPriceModal } from '@/components/item-display';
-import { QuickAddItemForm, QuickSellModal } from '@/components/forms';
+import { QuickAddItemForm, QuickSellModal, QuickWatchlistAdd } from '@/components/forms';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { supabase } from '@/supabaseClient';
 import { formatPrice, useItemFormatting } from '@/hooks/util';
@@ -22,7 +22,7 @@ const InvestmentDashboard = ({ userSession }) => {
   const { investments, soldItems, portfolioSummary, loading, error, errorDetails, refetch, retry, setInvestments, setSoldItems } = usePortfolioData(userSession);
   
   // Get watchlist data
-  const { watchlist } = useWatchlist(userSession);
+  const { watchlist, addToWatchlist } = useWatchlist(userSession);
 
   // single price data hook
   const { refreshSingleItemPrice } = useSingleItemPrice();
@@ -597,7 +597,8 @@ const portfolioMetrics = useMemo(() => {
 
         {/* Quick Watchlist Add Modal */}
         {showQuickWatchlistAdd && (
-          <QuickAddToWatchlistModal
+          <QuickWatchlistAdd
+            isOpen={showQuickWatchlistAdd}
             userSession={userSession}
             onClose={() => setShowQuickWatchlistAdd(false)}
             onAdd={async (item, price, marketplace, options) => {
