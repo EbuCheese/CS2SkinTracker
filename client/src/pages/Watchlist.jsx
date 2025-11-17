@@ -54,6 +54,7 @@ const WatchlistPage = ({ userSession }) => {
     loading, 
     addToWatchlist, 
     removeFromWatchlist,
+    updateWatchlistItem,
     bulkRemove,
     refreshWatchlist ,
     switchMarketplace,
@@ -283,6 +284,14 @@ const WatchlistPage = ({ userSession }) => {
     });
   };
 
+  const handleUpdateWatchlistItem = async (itemId, updates) => {
+    const result = await updateWatchlistItem(itemId, updates);
+    if (result.success) {
+      // Item name is already available in the hook's toast
+      // The hook already shows a toast, so we don't need another one here
+    }
+  };
+
   // switch the tracking to a different marketplace
   const handleSwitchMarketplace = async (itemId, marketplace) => {
     await switchMarketplace(itemId, marketplace);
@@ -493,6 +502,7 @@ const WatchlistPage = ({ userSession }) => {
                           }
                         });
                       }}
+                      onUpdateWatchlistItem={handleUpdateWatchlistItem}
                     />
                   ))}
                 </tbody>
@@ -560,9 +570,15 @@ const WatchlistRow = ({
   switchingMarketplace,
   onToggleMarketplaceSwitch, 
   userSession,
-  onUpdateEditField
+  onUpdateEditField,
+  onUpdateWatchlistItem
 }) => {
   const [showAllPrices, setShowAllPrices] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false); 
+  const [editingTarget, setEditingTarget] = useState(false);
+  const [notesValue, setNotesValue] = useState(item.notes || '');
+  const [targetValue, setTargetValue] = useState(item.target_price || '');
+
   const priceChange = item.price_change || 0;
   const priceChangePercent = item.price_change_percent || 0;
   const isGaining = priceChange > 0;
@@ -582,6 +598,21 @@ const WatchlistRow = ({
       return [];
     }
   }, [item.available_prices]);
+
+  // Handler for saving notes
+  const handleSaveNotes = async () => {
+    await onUpdateWatchlistItem(item.id, { notes: notesValue.trim() || null });
+    setEditingNotes(false);
+  };
+
+  // Handler for saving target price
+  const handleSaveTarget = async () => {
+    const targetNum = parseFloat(targetValue);
+    if (targetNum && targetNum > 0) {
+      await onUpdateWatchlistItem(item.id, { target_price: targetNum });
+      setEditingTarget(false);
+    }
+  };
 
   const daysSinceBaseline = Math.floor(item.days_since_baseline || 0);
 
@@ -608,11 +639,64 @@ const WatchlistRow = ({
                 className="w-12 h-12 object-contain bg-gray-700 rounded"
               />
             )}
-            <div>
+            <div className="flex-1">
               <div className="text-white font-medium">{item.full_name}</div>
-              {item.notes && (
-                <div className="text-gray-500 text-xs mt-0.5 truncate max-w-xs" title={item.notes}>
-                  {item.notes}
+              
+              {/* Notes Section */}
+              {editingNotes ? (
+                <div className="flex items-center gap-1 mt-1">
+                  <input
+                    type="text"
+                    value={notesValue}
+                    onChange={(e) => setNotesValue(e.target.value)}
+                    className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-xs"
+                    placeholder="Add notes..."
+                    maxLength={300}
+                  />
+                  <button
+                    onClick={handleSaveNotes}
+                    className="p-1 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded"
+                    title="Save"
+                  >
+                    <Save className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setNotesValue(item.notes || '');
+                      setEditingNotes(false);
+                    }}
+                    className="p-1 bg-gray-600/20 hover:bg-gray-600/30 text-gray-400 rounded"
+                    title="Cancel"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 mt-0.5">
+                  {item.notes ? (
+                    <div 
+                      className="text-gray-500 text-xs truncate max-w-xs cursor-pointer hover:text-gray-400"
+                      onClick={() => setEditingNotes(true)}
+                      title={item.notes}
+                    >
+                      {item.notes}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setEditingNotes(true)}
+                      className="text-gray-600 hover:text-gray-400 text-xs"
+                    >
+                      + Add note
+                    </button>
+                  )}
+                  {item.notes && (
+                    <button
+                      onClick={() => setEditingNotes(true)}
+                      className="p-0.5 text-gray-600 hover:text-gray-400"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -746,6 +830,88 @@ const WatchlistRow = ({
           </div>
         </td>
         
+           <td className="p-3 text-center">
+          {hasPrice && priceChange !== null ? (
+            <div className="flex flex-col items-center">
+              {/* Existing price change display */}
+              <div className={`font-bold flex items-center ${
+                isGaining ? 'text-green-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-400'
+              }`}>
+                {isGaining ? <TrendingUp className="w-4 h-4 mr-1" /> : 
+                 priceChange < 0 ? <TrendingDown className="w-4 h-4 mr-1" /> : null}
+                {isGaining ? '+' : ''}{priceChangePercent.toFixed(2)}%
+              </div>
+              <div className={`text-xs ${
+                isGaining ? 'text-green-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-400'
+              }`}>
+                {priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)}
+              </div>
+              
+              {/* Target Price Indicator */}
+              {(item.target_price || editingTarget) && (
+                <div className="mt-1 text-xs">
+                  {editingTarget ? (
+                    <div className="flex items-center gap-1">
+                      <DollarSign className="w-3 h-3 text-gray-400" />
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        value={targetValue}
+                        onChange={(e) => setTargetValue(e.target.value)}
+                        placeholder="0.00"
+                        autoFocus
+                        className="w-20 px-1 py-0.5 bg-gray-700 border border-gray-600 rounded text-white text-xs text-center"
+                      />
+                      <button 
+                        onClick={handleSaveTarget} 
+                        className="p-0.5 text-green-400 hover:text-green-300"
+                        title="Save"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setTargetValue(item.target_price || '');
+                          setEditingTarget(false);
+                        }}
+                        className="p-0.5 text-gray-400 hover:text-gray-300"
+                        title="Cancel"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div 
+                      className="flex items-center gap-1 text-blue-400 cursor-pointer hover:text-blue-300"
+                      onClick={() => setEditingTarget(true)}
+                      title="Click to edit target price"
+                    >
+                      <span>Target: ${item.target_price.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Show "Set target" button only when NOT editing and no target exists */}
+              {!item.target_price && !editingTarget && (
+                <button
+                  onClick={() => {
+                    setTargetValue('');
+                    setEditingTarget(true);
+                  }}
+                  className="mt-1 text-xs text-gray-600 hover:text-gray-400 flex items-center gap-1"
+                  title="Set a target price"
+                >
+                  Set target
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="text-gray-500 text-sm">—</div>
+          )}
+        </td>
+
         {/* ACTIONS */}
         <td className="p-3 text-center">
           <div className="flex items-center justify-center gap-1">
