@@ -23,15 +23,11 @@ const QuickWatchlistAdd = ({
 
   const [searchValue, setSearchValue] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
-  const [priceData, setPriceData] = useState(null);
-  const [fetchAttempted, setFetchAttempted] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [fetchingPrice, setFetchingPrice] = useState(false);
   
   const [selectedVariant, setSelectedVariant] = useState('normal');
   const [selectedCondition, setSelectedCondition] = useState('');
-  const [selectedMarketplace, setSelectedMarketplace] = useState('');
-  const [targetPrice, setTargetPrice] = useState('');
-  const [notes, setNotes] = useState('');
 
   const { lookupAllPrices, loading, error } = usePriceLookup(userSession);
   const { settings } = useUserSettings();
@@ -61,160 +57,105 @@ const QuickWatchlistAdd = ({
     );
   }, [needsCondition, selectedItem]);
 
-  // Check if we can fetch prices
-  const canFetchPrice = useMemo(() => {
+  // Check if ready to add
+  const canAdd = useMemo(() => {
     if (!selectedItem) return false;
     if (needsCondition && !selectedCondition) return false;
     return true;
   }, [selectedItem, needsCondition, selectedCondition]);
 
-  // Check if we can add to watchlist
-  const canAddToWatchlist = useMemo(() => {
-    if (!selectedItem || !priceData || Object.keys(priceData).length === 0) return false;
-    if (!selectedMarketplace) return false;
-    return true;
-  }, [selectedItem, priceData, selectedMarketplace]);
-
-  // Get available marketplace prices
-  const availableMarketplaces = useMemo(() => {
-    if (!priceData || Object.keys(priceData).length === 0) return [];
-    
-    const preferredMarket = settings.marketplacePriority?.[0] || 'csfloat';
-    
-    return Object.entries(priceData)
-      .filter(([_, prices]) => prices && prices.length > 0)
-      .map(([marketplace, prices]) => ({
-        marketplace,
-        price: prices[0].price,
-        is_bid_price: prices[0].is_bid_price,
-        isPreferred: marketplace === preferredMarket
-      }))
-      .sort((a, b) => {
-        // Preferred marketplace first
-        if (a.isPreferred) return -1;
-        if (b.isPreferred) return 1;
-        // Then by price
-        return a.price - b.price;
-      });
-  }, [priceData, settings.marketplacePriority]);
-
-  // Extracted fetch logic to reuse
-  const fetchPriceForItem = useCallback(async (item, variant, condition) => {
-    setFetchAttempted(true);
-    
-    const itemToLookup = {
-      ...item,
-      variant: variant,
-      condition: condition || undefined
-    };
-    
-    const result = await lookupAllPrices(itemToLookup);
-    if (result.success && result.results.length > 0) {
-      const filtered = result.results.filter(config => {
-        if (variant !== 'all' && config.variant !== variant) return false;
-        if (condition && config.condition !== condition) return false;
-        return true;
-      });
-      
-      if (filtered.length > 0) {
-        setPriceData(filtered[0].prices);
-        
-        // Auto-select primary marketplace
-        const preferredMarket = settings.marketplacePriority?.[0] || 'csfloat';
-        if (filtered[0].prices[preferredMarket]?.length > 0) {
-          setSelectedMarketplace(preferredMarket);
-          // ✅ Automatically set as ready to add
-        } else {
-          // Select first available
-          const firstAvailable = Object.keys(filtered[0].prices).find(
-            mp => filtered[0].prices[mp]?.length > 0
-          );
-          if (firstAvailable) {
-            setSelectedMarketplace(firstAvailable);
-          }
-        }
-      }
-    }
-  }, [lookupAllPrices, settings.marketplacePriority]);
-
   const handleItemSelect = useCallback((item) => {
     setSelectedItem(item);
-    setPriceData(null);
     setSearchValue('');
-    setFetchAttempted(false);
-    setSelectedMarketplace('');
-    setTargetPrice('');
-    setNotes('');
     
-    // For items with requiresVariantPreSelection, preserve their variant
     const itemVariant = item.actualSelectedVariant || item.selectedVariant || 'normal';
     setSelectedVariant(itemVariant);
     setSelectedCondition('');
-    
-    // Check if options are needed
-    const needsCond = item.itemType === 'skins' && 
-                     item.minFloat !== undefined && 
-                     item.maxFloat !== undefined;
-    const needsVar = !item.requiresVariantPreSelection && 
-                    (item.hasStatTrak || item.hasSouvenir);
-    
-    // Auto-fetch if no options needed
-    if (!needsCond && !needsVar) {
-      setTimeout(() => {
-        fetchPriceForItem(item, itemVariant, '');
-      }, 100);
-    }
-  }, [fetchPriceForItem]);
-
-  const handleFetchPrice = useCallback(async () => {
-    if (!canFetchPrice) return;
-    await fetchPriceForItem(selectedItem, selectedVariant, selectedCondition);
-  }, [canFetchPrice, selectedItem, selectedVariant, selectedCondition, fetchPriceForItem]);
+  }, []);
 
   const handleAddToWatchlist = useCallback(async () => {
-  if (!canAddToWatchlist) return;
-  
-  setAdding(true);
-  try {
-    const selectedMarketData = priceData[selectedMarketplace][0];
+    if (!canAdd) return;
     
-    await onAdd(
-      {
+    setAdding(true);
+    setFetchingPrice(true);
+    
+    try {
+      // Fetch price silently in the background
+      const itemToLookup = {
         ...selectedItem,
-        variant: selectedVariant,  // Add variant
-        condition: selectedCondition || null,  // Add condition
-        selectedVariant: selectedVariant  // For compatibility
-      },
-      selectedMarketData.price,
-      selectedMarketplace,
-      {
-        targetPrice: null,  // xplicitly set to null
-        notes: null  // Explicitly set to null
+        variant: selectedVariant,
+        condition: selectedCondition || undefined
+      };
+      
+      const result = await lookupAllPrices(itemToLookup);
+      
+      let initialPrice = null;
+      let initialMarketplace = settings.marketplacePriority?.[0] || 'csfloat';
+      
+      if (result.success && result.results.length > 0) {
+        const filtered = result.results.filter(config => {
+          if (selectedVariant !== 'all' && config.variant !== selectedVariant) return false;
+          if (selectedCondition && config.condition !== selectedCondition) return false;
+          return true;
+        });
+        
+        if (filtered.length > 0) {
+          const prices = filtered[0].prices;
+          
+          // Try to get price from user's preferred marketplace
+          const preferredMarket = settings.marketplacePriority?.[0] || 'csfloat';
+          if (prices[preferredMarket]?.length > 0) {
+            initialPrice = prices[preferredMarket][0].price;
+            initialMarketplace = preferredMarket;
+          } else {
+            // Fallback to first available marketplace
+            const firstAvailable = Object.keys(prices).find(mp => prices[mp]?.length > 0);
+            if (firstAvailable && prices[firstAvailable]?.length > 0) {
+              initialPrice = prices[firstAvailable][0].price;
+              initialMarketplace = firstAvailable;
+            }
+          }
+        }
       }
-    );
-    
-    onClose();
-  } catch (err) {
-    console.error('Error adding to watchlist:', err);
-  } finally {
-    setAdding(false);
-  }
-}, [canAddToWatchlist, selectedItem, selectedVariant, selectedCondition, priceData, selectedMarketplace, onAdd, onClose]);
+      
+      // If we couldn't get a price, throw an error
+      if (!initialPrice || initialPrice <= 0) {
+        throw new Error('No price data available for this item');
+      }
+      
+      setFetchingPrice(false);
+      
+      // Add to watchlist with the fetched price
+      await onAdd(
+        {
+          ...selectedItem,
+          variant: selectedVariant,
+          condition: selectedCondition || null,
+          selectedVariant: selectedVariant
+        },
+        initialPrice,
+        initialMarketplace,
+        {
+          targetPrice: null,
+          notes: null
+        }
+      );
+      
+      onClose();
+    } catch (err) {
+      console.error('Error adding to watchlist:', err);
+      setFetchingPrice(false);
+      // Show user-friendly error
+      alert(err.message || 'Failed to add item to watchlist. Please try again.');
+    } finally {
+      setAdding(false);
+    }
+  }, [canAdd, selectedItem, selectedVariant, selectedCondition, lookupAllPrices, settings.marketplacePriority, onAdd, onClose]);
 
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) {
       onClose();
     }
-  };
-
-  const formatMarketplaceName = (marketplace) => {
-    const names = {
-      csfloat: 'CSFloat',
-      buff163: 'Buff163',
-      steam: 'Steam',
-      skinport: 'Skinport'
-    };
-    return names[marketplace] || marketplace;
   };
 
   if (!isOpen) return null;
@@ -259,36 +200,21 @@ const QuickWatchlistAdd = ({
             />
             
             {/* Empty State */}
-            {!selectedItem && !loading && (
+            {!selectedItem && (
               <div className="absolute top-12 left-0 right-0 bottom-0 flex items-center justify-center pointer-events-none">
                 <div className="text-center">
                   <Eye className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                   <p className="text-gray-400 text-lg mb-2">Search for an item</p>
                   <p className="text-gray-500 text-sm">
-                    Track price changes and get alerts when items hit your targets
+                    Track price changes and market trends
                   </p>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Loading State */}
-          {loading && (
-            <div className="flex flex-col items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-orange-500 mb-3" />
-              <p className="text-gray-400">Fetching prices...</p>
-            </div>
-          )}
-
-          {/* Error State */}
-          {error && (
-            <div className="bg-red-900/20 border border-red-500/20 rounded-lg p-4">
-              <p className="text-red-400 text-sm">{error}</p>
-            </div>
-          )}
-
-          {/* Selected Item Display + Options (only show if not loading and no prices yet) */}
-          {selectedItem && !loading && !priceData && (needsCondition || needsVariant) && (
+          {/* Selected Item Display + Options */}
+          {selectedItem && (
             <>
               {/* Item Display */}
               <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
@@ -376,93 +302,29 @@ const QuickWatchlistAdd = ({
                     )}
                   </div>
                 </div>
-              )}  
+              )}
 
-              {/* Fetch button */}
-              <button
-                onClick={handleFetchPrice}
-                disabled={!canFetchPrice || loading}
-                className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-2.5 rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {!canFetchPrice && needsCondition && !selectedCondition 
-                  ? 'Select a condition to continue'
-                  : 'Get Prices'
-                }
-              </button>
-            </>
-          )}
-
-          {/* Marketplace Selection + Add to Watchlist Form */}
-          {priceData && Object.keys(priceData).length > 0 && !loading && (
-            <div className="space-y-4">
-              
-              {/* Simple confirmation card */}
-              <div className="bg-gradient-to-br from-green-900/30 to-emerald-900/30 rounded-lg p-6 border border-green-500/30">
-                <div className="flex items-center space-x-4 mb-4">
-                  <img 
-                    src={selectedItem.image} 
-                    alt={selectedItem.name}
-                    className="w-16 h-16 object-contain bg-gray-700 rounded"
-                  />
-                  <div className="flex-1">
-                    <h3 className="text-white font-semibold text-base">
-                      {selectedItem.baseName || selectedItem.name}
-                    </h3>
-                    <div className="flex items-center gap-2 text-sm text-gray-400 mt-1">
-                      {selectedCondition && <span>{selectedCondition}</span>}
-                      {selectedVariant !== 'normal' && (
-                        <>
-                          {selectedCondition && <span>•</span>}
-                          <span className={selectedVariant === 'stattrak' ? 'text-orange-400' : 'text-yellow-400'}>
-                            {selectedVariant === 'stattrak' ? 'StatTrak™' : 'Souvenir'}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-t border-gray-700 pt-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-gray-400 text-sm">Tracking from</span>
-                    <span className="text-green-400 text-sm font-medium uppercase">
-                      {formatMarketplaceName(selectedMarketplace)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-400 text-sm">Baseline price</span>
-                    <span className="text-white text-lg font-bold">
-                      ${priceData[selectedMarketplace][0].price.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-
-                {priceData[selectedMarketplace][0].is_bid_price && (
-                  <div className="mt-3 flex items-center space-x-2 text-yellow-400 text-xs bg-yellow-400/10 px-3 py-2 rounded">
-                    <AlertCircle className="w-3 h-3" />
-                    <span>Currently tracking bid price only</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Simple info note */}
+              {/* Info Box */}
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-                <p className="text-sm text-blue-300">
-                  You can switch marketplaces, add target prices, and notes from the watchlist page.
-                </p>
+                <div className="flex gap-2">
+                  <AlertCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-blue-300">
+                    You can switch marketplaces, add target prices, and notes from the watchlist page.
+                  </p>
+                </div>
               </div>
 
               {/* Action Buttons */}
               <div className="flex space-x-3">
                 <button
                   onClick={handleAddToWatchlist}
-                  disabled={adding}
+                  disabled={!canAdd || adding}
                   className="flex-1 bg-gradient-to-r from-orange-500 to-red-600 text-white py-2.5 rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                 >
                   {adding ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Adding...</span>
+                      <span>{fetchingPrice ? 'Fetching price...' : 'Adding...'}</span>
                     </>
                   ) : (
                     <>
@@ -479,18 +341,7 @@ const QuickWatchlistAdd = ({
                   Cancel
                 </button>
               </div>
-            </div>
-          )}
-
-          {/* No Price Data State - only show AFTER fetch attempt */}
-          {selectedItem && !loading && fetchAttempted && (!priceData || Object.keys(priceData).length === 0) && !error && (
-            <div className="text-center py-12">
-              <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-              <p className="text-gray-400 text-lg mb-2">No price data available</p>
-              <p className="text-gray-500 text-sm">
-                This item may not be actively traded or price data is unavailable
-              </p>
-            </div>
+            </>
           )}
 
         </div>
