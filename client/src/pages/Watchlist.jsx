@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import CSItemSearch from '@/components/search/CSItemSearch';
 import PopupManager from '@/components/ui/PopupManager';
-import { usePriceLookup, useWatchlist } from '@/hooks/portfolio';
+import { usePriceLookup, useWatchlist, useWatchlistFiltering  } from '@/hooks/portfolio';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
 import { useToast } from '@/contexts/ToastContext';
 import { useScrollLock, formatDateInTimezone } from '@/hooks/util';
@@ -68,6 +68,7 @@ const WatchlistPage = ({ userSession }) => {
   const [selectedType, setSelectedType] = useState('all');
   const [sortBy, setSortBy] = useState('date_desc');
   const [priceFilter, setPriceFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [editingBaselines, setEditingBaselines] = useState({});
   const [switchingMarketplace, setSwitchingMarketplace] = useState(null);
@@ -83,6 +84,15 @@ const WatchlistPage = ({ userSession }) => {
   });
 
   useScrollLock(showAddModal);
+
+  const filteredWatchlist = useWatchlistFiltering(
+    watchlist, 
+    searchQuery, 
+    selectedType, 
+    priceFilter
+  );
+
+  
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -144,20 +154,8 @@ const WatchlistPage = ({ userSession }) => {
   }, [watchlist]);
 
   const filteredAndSortedWatchlist = useMemo(() => {
-    let filtered = watchlist;
-
-    if (selectedType !== 'all') {
-      filtered = filtered.filter(item => item.type === selectedType);
-    }
-
-    if (priceFilter !== 'all') {
-      filtered = filtered.filter(item => {
-        if (!item.price_change) return false;
-        return priceFilter === 'gaining' ? item.price_change > 0 : item.price_change < 0;
-      });
-    }
-
-    const sorted = [...filtered].sort((a, b) => {
+    // Now we just sort the already-filtered data
+    const sorted = [...filteredWatchlist].sort((a, b) => {
       switch (sortBy) {
         case 'date_desc':
           return new Date(b.created_at) - new Date(a.created_at);
@@ -177,7 +175,7 @@ const WatchlistPage = ({ userSession }) => {
     });
 
     return sorted;
-  }, [watchlist, selectedType, priceFilter, sortBy]);
+  }, [filteredWatchlist, sortBy]);
 
   const toggleSelection = (id) => {
     setSelectedItems(prev => {
@@ -307,252 +305,357 @@ const WatchlistPage = ({ userSession }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 p-4">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">
-                Price Watchlist
-              </h1>
-              <p className="text-gray-400 mt-1">Track CS2 item prices and market changes</p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-              >
-                <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
-                <span>Refresh</span>
-              </button>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all flex items-center space-x-2"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Add Item</span>
-              </button>
-            </div>
+  <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 p-4">
+    <div className="max-w-7xl mx-auto">
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">
+              Price Watchlist
+            </h1>
+            <p className="text-gray-400 mt-1">Track CS2 item prices and market changes</p>
           </div>
-
-          {watchlist.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              {/* Card 1: Total Items */}
-              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                <div className="text-gray-400 text-sm mb-1">Total Items</div>
-                <div className="text-2xl font-bold text-white">{stats.totalItems}</div>
-              </div>
-              
-              {/* Card 2: Gaining */}
-              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                <div className="text-gray-400 text-sm mb-1">Gaining</div>
-                <div className="text-2xl font-bold text-green-400 flex items-center">
-                  <TrendingUp className="w-5 h-5 mr-1" />
-                  {stats.totalGaining}
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {stats.totalItems > 0 ? `${((stats.totalGaining / stats.totalItems) * 100).toFixed(0)}%` : '0%'} of items
-                </div>
-              </div>
-              
-              {/* Card 3: Losing */}
-              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                <div className="text-gray-400 text-sm mb-1">Losing</div>
-                <div className="text-2xl font-bold text-red-400 flex items-center">
-                  <TrendingDown className="w-5 h-5 mr-1" />
-                  {stats.totalLosing}
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {stats.totalItems > 0 ? `${((stats.totalLosing / stats.totalItems) * 100).toFixed(0)}%` : '0%'} of items
-                </div>
-              </div>
-              
-              {/* Card 4: Avg Change */}
-              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                <div className="text-gray-400 text-sm mb-1">Avg Change</div>
-                <div className={`text-2xl font-bold ${
-                  stats.avgChangePercent > 0 ? 'text-green-400' : 
-                  stats.avgChangePercent < 0 ? 'text-red-400' : 'text-gray-400'
-                }`}>
-                  {stats.avgChangePercent > 0 ? '+' : ''}{stats.avgChangePercent.toFixed(2)}%
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  Across {stats.itemsWithChanges} items
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Filtering section */}
-          <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Item Type</label>
-              <div className="flex flex-wrap gap-2">
-                {ITEM_TYPES.map(type => (
-                  <button
-                    key={type.value}
-                    onClick={() => setSelectedType(type.value)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      selectedType === type.value
-                        ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                  >
-                    {type.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-4">
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Sort By</label>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                >
-                  {SORT_OPTIONS.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex-1 min-w-[200px]">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Price Change</label>
-                <select
-                  value={priceFilter}
-                  onChange={(e) => setPriceFilter(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-                >
-                  <option value="all">All Items</option>
-                  <option value="gaining">Gaining Value</option>
-                  <option value="losing">Losing Value</option>
-                </select>
-              </div>
-            </div>
-
-            {selectedItems.size > 0 && (
-              <div className="flex items-center justify-between p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-                <span className="text-orange-400 font-medium">
-                  {selectedItems.size} items selected
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleBulkDelete}
-                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center space-x-2"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span>Remove Selected</span>
-                  </button>
-                </div>
-              </div>
-            )}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+            >
+              <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all flex items-center space-x-2"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Add Item</span>
+            </button>
           </div>
         </div>
 
-        {filteredAndSortedWatchlist.length > 0 ? (
-          <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
-                <thead className="bg-gray-700/50">
-                  <tr>
-                    <th className="p-3 text-left">
-                      <input
-                        type="checkbox"
-                        checked={selectedItems.size === filteredAndSortedWatchlist.length && filteredAndSortedWatchlist.length > 0}
-                        onChange={toggleSelectAll}
-                        className="w-4 h-4 rounded bg-gray-600 border-gray-500 cursor-pointer"
-                      />
-                    </th>
-                    <th className="p-3 text-left text-sm font-medium text-gray-300">Item</th>
-                      <th className="p-3 text-center text-sm font-medium text-gray-300">Baseline Price</th>
-                      <th className="p-3 text-center text-sm font-medium text-gray-300">Current Price</th>
-                      <th className="p-3 text-center text-sm font-medium text-gray-300">Change</th>
-                      <th className="p-3 text-center text-sm font-medium text-gray-300">Tracking</th>
-                      <th className="p-3 text-center text-sm font-medium text-gray-300">Added</th>
-                      <th className="p-3 text-center text-sm font-medium text-gray-300">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                  {filteredAndSortedWatchlist.map(item => (
-                    <WatchlistRow
-                      key={item.id}
-                      item={item}
-                      isSelected={selectedItems.has(item.id)}
-                      onToggleSelect={() => toggleSelection(item.id)}
-                      onRemove={() => removeFromWatchlist(item.id)}
-                      onRequestRemoveConfirm={handleRequestRemove}
-                      editingBaseline={editingBaselines[item.id]}
-                      onStartEditBaseline={startEditingBaseline}
-                      onCancelEditBaseline={cancelEditingBaseline}
-                      onSaveBaseline={saveBaseline}
-                      onResetBaseline={handleResetBaseline} 
-                      onSwitchMarketplace={handleSwitchMarketplace}
-                      switchingMarketplace={switchingMarketplace}
-                      onToggleMarketplaceSwitch={setSwitchingMarketplace} 
-                      userSession={userSession}
-                      onUpdateEditField={(field, value) => {
-                        setEditingBaselines({
-                          ...editingBaselines,
-                          [item.id]: {
-                            ...editingBaselines[item.id],
-                            [field]: value
-                          }
-                        });
-                      }}
-                      onUpdateWatchlistItem={handleUpdateWatchlistItem}
-                    />
-                  ))}
-                </tbody>
-              </table>
+        {watchlist.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {/* Card 1: Total Items */}
+            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div className="text-gray-400 text-sm mb-1">
+                {searchQuery ? 'Filtered Items' : 'Total Items'}
+              </div>
+              <div className="text-2xl font-bold text-white">
+                {filteredWatchlist.length}
+                {searchQuery && (
+                  <span className="text-sm text-gray-500 ml-2">
+                    of {watchlist.length}
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
-            <Search className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-white mb-2">
-              {watchlist.length === 0 ? 'No items in watchlist' : 'No items match your filters'}
-            </h3>
-            <p className="text-gray-400 mb-4">
-              {watchlist.length === 0 
-                ? 'Add items to start tracking prices'
-                : 'Try adjusting your filters to see more items'}
-            </p>
-            {watchlist.length === 0 && (
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all"
-              >
-                Add First Item
-              </button>
-            )}
+            
+            {/* Card 2: Gaining */}
+            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div className="text-gray-400 text-sm mb-1">Gaining</div>
+              <div className="text-2xl font-bold text-green-400 flex items-center">
+                <TrendingUp className="w-5 h-5 mr-1" />
+                {stats.totalGaining}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                {stats.totalItems > 0 ? `${((stats.totalGaining / stats.totalItems) * 100).toFixed(0)}%` : '0%'} of items
+              </div>
+            </div>
+            
+            {/* Card 3: Losing */}
+            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div className="text-gray-400 text-sm mb-1">Losing</div>
+              <div className="text-2xl font-bold text-red-400 flex items-center">
+                <TrendingDown className="w-5 h-5 mr-1" />
+                {stats.totalLosing}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                {stats.totalItems > 0 ? `${((stats.totalLosing / stats.totalItems) * 100).toFixed(0)}%` : '0%'} of items
+              </div>
+            </div>
+            
+            {/* Card 4: Avg Change */}
+            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div className="text-gray-400 text-sm mb-1">Avg Change</div>
+              <div className={`text-2xl font-bold ${
+                stats.avgChangePercent > 0 ? 'text-green-400' : 
+                stats.avgChangePercent < 0 ? 'text-red-400' : 'text-gray-400'
+              }`}>
+                {stats.avgChangePercent > 0 ? '+' : ''}{stats.avgChangePercent.toFixed(2)}%
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                Across {stats.itemsWithChanges} items
+              </div>
+            </div>
           </div>
         )}
 
-        <PopupManager
-          isOpen={popupState.isOpen}
-          onClose={() => setPopupState(prev => ({ ...prev, isOpen: false }))}
-          type={popupState.type}
-          title={popupState.title}
-          message={popupState.message}
-          onConfirm={popupState.onConfirm}
-          onCancel={() => setPopupState(prev => ({ ...prev, isOpen: false }))}
-          confirmText={popupState.confirmText}
-          cancelText={popupState.cancelText}
-        />
+        {/* Filtering section */}
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 space-y-4">
+          {/* Search Bar */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Search Watchlist
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name, condition, or notes..."
+                className="w-full pl-10 pr-10 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                  title="Clear search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            {searchQuery && searchQuery.length < 2 && (
+              <p className="text-xs text-gray-500 mt-1">
+                Type at least 2 characters to search
+              </p>
+            )}
+          </div>
+
+          {/* Item Type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Item Type</label>
+            <div className="flex flex-wrap gap-2">
+              {ITEM_TYPES.map(type => (
+                <button
+                  key={type.value}
+                  onClick={() => setSelectedType(type.value)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    selectedType === type.value
+                      ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  {type.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-4">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Sort By</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+              >
+                {SORT_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Price Change</label>
+              <select
+                value={priceFilter}
+                onChange={(e) => setPriceFilter(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+              >
+                <option value="all">All Items</option>
+                <option value="gaining">Gaining Value</option>
+                <option value="losing">Losing Value</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Active Filters Indicator */}
+          {(searchQuery || selectedType !== 'all' || priceFilter !== 'all') && (
+            <div className="flex items-center gap-2 pt-2 border-t border-gray-700 flex-wrap">
+              <span className="text-sm text-gray-400">Active filters:</span>
+              {searchQuery && (
+                <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full flex items-center gap-1">
+                  Search: "{searchQuery.slice(0, 20)}{searchQuery.length > 20 ? '...' : ''}"
+                  <button 
+                    onClick={() => setSearchQuery('')}
+                    className="hover:text-blue-300"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {selectedType !== 'all' && (
+                <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs rounded-full flex items-center gap-1">
+                  {ITEM_TYPES.find(t => t.value === selectedType)?.label}
+                  <button 
+                    onClick={() => setSelectedType('all')}
+                    className="hover:text-orange-300"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {priceFilter !== 'all' && (
+                <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full flex items-center gap-1">
+                  {priceFilter === 'gaining' ? 'Gaining' : 'Losing'}
+                  <button 
+                    onClick={() => setPriceFilter('all')}
+                    className="hover:text-green-300"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedType('all');
+                  setPriceFilter('all');
+                }}
+                className="ml-auto text-xs text-gray-400 hover:text-white"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+
+          {selectedItems.size > 0 && (
+            <div className="flex items-center justify-between p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+              <span className="text-orange-400 font-medium">
+                {selectedItems.size} items selected
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleBulkDelete}
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Remove Selected</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {showAddModal && (
-        <ImprovedAddModal
-          userSession={userSession}
-          onClose={() => setShowAddModal(false)}
-          onAdd={addToWatchlist}
-        />
+      {filteredAndSortedWatchlist.length > 0 ? (
+        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px]">
+              <thead className="bg-gray-700/50">
+                <tr>
+                  <th className="p-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={selectedItems.size === filteredAndSortedWatchlist.length && filteredAndSortedWatchlist.length > 0}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded bg-gray-600 border-gray-500 cursor-pointer"
+                    />
+                  </th>
+                  <th className="p-3 text-left text-sm font-medium text-gray-300">Item</th>
+                  <th className="p-3 text-center text-sm font-medium text-gray-300">Baseline Price</th>
+                  <th className="p-3 text-center text-sm font-medium text-gray-300">Current Price</th>
+                  <th className="p-3 text-center text-sm font-medium text-gray-300">Change</th>
+                  <th className="p-3 text-center text-sm font-medium text-gray-300">Tracking</th>
+                  <th className="p-3 text-center text-sm font-medium text-gray-300">Added</th>
+                  <th className="p-3 text-center text-sm font-medium text-gray-300">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAndSortedWatchlist.map(item => (
+                  <WatchlistRow
+                    key={item.id}
+                    item={item}
+                    isSelected={selectedItems.has(item.id)}
+                    onToggleSelect={() => toggleSelection(item.id)}
+                    onRemove={() => removeFromWatchlist(item.id)}
+                    onRequestRemoveConfirm={handleRequestRemove}
+                    editingBaseline={editingBaselines[item.id]}
+                    onStartEditBaseline={startEditingBaseline}
+                    onCancelEditBaseline={cancelEditingBaseline}
+                    onSaveBaseline={saveBaseline}
+                    onResetBaseline={handleResetBaseline} 
+                    onSwitchMarketplace={handleSwitchMarketplace}
+                    switchingMarketplace={switchingMarketplace}
+                    onToggleMarketplaceSwitch={setSwitchingMarketplace} 
+                    userSession={userSession}
+                    onUpdateEditField={(field, value) => {
+                      setEditingBaselines({
+                        ...editingBaselines,
+                        [item.id]: {
+                          ...editingBaselines[item.id],
+                          [field]: value
+                        }
+                      });
+                    }}
+                    onUpdateWatchlistItem={handleUpdateWatchlistItem}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
+          <Search className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-white mb-2">
+            {watchlist.length === 0 
+              ? 'No items in watchlist' 
+              : searchQuery 
+              ? 'No items match your search'
+              : 'No items match your filters'}
+          </h3>
+          <p className="text-gray-400 mb-4">
+            {watchlist.length === 0 
+              ? 'Add items to start tracking prices'
+              : searchQuery
+              ? `No results for "${searchQuery}"`
+              : 'Try adjusting your filters to see more items'}
+          </p>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors mr-2"
+            >
+              Clear Search
+            </button>
+          )}
+          {watchlist.length === 0 && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all"
+            >
+              Add First Item
+            </button>
+          )}
+        </div>
       )}
+
+      <PopupManager
+        isOpen={popupState.isOpen}
+        onClose={() => setPopupState(prev => ({ ...prev, isOpen: false }))}
+        type={popupState.type}
+        title={popupState.title}
+        message={popupState.message}
+        onConfirm={popupState.onConfirm}
+        onCancel={() => setPopupState(prev => ({ ...prev, isOpen: false }))}
+        confirmText={popupState.confirmText}
+        cancelText={popupState.cancelText}
+      />
     </div>
-  );
+
+    {showAddModal && (
+      <ImprovedAddModal
+        userSession={userSession}
+        onClose={() => setShowAddModal(false)}
+        onAdd={addToWatchlist}
+      />
+    )}
+  </div>
+);
 };
 
 const WatchlistRow = ({ 
