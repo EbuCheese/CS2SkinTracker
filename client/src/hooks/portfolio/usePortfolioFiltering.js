@@ -44,6 +44,37 @@ const createSearchFilter = (searchQuery) => {
   };
 };
 
+// filtering for watchlist items
+export const useWatchlistFiltering = (watchlist, searchQuery, selectedType, priceFilter) => {
+  const searchFilter = useMemo(() => createSearchFilter(searchQuery), [searchQuery]);
+
+  const filteredWatchlist = useMemo(() => {
+    let filtered = watchlist;
+
+    // Apply search filter
+    if (searchQuery && searchQuery.length >= 2) {
+      filtered = filtered.filter(searchFilter);
+    }
+
+    // Apply type filter
+    if (selectedType !== 'all') {
+      filtered = filtered.filter(item => item.type === selectedType);
+    }
+
+    // Apply price change filter
+    if (priceFilter !== 'all') {
+      filtered = filtered.filter(item => {
+        if (!item.price_change) return false;
+        return priceFilter === 'gaining' ? item.price_change > 0 : item.price_change < 0;
+      });
+    }
+
+    return filtered;
+  }, [watchlist, searchFilter, searchQuery, selectedType, priceFilter]);
+
+  return filteredWatchlist;
+};
+
 // filtering hook - only filters, no calculations
 export const usePortfolioFiltering = (investments, soldItems, activeTab, searchQuery) => {
   
