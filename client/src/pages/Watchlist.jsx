@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { 
   Search, 
   TrendingUp, 
@@ -72,6 +72,7 @@ const WatchlistPage = ({ userSession }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [editingBaselines, setEditingBaselines] = useState({});
   const [switchingMarketplace, setSwitchingMarketplace] = useState(null);
+  const [showBulkMarketplaceSelect, setShowBulkMarketplaceSelect] = useState(false);
 
   const [popupState, setPopupState] = useState({
     isOpen: false,
@@ -85,14 +86,27 @@ const WatchlistPage = ({ userSession }) => {
 
   useScrollLock(showAddModal);
 
+  const bulkMarketplaceRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (showBulkMarketplaceSelect && 
+          bulkMarketplaceRef.current && 
+          !bulkMarketplaceRef.current.contains(e.target)) {
+        setShowBulkMarketplaceSelect(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showBulkMarketplaceSelect]);
+
   const filteredWatchlist = useWatchlistFiltering(
     watchlist, 
     searchQuery, 
     selectedType, 
     priceFilter
   );
-
-  
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -295,6 +309,46 @@ const WatchlistPage = ({ userSession }) => {
     await switchMarketplace(itemId, marketplace);
     setSwitchingMarketplace(null);
   };
+
+  // bulk switch marketplaces
+  const handleBulkSwitchMarketplace = async (marketplace) => {
+  if (selectedItems.size === 0) return;
+  
+  const itemCount = selectedItems.size;
+  
+  setPopupState({
+    isOpen: true,
+    type: 'confirm',
+    title: 'Switch Marketplace',
+    message: `Switch ${itemCount} item${itemCount > 1 ? 's' : ''} to track from ${marketplace.toUpperCase()}?`,
+    confirmText: 'Switch',
+    cancelText: 'Cancel',
+    onConfirm: async () => {
+      try {
+        // Pass true for silent parameter
+        const promises = Array.from(selectedItems).map(id => 
+          switchMarketplace(id, marketplace, true)
+        );
+        const results = await Promise.all(promises);
+        
+        const successCount = results.filter(r => r.success).length;
+        
+        setSelectedItems(new Set());
+        setShowBulkMarketplaceSelect(false);
+        
+        // Show single summary toast
+        toast.info(
+          `${successCount} item${successCount > 1 ? 's' : ''} now tracking from ${marketplace.toUpperCase()}`,
+          'Marketplace Switched'
+        );
+      } catch (err) {
+        console.error('Bulk marketplace switch failed:', err);
+        toast.error('Failed to switch marketplaces', 'Error');
+      }
+      setPopupState(prev => ({ ...prev, isOpen: false }));
+    }
+  });
+};
 
   if (loading) {
     return (
@@ -525,9 +579,36 @@ const WatchlistPage = ({ userSession }) => {
           {selectedItems.size > 0 && (
             <div className="flex items-center justify-between p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
               <span className="text-orange-400 font-medium">
-                {selectedItems.size} items selected
+                {selectedItems.size} item{selectedItems.size > 1 ? 's' : ''} selected
               </span>
               <div className="flex items-center gap-2">
+                {/* Bulk Switch Marketplace */}
+                  <div className="relative" ref={bulkMarketplaceRef}>
+                    <button
+                      onClick={() => setShowBulkMarketplaceSelect(!showBulkMarketplaceSelect)}
+                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center space-x-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span>Switch Marketplace</span>
+                    </button>
+                    
+                    {/* Marketplace Dropdown */}
+                    {showBulkMarketplaceSelect && (
+                      <div className="absolute top-full right-0 mt-2 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-10 overflow-hidden min-w-[160px]">
+                        {['csfloat', 'buff163', 'steam', 'skinport'].map(mp => (
+                          <button
+                            key={mp}
+                            onClick={() => handleBulkSwitchMarketplace(mp)}
+                            className="w-full px-4 py-2.5 text-left text-gray-300 hover:bg-purple-600/20 hover:text-purple-400 transition-colors flex items-center justify-between"
+                          >
+                            <span className="uppercase font-medium">{mp}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                {/* Bulk Delete */}
                 <button
                   onClick={handleBulkDelete}
                   className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center space-x-2"
