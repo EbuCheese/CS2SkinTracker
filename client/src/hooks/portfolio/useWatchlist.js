@@ -173,11 +173,10 @@ export const useWatchlist = (userSession) => {
   }
 }, [userSession, toast, fetchWatchlist, watchlist]);
 
-  const switchMarketplace = useCallback(async (id, marketplace) => {
+  const switchMarketplace = useCallback(async (id, marketplace, silent = false) => {
   if (!userSession?.id) return { success: false };
 
   try {
-    // Find the item to get its name for the toast
     const item = watchlist.find(w => w.id === id);
     
     const { data, error } = await supabase.rpc('switch_watchlist_marketplace', {
@@ -190,16 +189,20 @@ export const useWatchlist = (userSession) => {
 
     await fetchWatchlist();
     
-    // Use the item's full_name in the toast
-    toast.info(
-      `Now tracking ${marketplace.toUpperCase()} prices`, 
-      item?.full_name || 'Marketplace Switched'
-    );
+    // Only show toast if not silent
+    if (!silent) {
+      toast.info(
+        `Now tracking ${marketplace.toUpperCase()} prices`, 
+        item?.full_name || 'Marketplace Switched'
+      );
+    }
 
     return { success: true, data };
   } catch (err) {
     console.error('Error switching marketplace:', err);
-    toast.error('Failed to switch marketplace', 'Error');
+    if (!silent) {
+      toast.error('Failed to switch marketplace', 'Error');
+    }
     return { success: false, error: err.message };
   }
 }, [userSession, toast, fetchWatchlist, watchlist]);
