@@ -1,10 +1,12 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Search, Loader2, TrendingUp, AlertTriangle  } from 'lucide-react';
+import { Search, Loader2, TrendingUp, AlertTriangle, Eye  } from 'lucide-react';
 import CSItemSearch from '@/components/search/CSItemSearch';
 import { useCSData } from '@/contexts/CSDataContext';
 import { usePriceLookup } from '@/hooks/portfolio/usePriceLookup';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { QuickWatchlistAdd } from '@/components/forms';
+import { useWatchlist } from '@/hooks/portfolio';
 
 const ITEM_TYPES = [
   { value: 'all', label: 'All' },
@@ -22,6 +24,7 @@ const ITEM_TYPES = [
 const PricesPage = ({ userSession }) => {
   const location = useLocation();
   const { lookupMaps } = useCSData();
+  const { addToWatchlist, refreshWatchlist } = useWatchlist(userSession);
 
   const [selectedType, setSelectedType] = useState('all');
   const [searchValue, setSearchValue] = useState('');
@@ -33,6 +36,7 @@ const PricesPage = ({ userSession }) => {
   const [filterVariant, setFilterVariant] = useState('all'); // 'all', 'normal', 'stattrak', 'souvenir'
 
   const { lookupAllPrices, loading, error } = usePriceLookup(userSession);
+  const [showQuickWatchlistAdd, setShowQuickWatchlistAdd] = useState(false);
 
     useEffect(() => {
       if (location.state?.preSelectedItem) {
@@ -175,16 +179,26 @@ const filteredMarketPrices = useMemo(() =>
             <div className="lg:col-span-1 space-y-4">
               
               {/* Item Card */}
-              <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
-                <img 
-                  src={selectedItem.image} 
-                  alt={selectedItem.name}
-                  className="w-full h-32 object-contain bg-gray-700 rounded mb-3"
-                />
-                <h3 className="text-white font-bold text-sm mb-1 leading-tight">
-                  {selectedItem.name}
-                </h3>
-                
+                <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
+                  <div className="relative">
+                    <img 
+                      src={selectedItem.image} 
+                      alt={selectedItem.name}
+                      className="w-full h-32 object-contain bg-gray-700 rounded mb-3"
+                    />
+                    {/* Subtle Add to Watchlist Icon */}
+                    <button
+                      onClick={() => setShowQuickWatchlistAdd(true)}
+                      className="absolute top-2 right-2 p-1.5 bg-gray-900/70 hover:bg-orange-500/20 border border-gray-600 hover:border-orange-500/50 text-gray-400 hover:text-orange-400 rounded-lg transition-colors"
+                      title="Add to Watchlist"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <h3 className="text-white font-bold text-sm mb-1 leading-tight">
+                    {selectedItem.name}
+                  </h3>
+  
                 {/* Primary Stats Section */}
                 <div className="space-y-1 text-xs mt-3 pb-3 border-b border-gray-700">
                   <div className="flex justify-between text-gray-400">
@@ -558,6 +572,23 @@ const filteredMarketPrices = useMemo(() =>
           </div>
         )}
       </div>
+      {showQuickWatchlistAdd && selectedItem && (
+        <QuickWatchlistAdd
+          isOpen={showQuickWatchlistAdd}
+          userSession={userSession}
+          onClose={() => setShowQuickWatchlistAdd(false)}
+          onAdd={async (item, price, marketplace, options) => {
+            const result = await addToWatchlist(item, price, marketplace, options);
+            if (result.success) {
+              await refreshWatchlist();
+            }
+            setShowQuickWatchlistAdd(false);
+          }}
+          preSelectedItem={selectedItem}
+          preSelectedCondition={filterCondition !== 'all' ? filterCondition : null}
+          preSelectedVariant={filterVariant !== 'all' ? filterVariant : null}
+        />
+      )}
     </div>
   );
 };
