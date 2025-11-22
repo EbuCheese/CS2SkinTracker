@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { X, Eye, Loader2, Target, DollarSign, AlertCircle } from 'lucide-react';
 import CSItemSearch from '@/components/search/CSItemSearch';
 import { usePriceLookup } from '@/hooks/portfolio/usePriceLookup';
@@ -17,7 +17,10 @@ const QuickWatchlistAdd = ({
   isOpen, 
   onClose, 
   userSession,
-  onAdd
+  onAdd,
+  preSelectedItem = null,
+  preSelectedCondition = null,
+  preSelectedVariant = null
 }) => {
   useScrollLock(isOpen);
 
@@ -31,6 +34,40 @@ const QuickWatchlistAdd = ({
 
   const { lookupAllPrices, loading, error } = usePriceLookup(userSession);
   const { settings } = useUserSettings();
+
+  useEffect(() => {
+    if (isOpen && preSelectedItem) {
+      setSelectedItem(preSelectedItem);
+      setSearchValue('');
+      
+      // Pre-fill variant
+      if (preSelectedVariant) {
+        setSelectedVariant(preSelectedVariant);
+      } else {
+        const itemVariant = preSelectedItem.actualSelectedVariant || preSelectedItem.selectedVariant || 'normal';
+        setSelectedVariant(itemVariant);
+      }
+      
+      // Pre-fill condition
+      if (preSelectedCondition) {
+        setSelectedCondition(preSelectedCondition);
+      } else {
+        setSelectedCondition('');
+      }
+    }
+  }, [isOpen, preSelectedItem, preSelectedCondition, preSelectedVariant]);
+
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedItem(null);
+      setSearchValue('');
+      setSelectedCondition('');
+      setSelectedVariant('normal');
+      setAdding(false);
+      setFetchingPrice(false);
+    }
+  }, [isOpen]);
 
   // Determine if item needs condition selection
   const needsCondition = useMemo(() => {
