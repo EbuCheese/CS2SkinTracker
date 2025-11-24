@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Search, Plus, X, DollarSign, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
-import { ItemCard } from '@/components/item-display';
+import { ItemCard, ItemList } from '@/components/item-display';
 import { AddItemForm } from '@/components/forms'
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { useScrollLock, useAdvancedDebounce, useItemFormatting } from '@/hooks/util';
@@ -25,6 +25,9 @@ const InvestmentsPage = ({ userSession }) => {
 
   // unified item id state
   const [itemStates, setItemStates] = useState(new Map());
+
+  // change view mode
+  const [viewMode, setViewMode] = useState('card');
 
   // Track sale data optimistically
   const [optimisticSoldItems, setOptimisticSoldItems] = useState([]);
@@ -682,7 +685,7 @@ const handleAddItem = useCallback((newItem) => {
         )}
 
         {/* Search Bar*/}
-        <div className="mb-6 flex justify-center">
+        <div className="mb-6 flex justify-center items-center gap-4">
           <div className="relative max-w-md w-full">
             <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" style={{ marginTop: '2px' }} />
             <input
@@ -701,6 +704,36 @@ const handleAddItem = useCallback((newItem) => {
                 <X className="w-5 h-5" />
               </button>
             )}
+          </div>
+
+          {/* View toggle */}
+          <div className="flex bg-gray-800 rounded-lg border border-gray-700 p-1">
+            <button
+              onClick={() => setViewMode('card')}
+              className={`px-3 py-1.5 rounded transition-all ${
+                viewMode === 'card' 
+                  ? 'bg-orange-500 text-white' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              title="Card View"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1.5 rounded transition-all ${
+                viewMode === 'list' 
+                  ? 'bg-orange-500 text-white' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+              title="List View"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -753,7 +786,7 @@ const handleAddItem = useCallback((newItem) => {
           </div>
         )}
 
-        {/* Items Grid */}
+        {/* Items Grid/List */}
         <ErrorBoundary 
           title="Error Loading Items"
           message="There was an issue displaying your items. This might be due to corrupted data or a temporary glitch."
@@ -762,39 +795,77 @@ const handleAddItem = useCallback((newItem) => {
             setItemStates(new Map());
           }}
         >
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {currentItems.map((item) => {
-              const itemState = itemStates.get(item.id) || { isNew: false, isPriceLoading: false }
-              const relatedInvestment = activeTab === 'Sold' && item.investment_id 
-                ? investments.find(inv => inv.id === item.investment_id) 
-                : null;
-                
-              return (
-                <ErrorBoundary
-                  key={item.id}
-                  title={`Error Loading Item`}
-                  message="This item couldn't be displayed properly. You can try refreshing or contact support if this continues."
-                  onRetry={() => refetch()}
-                >
-                  <ItemCard
-                    item={item}
-                    userSession={userSession}
-                    onUpdate={handleItemUpdate}
-                    onDelete={handleItemDelete}
-                    onRemove={handleItemRemove}
-                    onRefresh={handleRefreshData}
-                    isNew={itemState.isNew}
-                    isPriceLoading={itemState.isPriceLoading}
-                    isSoldItem={activeTab === 'Sold'}
-                    relatedInvestment={relatedInvestment}
-                    refreshSingleItemPrice={refreshSingleItemPrice}
-                    updateItemState={updateItemState}
-                    setInvestments={setInvestments}
-                  />
-                </ErrorBoundary>
-              );
-            })}
-          </div>
+          {viewMode === 'card' ? (
+            // Card View (existing grid)
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {currentItems.map((item) => {
+                const itemState = itemStates.get(item.id) || { isNew: false, isPriceLoading: false }
+                const relatedInvestment = activeTab === 'Sold' && item.investment_id 
+                  ? investments.find(inv => inv.id === item.investment_id) 
+                  : null;
+                  
+                return (
+                  <ErrorBoundary
+                    key={item.id}
+                    title={`Error Loading Item`}
+                    message="This item couldn't be displayed properly. You can try refreshing or contact support if this continues."
+                    onRetry={() => refetch()}
+                  >
+                    <ItemCard
+                      item={item}
+                      userSession={userSession}
+                      onUpdate={handleItemUpdate}
+                      onDelete={handleItemDelete}
+                      onRemove={handleItemRemove}
+                      onRefresh={handleRefreshData}
+                      isNew={itemState.isNew}
+                      isPriceLoading={itemState.isPriceLoading}
+                      isSoldItem={activeTab === 'Sold'}
+                      relatedInvestment={relatedInvestment}
+                      refreshSingleItemPrice={refreshSingleItemPrice}
+                      updateItemState={updateItemState}
+                      setInvestments={setInvestments}
+                    />
+                  </ErrorBoundary>
+                );
+              })}
+            </div>
+          ) : (
+            // List View (new)
+            <div className="space-y-2">
+              {currentItems.map((item) => {
+                const itemState = itemStates.get(item.id) || { isNew: false, isPriceLoading: false }
+                const relatedInvestment = activeTab === 'Sold' && item.investment_id 
+                  ? investments.find(inv => inv.id === item.investment_id) 
+                  : null;
+                  
+                return (
+                  <ErrorBoundary
+                    key={item.id}
+                    title={`Error Loading Item`}
+                    message="This item couldn't be displayed properly. You can try refreshing or contact support if this continues."
+                    onRetry={() => refetch()}
+                  >
+                    <ItemList
+                      item={item}
+                      userSession={userSession}
+                      onUpdate={handleItemUpdate}
+                      onDelete={handleItemDelete}
+                      onRemove={handleItemRemove}
+                      onRefresh={handleRefreshData}
+                      isNew={itemState.isNew}
+                      isPriceLoading={itemState.isPriceLoading}
+                      isSoldItem={activeTab === 'Sold'}
+                      relatedInvestment={relatedInvestment}
+                      refreshSingleItemPrice={refreshSingleItemPrice}
+                      updateItemState={updateItemState}
+                      setInvestments={setInvestments}
+                    />
+                  </ErrorBoundary>
+                );
+              })}
+            </div>
+          )}
         </ErrorBoundary>
 
         {/* Empty State - Shows when no items match current filters */}
