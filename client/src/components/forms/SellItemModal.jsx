@@ -132,9 +132,9 @@ const SellItemModal = ({
                 <p className="text-sm text-white font-medium leading-tight" title={itemDisplayName}>
                   {itemDisplayName}
                 </p>
-                <div className="flex items-center gap-1 text-xs">
-                  <span className="text-gray-400">{itemSubtitle}</span>
-                  <span className="text-gray-600">•</span>
+                <div className={`flex items-center text-xs ${itemSubtitle ? 'gap-1' : ''}`}>
+                  {itemSubtitle && <span className="text-gray-400">{itemSubtitle}</span>}
+                  {itemSubtitle && <span className="text-gray-600">•</span>}
                   <span className="text-gray-500">
                     Added {formatDateInTimezone(
                       item.created_at,
