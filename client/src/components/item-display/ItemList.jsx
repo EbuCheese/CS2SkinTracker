@@ -783,6 +783,9 @@ const ItemList = React.memo(({
                 src={item.image_url} 
                 alt={displayValues.name || 'Item image'}
                 className="w-full h-full object-contain p-1"
+                style={{ 
+                  textIndent: '-9999px' 
+                }}
               />
             ) : (
               <div className="text-gray-400 text-xs text-center flex items-center justify-center h-full">No Image</div>
@@ -856,8 +859,24 @@ const ItemList = React.memo(({
                   <>
                     {hasValidPriceData(item) ? `$${baseMetrics.currentPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : <span className="text-gray-500 text-xs">No data</span>}
                     {isPriceLoading && <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
-                    {item.price_source === 'manual' && <svg className="w-2.5 h-2.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
-                    {item.price_source !== 'manual' && !isNew && isBidOnlyPrice() && <AlertTriangle className="w-2.5 h-2.5 text-yellow-400" />}
+                    {item.price_source === 'manual' && (
+                      <div className="relative group">
+                        <svg className="w-2.5 h-2.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                          Manual Price
+                        </div>
+                      </div>
+                    )}
+                    {item.price_source !== 'manual' && !isNew && isBidOnlyPrice() && (
+                      <div className="relative group">
+                        <AlertTriangle className="w-2.5 h-2.5 text-yellow-400" />
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                          Bid Price Only
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -883,9 +902,34 @@ const ItemList = React.memo(({
             <div className={`text-sm font-bold ${profitMetrics.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {profitMetrics.totalProfitLoss >= 0 ? '+' : '-'}${Math.abs(profitMetrics.totalProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })}
             </div>
-            <div className={`text-[10px] ${profitMetrics.totalProfitLoss >= 0 ? 'text-green-300/80' : 'text-red-300/80'}`}>
-              {parseFloat(profitMetrics.profitPercentage) >= 0 ? '+' : ''}{parseFloat(profitMetrics.profitPercentage).toLocaleString('en-US', { maximumFractionDigits: 2 })}%
+            <div className="flex items-center gap-1">
+              <div className={`text-[10px] ${profitMetrics.totalProfitLoss >= 0 ? 'text-green-300/80' : 'text-red-300/80'}`}>
+                {parseFloat(profitMetrics.profitPercentage) >= 0 ? '+' : ''}{parseFloat(profitMetrics.profitPercentage).toLocaleString('en-US', { maximumFractionDigits: 2 })}%
+              </div>
+              {/* Breakdown toggle for sold items */}
+              {!isSoldItem && salesSummary.hasAnySales && (
+                <button
+                  onClick={() => setShowBreakdown(!showBreakdown)}
+                  className="text-slate-400 hover:text-slate-300 transition-colors"
+                  title="Show breakdown"
+                >
+                  <svg 
+                    className={`w-3.5 h-3.5 transition-transform ${showBreakdown ? 'rotate-180' : ''}`}
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              )}
             </div>
+            {/* Total sale value for sold items */}
+            {isSoldItem && (
+              <div className="text-[10px] text-slate-400">
+                total: ${item.total_sale_value?.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              </div>
+            )}
           </div>
 
           {/* Actions - Col span 1 */}
@@ -920,6 +964,49 @@ const ItemList = React.memo(({
           </div>
         </div>
       </div>
+
+      {/* Breakdown Section - Shows below when expanded */}
+      {showBreakdown && !isSoldItem && salesSummary.hasAnySales && (
+        <div className="mt-3 pt-3 border-t border-slate-700/50">
+          <div className="grid  gap-3 text-xs">
+            <div>
+              <div className="text-slate-400 mb-1">Realized P&L</div>
+              <div className={`font-semibold ${salesSummary.realizedProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-400 mb-1">Unrealized P&L</div>
+              <div className={`font-semibold ${salesSummary.unrealizedProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.unrealizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-400 mb-1">Avg Sale Price</div>
+              <div className="font-semibold text-yellow-400">
+                ${salesSummary.averageSalePrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notes Section - Shows below if item has notes */}
+      {item.notes && (
+        <div className="mt-2 pt-2 border-t border-slate-700/50">
+          <button
+            onClick={() => showPopup({
+              type: 'note',
+              title: 'Item Note',
+              message: item.notes,
+              confirmText: 'Close'
+            })}
+            className="text-xs text-slate-400 italic hover:text-orange-300 transition-colors"
+          >
+            <span className="truncate">note: {item.notes}</span>
+          </button>
+        </div>
+      )}
 
       {/* Modals - Same as ItemCard */}
       <EditItemModal
