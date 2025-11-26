@@ -1,4 +1,5 @@
 export { useCalculatePortfolioHealth } from './useCalculatePortfolioHealth'
+export { useItemLogic } from './useItemLogic'
 export { useChartData } from './useChartData'
 export { useItemSearch } from './useItemSearch'
 export { usePortfolioData } from './usePortfolioData'
