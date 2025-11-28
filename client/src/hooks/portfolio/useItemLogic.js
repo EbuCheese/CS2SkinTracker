@@ -207,6 +207,33 @@ export const useItemLogic = ({
     item.variant
   ]);
 
+  // memoized Variant Badge
+  const variantBadge = useMemo(() => {
+  const rawName = isSoldItem ? item.item_name : item.name;
+  const variant = isSoldItem ? item.item_variant : item.variant;
+  
+  const isNameBasedSouvenir = item.isNameBasedSouvenir ||
+    rawName?.startsWith('Souvenir Charm') ||
+    rawName?.includes('Souvenir Package');
+  const isNameBasedStatTrak = item.isNameBasedStatTrak ||
+    rawName?.startsWith('StatTrak™ Music Kit') ||
+    (rawName?.startsWith('StatTrak™') && rawName?.includes('Music Kit Box'));
+  
+  const showSouvenirBadge = isNameBasedSouvenir || (variant === 'souvenir');
+  const showStatTrakBadge = isNameBasedStatTrak || (variant === 'stattrak');
+  
+  if (!showSouvenirBadge && !showStatTrakBadge) return null;
+  
+  return {
+    show: true,
+    type: showStatTrakBadge ? 'stattrak' : 'souvenir',
+    label: showStatTrakBadge ? 'ST' : 'SV',
+    className: showStatTrakBadge 
+      ? 'bg-gradient-to-r from-orange-500 to-red-500'
+      : 'bg-gradient-to-r from-yellow-500 to-yellow-600'
+  };
+}, [isSoldItem, item.item_name, item.name, item.variant, item.item_variant, item.isNameBasedSouvenir, item.isNameBasedStatTrak]);
+
   // Helper Functions
   const hasValidPriceData = useCallback((item) => {
     return item.current_price !== null && 
@@ -724,6 +751,7 @@ export const useItemLogic = ({
     profitMetrics,
     salesSummary,
     displayValues,
+    variantBadge,
     fullItemName,
     
     // Helper Functions
