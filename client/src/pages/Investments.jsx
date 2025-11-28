@@ -73,6 +73,25 @@ const InvestmentsPage = ({ userSession }) => {
   // lock scroll on add form or delete message  
   useScrollLock(showAddForm || !!itemToDelete);
   
+  const memoizedCurrentItems = useMemo(() => {
+  // Build a lookup map for related investments (faster than repeated .find())
+  const investmentMap = new Map(investments.map(inv => [inv.id, inv]));
+  
+  return currentItems.map((item) => {
+    const itemState = itemStates.get(item.id) || { isNew: false, isPriceLoading: false };
+    const relatedInvestment = activeTab === 'Sold' && item.investment_id 
+      ? investmentMap.get(item.investment_id) || null
+      : null;
+    
+    return {
+      item,
+      itemState,
+      relatedInvestment,
+      key: item.id
+    };
+  });
+}, [currentItems, itemStates, activeTab, investments]);
+
   // Handle navigation from quick add
   useEffect(() => {
     if (location.state?.openAddForm && location.state?.tab) {
@@ -112,22 +131,21 @@ const InvestmentsPage = ({ userSession }) => {
   }, [loading, portfolioSummary]);
 
   // helper for building item name
-  const buildDetailedItemName = (item) => {
-    // Use the formatting hook instead of manual construction
-    const normalizedItem = {
-      name: item.item_name || item.name,
-      skin_name: item.item_skin_name || item.skin_name,
-      condition: item.item_condition || item.condition,
-      variant: item.item_variant || item.variant,
-      isNameBasedSouvenir: item.isNameBasedSouvenir,
-      isNameBasedStatTrak: item.isNameBasedStatTrak
-    };
-    
-    return displayName(normalizedItem, { 
-      includeCondition: true, 
-      format: 'full'
-    });
+  const buildDetailedItemName = useCallback((item) => {
+  const normalizedItem = {
+    name: item.item_name || item.name,
+    skin_name: item.item_skin_name || item.skin_name,
+    condition: item.item_condition || item.condition,
+    variant: item.item_variant || item.variant,
+    isNameBasedSouvenir: item.isNameBasedSouvenir,
+    isNameBasedStatTrak: item.isNameBasedStatTrak
   };
+  
+  return displayName(normalizedItem, { 
+    includeCondition: true, 
+    format: 'full'
+  });
+}, [displayName]);
 
 // Helper function to update item state
 const updateItemState = useCallback((itemId, updates) => {
@@ -796,74 +814,59 @@ const handleAddItem = useCallback((newItem) => {
           }}
         >
           {viewMode === 'card' ? (
-            // Card View (existing grid)
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {currentItems.map((item) => {
-                const itemState = itemStates.get(item.id) || { isNew: false, isPriceLoading: false }
-                const relatedInvestment = activeTab === 'Sold' && item.investment_id 
-                  ? investments.find(inv => inv.id === item.investment_id) 
-                  : null;
-                  
-                return (
-                  <ErrorBoundary
-                    key={item.id}
-                    title={`Error Loading Item`}
-                    message="This item couldn't be displayed properly. You can try refreshing or contact support if this continues."
-                    onRetry={() => refetch()}
-                  >
-                    <ItemCard
-                      item={item}
-                      userSession={userSession}
-                      onUpdate={handleItemUpdate}
-                      onDelete={handleItemDelete}
-                      onRemove={handleItemRemove}
-                      onRefresh={handleRefreshData}
-                      isNew={itemState.isNew}
-                      isPriceLoading={itemState.isPriceLoading}
-                      isSoldItem={activeTab === 'Sold'}
-                      relatedInvestment={relatedInvestment}
-                      refreshSingleItemPrice={refreshSingleItemPrice}
-                      updateItemState={updateItemState}
-                      setInvestments={setInvestments}
-                    />
-                  </ErrorBoundary>
-                );
-              })}
+              {memoizedCurrentItems.map(({ item, itemState, relatedInvestment, key }) => (
+                <ErrorBoundary
+                  key={key}
+                  title={`Error Loading Item`}
+                  message="This item couldn't be displayed properly. You can try refreshing or contact support if this continues."
+                  onRetry={() => refetch()}
+                >
+                  <ItemCard
+                    item={item}
+                    userSession={userSession}
+                    onUpdate={handleItemUpdate}
+                    onDelete={handleItemDelete}
+                    onRemove={handleItemRemove}
+                    onRefresh={handleRefreshData}
+                    isNew={itemState.isNew}
+                    isPriceLoading={itemState.isPriceLoading}
+                    isSoldItem={activeTab === 'Sold'}
+                    relatedInvestment={relatedInvestment}
+                    refreshSingleItemPrice={refreshSingleItemPrice}
+                    updateItemState={updateItemState}
+                    setInvestments={setInvestments}
+                  />
+                </ErrorBoundary>
+              ))}
             </div>
           ) : (
-            // List View (new)
+            // List View
             <div className="space-y-2">
-              {currentItems.map((item) => {
-                const itemState = itemStates.get(item.id) || { isNew: false, isPriceLoading: false }
-                const relatedInvestment = activeTab === 'Sold' && item.investment_id 
-                  ? investments.find(inv => inv.id === item.investment_id) 
-                  : null;
-                  
-                return (
-                  <ErrorBoundary
-                    key={item.id}
-                    title={`Error Loading Item`}
-                    message="This item couldn't be displayed properly. You can try refreshing or contact support if this continues."
-                    onRetry={() => refetch()}
-                  >
-                    <ItemList
-                      item={item}
-                      userSession={userSession}
-                      onUpdate={handleItemUpdate}
-                      onDelete={handleItemDelete}
-                      onRemove={handleItemRemove}
-                      onRefresh={handleRefreshData}
-                      isNew={itemState.isNew}
-                      isPriceLoading={itemState.isPriceLoading}
-                      isSoldItem={activeTab === 'Sold'}
-                      relatedInvestment={relatedInvestment}
-                      refreshSingleItemPrice={refreshSingleItemPrice}
-                      updateItemState={updateItemState}
-                      setInvestments={setInvestments}
-                    />
-                  </ErrorBoundary>
-                );
-              })}
+              {memoizedCurrentItems.map(({ item, itemState, relatedInvestment, key }) => (
+                <ErrorBoundary
+                  key={key}
+                  title={`Error Loading Item`}
+                  message="This item couldn't be displayed properly. You can try refreshing or contact support if this continues."
+                  onRetry={() => refetch()}
+                >
+                  <ItemList
+                    item={item}
+                    userSession={userSession}
+                    onUpdate={handleItemUpdate}
+                    onDelete={handleItemDelete}
+                    onRemove={handleItemRemove}
+                    onRefresh={handleRefreshData}
+                    isNew={itemState.isNew}
+                    isPriceLoading={itemState.isPriceLoading}
+                    isSoldItem={activeTab === 'Sold'}
+                    relatedInvestment={relatedInvestment}
+                    refreshSingleItemPrice={refreshSingleItemPrice}
+                    updateItemState={updateItemState}
+                    setInvestments={setInvestments}
+                  />
+                </ErrorBoundary>
+              ))}
             </div>
           )}
         </ErrorBoundary>
