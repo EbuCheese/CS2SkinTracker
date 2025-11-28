@@ -23,7 +23,13 @@ import { useUserSettings } from '@/contexts/UserSettingsContext';
     'item.variant',
     'isNew',
     'isPriceLoading',
-    'isSoldItem'
+    'isSoldItem',
+    'item.price_source',
+    'item.available_prices',
+    'item.market_price_override',
+    'item.use_override',
+    'relatedInvestment.total_sold_quantity',
+    'relatedInvestment.realized_profit_loss'
   ];
 
   // Check if any critical prop has changed
@@ -88,6 +94,7 @@ const ItemCard = React.memo(({
     profitMetrics,
     salesSummary,
     displayValues,
+    variantBadge,
     fullItemName,
     hasValidPriceData,
     isBidOnlyPrice,
@@ -117,7 +124,7 @@ const ItemCard = React.memo(({
 useScrollLock(popup.isOpen || showEditModal || showSellModal);
 
 // destructured
-const { name, skinName, condition, variant } = displayValues;
+const { name, skinName, condition } = displayValues;
 
   return (
   <div className={`break-inside-avoid bg-gradient-to-br from-gray-800 to-slate-800 rounded-xl p-5 border border-slate-700/50 hover:border-orange-400/30 shadow-xl hover:shadow-orange-500/5 transition-all duration-300 ${animationClass} ${profitMetrics.isFullySold ? 'opacity-75' : ''} overflow-hidden`}>
@@ -142,36 +149,11 @@ const { name, skinName, condition, variant } = displayValues;
           </div>
   
       {/* Variant badges */}
-      {(() => {
-        // Get the raw name (before we stripped the prefix for display)
-        const rawName = isSoldItem ? item.item_name : item.name;
-        
-        // Check if item is name-based souvenir
-        const isNameBasedSouvenir = item.isNameBasedSouvenir ||
-                                    rawName?.startsWith('Souvenir Charm') ||
-                                    rawName?.includes('Souvenir Package');
-        
-        // Check if item is name-based StatTrak™ (check the RAW name, not displayValues.name)
-        const isNameBasedStatTrak = item.isNameBasedStatTrak ||
-                                    rawName?.startsWith('StatTrak™ Music Kit') ||
-                                    (rawName?.startsWith('StatTrak™') && rawName?.includes('Music Kit Box'));
-        
-        // Show badges based on EITHER the variant field OR name-based detection
-        const showSouvenirBadge = isNameBasedSouvenir || (variant === 'souvenir');
-        const showStatTrakBadge = isNameBasedStatTrak || (variant === 'stattrak');
-        
-        if (!showSouvenirBadge && !showStatTrakBadge) return null;
-        
-        return (
-          <div className={`absolute -top-1 -right-1 z-10 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg ${
-            showStatTrakBadge
-              ? 'bg-gradient-to-r from-orange-500 to-red-500'
-              : 'bg-gradient-to-r from-yellow-500 to-yellow-600'
-          } ${profitMetrics.isFullySold ? 'opacity-65' : ''}`}>
-            {showStatTrakBadge ? 'ST' : 'SV'}
-          </div>
-        );
-      })()}
+      {variantBadge && (
+        <div className={`absolute -top-1 -right-1 z-10 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg ${variantBadge.className} ${profitMetrics.isFullySold ? 'opacity-65' : ''}`}>
+          {variantBadge.label}
+        </div>
+      )}
 
       {/* Sold indicator for fully sold items */}
       {profitMetrics.isFullySold && (

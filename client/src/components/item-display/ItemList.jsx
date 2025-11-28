@@ -39,6 +39,7 @@ const ItemList = React.memo(({
       profitMetrics,
       salesSummary,
       displayValues,
+      variantBadge,
       fullItemName,
       hasValidPriceData,
       isBidOnlyPrice,
@@ -92,23 +93,11 @@ const ItemList = React.memo(({
           </div>
           
           {/* Variant badges */}
-          {(() => {
-            const rawName = isSoldItem ? item.item_name : item.name;
-            const isNameBasedSouvenir = item.isNameBasedSouvenir || rawName?.startsWith('Souvenir Charm') || rawName?.includes('Souvenir Package');
-            const isNameBasedStatTrak = item.isNameBasedStatTrak || rawName?.startsWith('StatTrak™ Music Kit') || (rawName?.startsWith('StatTrak™') && rawName?.includes('Music Kit Box'));
-            const showSouvenirBadge = isNameBasedSouvenir || (displayValues.variant === 'souvenir');
-            const showStatTrakBadge = isNameBasedStatTrak || (displayValues.variant === 'stattrak');
-            
-            if (!showSouvenirBadge && !showStatTrakBadge) return null;
-            
-            return (
-              <div className={`absolute -top-1 -right-1 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow-lg ${
-                showStatTrakBadge ? 'bg-gradient-to-r from-orange-500 to-red-500' : 'bg-gradient-to-r from-yellow-500 to-yellow-600'
-              }`}>
-                {showStatTrakBadge ? 'ST' : 'SV'}
-              </div>
-            );
-          })()}
+          {variantBadge && (
+            <div className={`absolute -top-1 -right-1 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow-lg ${variantBadge.className}`}>
+              {variantBadge.label}
+            </div>
+          )}
 
           {profitMetrics.isFullySold && (
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-green-600/90 to-transparent text-white text-[9px] py-0.5 font-bold text-center rounded-b-xl">
