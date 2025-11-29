@@ -94,7 +94,7 @@ const ItemList = React.memo(({
           
           {/* Variant badges */}
           {variantBadge && (
-            <div className={`absolute -top-1 -right-1 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow-lg ${variantBadge.className}`}>
+            <div className={`absolute -top-1 -right-1 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow-lg ${variantBadge.className} ${profitMetrics.isFullySold ? 'opacity-75' : ''}`}>
               {variantBadge.label}
             </div>
           )}
@@ -119,13 +119,13 @@ const ItemList = React.memo(({
             )}
             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
               {displayValues.condition && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-300 border border-slate-600/30 font-semibold">
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-300 border border-slate-600/30 font-semibold">
                   {displayValues.condition}
                 </span>
               )}
-              <span className="text-[10px] text-slate-400 flex items-center">
+              <span className="text-[11px] text-slate-400 flex items-center">
                 {isSoldItem ? <CalendarCheck2 className="w-3 h-3 mr-0.5" /> : <CalendarPlus className="w-3 h-3 mr-0.5" />}
-                {formatDateInTimezone(isSoldItem ? item.sale_date : item.created_at, timezone, { month: 'short', day: 'numeric', year: '2-digit' })}
+                {formatDateInTimezone(isSoldItem ? item.sale_date : item.created_at, timezone, { month: 'short', day: 'numeric', year: 'numeric' })}
               </span>
             </div>
           </div>
