@@ -72,7 +72,7 @@ const ItemList = React.memo(({
   return (
     <div className={`bg-gradient-to-br from-gray-800 to-slate-800 rounded-lg p-3 border border-slate-700/50 hover:border-orange-400/30 transition-all duration-300 ${animationClass} ${profitMetrics.isFullySold ? 'opacity-75' : ''}`}>
       
-      {/* HORIZONTAL LAYOUT - Main difference from card view */}
+      {/* HORIZONTAL LIST LAYOUT */}
       <div className="flex items-center gap-4">
         
         {/* Image - Smaller in list view */}
@@ -109,7 +109,7 @@ const ItemList = React.memo(({
         {/* Item Info - Takes remaining space */}
         <div className="flex-1 min-w-0 grid grid-cols-12 gap-3 items-center">
           
-          {/* Name & Metadata - Col span 4 */}
+          {/* Name & Metadata */}
           <div className="col-span-4 min-w-0">
             <h3 className="text-sm font-bold text-white truncate" title={displayValues.name}>
               {displayValues.name}
@@ -130,7 +130,7 @@ const ItemList = React.memo(({
             </div>
           </div>
 
-          {/* Prices - Col span 3 */}
+          {/* Prices */}
           <div className="col-span-3 flex gap-2">
             <div className="flex-1">
               <div className="text-[10px] text-slate-400 uppercase mb-0.5">{isSoldItem ? 'Sale' : 'Buy'}</div>
@@ -171,7 +171,7 @@ const ItemList = React.memo(({
             </div>
           </div>
 
-          {/* Quantity - Col span 2 */}
+          {/* Quantity */}
           <div className="col-span-2">
             <div className="text-[10px] text-slate-400 uppercase mb-0.5">Qty</div>
             <div className="text-sm font-bold text-white">
@@ -184,7 +184,7 @@ const ItemList = React.memo(({
             </div>
           </div>
 
-          {/* P&L - Col span 2 */}
+          {/* P&L */}
           <div className="col-span-2">
             <div className="text-[10px] text-slate-400 uppercase mb-0.5">P&L</div>
             <div className={`text-sm font-bold ${profitMetrics.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -220,7 +220,7 @@ const ItemList = React.memo(({
             )}
           </div>
 
-          {/* Actions - Col span 1 */}
+          {/* Actions */}
           <div className="col-span-1 flex gap-1 justify-end">
             {!isSoldItem ? (
               <>
@@ -279,7 +279,7 @@ const ItemList = React.memo(({
         </div>
       )}
 
-      {/* Notes Section - Shows below if item has notes */}
+      {/* Notes Section - Shows on bottom if item has notes */}
       {item.notes && (
         <div className="mt-2 pt-2 border-t border-slate-700/50">
           <button

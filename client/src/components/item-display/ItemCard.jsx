@@ -123,7 +123,7 @@ const ItemCard = React.memo(({
 // Prevent body scroll when popup is open
 useScrollLock(popup.isOpen || showEditModal || showSellModal);
 
-// destructured
+// Destructured display values
 const { name, skinName, condition } = displayValues;
 
   return (
@@ -174,6 +174,7 @@ const { name, skinName, condition } = displayValues;
             )}
           </div>
           
+          {/* Show condition and date */}
           <div className="flex items-center gap-1 flex-wrap">
             {condition && (
               <span className="text-xs px-1.5 py-1 rounded-md bg-slate-700/50 text-slate-300 border border-slate-600/30 font-semibold whitespace-nowrap">
@@ -293,6 +294,7 @@ const { name, skinName, condition } = displayValues;
         </div>
       </div>
       
+      {/* Current or Buy Price */}
       <div className="bg-slate-800/40 rounded-lg p-2 border border-slate-700/30 relative">
         <div className="flex items-center space-x-1 mb-0.5">
           {isSoldItem ? (
@@ -338,6 +340,7 @@ const { name, skinName, condition } = displayValues;
         </div>
       </div>
       
+      {/* Quantity */}
       <div className="bg-slate-800/40 rounded-lg p-2 border border-slate-700/30">
         <div className="flex items-center space-x-1 mb-0.5">
           <Package className="w-3.5 h-3.5 text-purple-400" />
