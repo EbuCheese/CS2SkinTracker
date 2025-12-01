@@ -5,6 +5,7 @@ import { usePriceLookup } from '@/hooks/portfolio/usePriceLookup';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
 import { useScrollLock } from '@/hooks/util';
 
+// Condition and float range options for skins
 const CONDITION_OPTIONS = [
   { short: 'FN', full: 'Factory New', minFloat: 0.00, maxFloat: 0.07 },
   { short: 'MW', full: 'Minimal Wear', minFloat: 0.07, maxFloat: 0.15 },
@@ -341,7 +342,7 @@ const QuickWatchlistAdd = ({
                 </div>
               )}
 
-              {/* Info Box */}
+              {/* Action Info Box */}
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
                 <div className="flex gap-2">
                   <AlertCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />

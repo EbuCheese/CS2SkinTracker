@@ -63,6 +63,7 @@ const WatchlistPage = ({ userSession }) => {
   } = useWatchlist(userSession);
 
   const toast = useToast();
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [selectedType, setSelectedType] = useState('all');
@@ -114,7 +115,7 @@ const WatchlistPage = ({ userSession }) => {
     setRefreshing(false);
   };
 
-  // stats calculations
+  // item stats calculation
   const stats = useMemo(() => {
     let totalGaining = 0;
     let totalLosing = 0;
@@ -167,8 +168,8 @@ const WatchlistPage = ({ userSession }) => {
     };
   }, [watchlist]);
 
+  // sorting the filtered watchlist
   const filteredAndSortedWatchlist = useMemo(() => {
-    // Now we just sort the already-filtered data
     const sorted = [...filteredWatchlist].sort((a, b) => {
       switch (sortBy) {
         case 'date_desc':
@@ -191,6 +192,7 @@ const WatchlistPage = ({ userSession }) => {
     return sorted;
   }, [filteredWatchlist, sortBy]);
 
+  // select individual items
   const toggleSelection = (id) => {
     setSelectedItems(prev => {
       const newSet = new Set(prev);
@@ -314,6 +316,7 @@ const WatchlistPage = ({ userSession }) => {
   const handleBulkSwitchMarketplace = async (marketplace) => {
   if (selectedItems.size === 0) return;
   
+  // count of selected items
   const itemCount = selectedItems.size;
   
   setPopupState({
@@ -363,6 +366,7 @@ const WatchlistPage = ({ userSession }) => {
     <div className="max-w-7xl mx-auto">
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
+          {/* Header & Top Actions */}
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">
               Price Watchlist
@@ -622,6 +626,7 @@ const WatchlistPage = ({ userSession }) => {
         </div>
       </div>
 
+      {/* Display Watchlist Table or Empty State */}
       {filteredAndSortedWatchlist.length > 0 ? (
         <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
@@ -772,6 +777,7 @@ const WatchlistRow = ({
   
   const { timezone } = useUserSettings();
 
+  // Parse available prices
   const availablePrices = useMemo(() => {
     if (!item.available_prices) return [];
     try {
@@ -798,6 +804,7 @@ const WatchlistRow = ({
     }
   };
 
+  // Calculate days since baseline
   const daysSinceBaseline = Math.floor(item.days_since_baseline || 0);
 
   return (
@@ -887,7 +894,7 @@ const WatchlistRow = ({
           </div>
         </td>
         
-        {/* BASELINE PRICE CELL */}
+        {/* Baseline Price Cell */}
         <td className="p-3 text-center">
           {isEditing ? (
             <div className="flex flex-col items-center gap-1">
@@ -937,7 +944,7 @@ const WatchlistRow = ({
           )}
         </td>
         
-        {/* CURRENT PRICE CELL */}
+        {/* Current Price Cell */}
         <td className="p-3 text-center">
           {hasPrice ? (
             <div>
@@ -967,7 +974,7 @@ const WatchlistRow = ({
           )}
         </td>
         
-        {/* CHANGE FROM BASELINE */}
+        {/* Change From Baseline */}
         <td className="p-3 text-center">
           {hasPrice && priceChange !== null ? (
             <div className="flex flex-col items-center">
@@ -989,7 +996,7 @@ const WatchlistRow = ({
           )}
         </td>
         
-        {/* TRACKING SOURCE */}
+        {/* Tracking Source */}
         <td className="p-3 text-center">
           {item.current_marketplace ? (
             <div>
@@ -1003,7 +1010,7 @@ const WatchlistRow = ({
           )}
         </td>
         
-        {/* ADDED DATE */}
+        {/* Added Date */}
         <td className="p-3 text-center">
           <div className="text-gray-400 text-sm">
             {formatDateInTimezone(item.created_at, timezone, {
@@ -1014,7 +1021,7 @@ const WatchlistRow = ({
           </div>
         </td>
         
-           <td className="p-3 text-center">
+        <td className="p-3 text-center">
           {hasPrice && priceChange !== null ? (
             <div className="flex flex-col items-center">
               {/* Existing price change display */}
@@ -1096,7 +1103,7 @@ const WatchlistRow = ({
           )}
         </td>
 
-        {/* ACTIONS */}
+        {/* Actions */}
         <td className="p-3 text-center">
           <div className="flex items-center justify-center gap-1">
             {isEditing ? (
@@ -1317,6 +1324,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
     selectedItem.category || selectedItem.metadata?.[0]
   );
   
+  // get the current variant of item
   const currentVariantItem = useMemo(() => {
     if (!selectedItem) return null;
     return selectedItem.variants?.get?.(selectedVariant) || 
@@ -1324,11 +1332,13 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
            selectedItem;
   }, [selectedItem, selectedVariant]);
   
+  // check if item has variants like StatTrak or Souvenir
   const hasVariants = selectedItem && !selectedItem.requiresVariantPreSelection && 
                      (selectedItem.hasStatTrak || selectedItem.hasSouvenir);
 
   const isFormComplete = selectedItem && (!needsCondition || selectedCondition) && selectedItem.initialPrice;
 
+  // handle when an item is selected from search
   const handleItemSelect = async (item) => {
     setSelectedItem(item);
     setSearchValue('');
@@ -1400,6 +1410,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
     }
   };
 
+  // refetch prices when condition changes
   useEffect(() => {
     if (!needsCondition || !selectedCondition || !selectedItem) return;
     
@@ -1412,6 +1423,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
     return () => clearTimeout(timeoutId);
   }, [selectedCondition, selectedVariant, needsCondition, selectedItem?.id, settings.marketplacePriority]);
 
+  // handle adding the item to watchlist
   const handleAdd = async () => {
     if (!isFormComplete) return;
 
@@ -1550,6 +1562,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
                   </div>
                 </div>
 
+                { /* Condition Selection if Applicable */ }
                 {needsCondition && currentVariantItem && (
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -1595,7 +1608,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
                     )}
                   </div>
                 )}
-
+                { /* Variant Selection if Applicable */ }
                 {hasVariants && !selectedItem.requiresVariantPreSelection && (
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -1643,6 +1656,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
                   </div>
                 )}
 
+                { /* Initial Marketplace & Price Selection */ }
                 {!loading && Object.keys(allMarketplacePrices).length > 0 && (
                   <div className="pt-3 border-t border-gray-600">
                     <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -1709,6 +1723,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
                   </div>
                 )}
 
+                { /* Target Price Input */ }
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     <div className="flex items-center gap-2">
@@ -1733,6 +1748,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
                   </p>
                 </div>
 
+                { /* Notes Input */ }
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Notes (Optional)
@@ -1751,6 +1767,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
                   </div>
                 </div>
 
+                { /* How Tracking Works Info */ }
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
                   <div className="flex gap-2">
                     <AlertCircle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
@@ -1765,6 +1782,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
                   </div>
                 </div>
                 
+                { /* Add to Watchlist Button */ }
                 <button
                   onClick={handleAdd}
                   disabled={!isFormComplete || loading}
