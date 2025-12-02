@@ -1,6 +1,7 @@
 // contexts/UserSettingsContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/supabaseClient';
+import { ensureFreshRates } from '@/hooks/util/currency';
 
 const UserSettingsContext = createContext();
 
@@ -18,9 +19,9 @@ export const UserSettingsProvider = ({ children, userSession }) => {
     
     return {
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      currency: 'USD', // Default currency
       // Future settings 
       // theme: 'light',
-      // currency: 'USD',
       // etc.
     };
   });
@@ -28,6 +29,7 @@ export const UserSettingsProvider = ({ children, userSession }) => {
   useEffect(() => {
     if (userSession?.id) {
       loadSettings();
+      ensureFreshRates();
     }
   }, [userSession?.id]);
 
@@ -50,6 +52,7 @@ export const UserSettingsProvider = ({ children, userSession }) => {
       
       const newSettings = {
         timezone: data.timezone || settings.timezone,
+        currency: data.currency || 'USD',
         marketplacePriority: [preferred, ...fallbacks]
       };
       
@@ -85,7 +88,8 @@ export const UserSettingsProvider = ({ children, userSession }) => {
       updateSetting, 
       updateSettings,
       // Convenience getters for common settings
-      timezone: settings.timezone 
+      timezone: settings.timezone,
+      currency: settings.currency
     }}>
       {children}
     </UserSettingsContext.Provider>
