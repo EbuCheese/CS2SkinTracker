@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, LogOut, Shield, Calendar, Key, IdCardLanyard, AlertTriangle, Settings, Globe, Store, Save, Eye, EyeOff, Copy, Check, CircleAlert } from 'lucide-react';
+import { User, LogOut, Shield, Calendar, Key, IdCardLanyard, AlertTriangle, Settings, Globe, Save, Eye, EyeOff, Copy, Check, CircleAlert, DollarSign } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
 import { useToast } from '@/contexts/ToastContext';
 import { MarketplacePriorityManager } from '@/components/forms';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { CURRENCY_CONFIG  } from '@/hooks/util/currency';
 
 const AccountPage = ({ userSession, onLogout, onRevoke }) => {
   const { updateSettings } = useUserSettings();
@@ -41,37 +42,50 @@ const AccountPage = ({ userSession, onLogout, onRevoke }) => {
 
 
 // save settings to db
-  const handleSaveSettings = async () => {
-    setSettingsLoading(true);
-    try {
-      const preferred = formSettings.marketplacePriority[0];
-      const fallbacks = formSettings.marketplacePriority.slice(1);
-      
-      const { data, error } = await supabase
-        .rpc('update_user_settings', {
-          p_user_id: userSession.id,
-          p_preferred_marketplace: preferred,
-          p_timezone: formSettings.timezone,
-          p_fallback_marketplaces: fallbacks
-        });
-      
-      if (error) {
-        toast.error('Failed to save settings. Please try again.', 'Settings Error');
-      } else if (data?.success) {
-        // Update the context with saved settings
-        updateSettings(formSettings);
-        setSettingsChanged(false);
-        toast.success('Your settings have been saved successfully.', 'Settings Saved');
-      } else {
-        toast.error('Settings could not be saved. Please try again.', 'Save Failed');
-      }
-    } catch (error) {
-      console.error('Failed to save settings:', error);
-      toast.error('An unexpected error occurred while saving settings.', 'Settings Error');
-    } finally {
-      setSettingsLoading(false);
+const handleSaveSettings = async () => {
+  setSettingsLoading(true);
+  try {
+    const preferred = formSettings.marketplacePriority[0];
+    const fallbacks = formSettings.marketplacePriority.slice(1);
+    
+    // Add detailed logging
+    console.log('Saving settings with currency:', {
+      p_user_id: userSession.id,
+      p_preferred_marketplace: preferred,
+      p_timezone: formSettings.timezone,
+      p_fallback_marketplaces: fallbacks,
+      p_currency: formSettings.currency // Check this value
+    });
+    
+    const { data, error } = await supabase
+      .rpc('update_user_settings', {
+        p_user_id: userSession.id,
+        p_preferred_marketplace: preferred,
+        p_timezone: formSettings.timezone,
+        p_fallback_marketplaces: fallbacks,
+        p_currency: formSettings.currency
+      });
+    
+    console.log('RPC Response:', { data, error }); // Check what's returned
+    
+    if (error) {
+      console.error('Supabase error:', error);
+      toast.error('Failed to save settings. Please try again.', 'Settings Error');
+    } else if (data?.success) {
+      console.log('Saved data:', data); // Check if currency is in the response
+      updateSettings(formSettings);
+      setSettingsChanged(false);
+      toast.success('Your settings have been saved successfully.', 'Settings Saved');
+    } else {
+      toast.error('Settings could not be saved. Please try again.', 'Save Failed');
     }
-  };
+  } catch (error) {
+    console.error('Failed to save settings:', error);
+    toast.error('An unexpected error occurred while saving settings.', 'Settings Error');
+  } finally {
+    setSettingsLoading(false);
+  }
+};
 
 // handle changing settings
 const handleSettingChange = (key, value) => {
@@ -324,6 +338,29 @@ const handleSettingChange = (key, value) => {
                 </p>
               </div>
             </div>
+          </div>
+
+          <div className='mt-2 pt-2'>
+            <div className="flex items-center space-x-2 mb-2">
+              <DollarSign className="w-5 h-5 text-green-400" />
+              <label className="block text-sm font-medium text-gray-300">
+                Display Currency
+              </label>
+            </div>
+            <select
+              value={formSettings.currency || 'USD'}
+              onChange={(e) => handleSettingChange('currency', e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+            >
+              {Object.entries(CURRENCY_CONFIG).map(([code, config]) => (
+                <option key={code} value={code}>
+                  {config.symbol} {config.name} ({code})
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              All prices will be converted from USD to your selected currency
+            </p>
           </div>
         </div>
 
