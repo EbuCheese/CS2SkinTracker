@@ -3,6 +3,7 @@ import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Responsive
 import { TrendingUp, TrendingDown, Loader2, ChartLine } from 'lucide-react';
 import { formatPrice, timePeriods } from '@/hooks/util';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { convertAndFormat } from '@/hooks/util/currency';
 
 // Pure presentation component for displaying portfolio performance chart
 const PortfolioPerformanceChart = ({ 
@@ -11,20 +12,23 @@ const PortfolioPerformanceChart = ({
   selectedTimePeriod, 
   onTimePeriodChange 
 }) => {
-  const { timezone } = useUserSettings();
+  const { timezone, currency } = useUserSettings();
   // Formats Y-axis tick values with dollar sign
   const formatTickPrice = useCallback((value) => {
-  if (value >= 1000000) {
-    return `$${(value / 1000000).toFixed(2)}M`;
-  } else if (value >= 10000) {
-    return `$${(value / 1000).toFixed(1)}K`;
-  } else if (value >= 1000) {
-    return `$${(value / 1000).toFixed(2)}K`;
-  } else if (value >= 1) {
-    return `$${value.toFixed(0)}`;
-  }
-  return `$${value.toFixed(2)}`;
-}, []);
+    // Convert USD to user's currency and format
+    if (value >= 1000000) {
+      const converted = value; // Already in correct currency from chartData
+      const formatted = currency === 'USD' ? `$${(converted / 1000000).toFixed(2)}M` :
+                       `${(converted / 1000000).toFixed(2)}M`;
+      return formatted;
+    } else if (value >= 10000) {
+      return convertAndFormat(value, currency, { compact: true });
+    } else if (value >= 1000) {
+      return convertAndFormat(value, currency, { compact: true });
+    } else {
+      return convertAndFormat(value, currency);
+    }
+  }, [currency]);
 
   // Handles time period selection changes
   const handleTimePeriodChange = useCallback((period) => {
@@ -92,11 +96,11 @@ const PortfolioPerformanceChart = ({
 
   // Formats tooltip values based on data type
   const tooltipFormatter = useCallback((value, name) => {
-    if (name === 'totalValue') return [formatPrice(value), 'Portfolio Value'];
-    if (name === 'invested') return [formatPrice(value), 'Total Invested'];
-    if (name === 'profitLoss') return [formatPrice(value), 'Profit/Loss'];
+    if (name === 'totalValue') return [convertAndFormat(value, currency), 'Portfolio Value'];
+    if (name === 'invested') return [convertAndFormat(value, currency), 'Total Invested'];
+    if (name === 'profitLoss') return [convertAndFormat(value, currency), 'Profit/Loss'];
     return [value, name];
-  }, []);
+  }, [currency]);
 
   // Formats tooltip labels (dates) based on selected time period
   const tooltipLabelFormatter = useCallback((label, payload) => {
@@ -172,7 +176,7 @@ const PortfolioPerformanceChart = ({
             <div className="flex items-center space-x-2">
               {/* Change Amount */}
               <span className={`text-xl font-bold ${timeFrameChange.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {timeFrameChange.change >= 0 ? '+' : ''}{formatPrice(timeFrameChange.change)}
+                {timeFrameChange.change >= 0 ? '+' : ''}{convertAndFormat(timeFrameChange.change, currency)}
               </span>
               {/* Percentage Change Badge */}
               <span className={`text-sm font-medium px-2 py-1 rounded ${

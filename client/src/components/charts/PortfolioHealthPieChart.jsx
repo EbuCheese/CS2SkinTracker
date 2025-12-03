@@ -2,6 +2,8 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip} from 'recharts';
 import { ChartPie, Table, List } from 'lucide-react';
 import { useItemSearch } from '@/hooks/portfolio';
+import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { convertAndFormat } from '@/hooks/util/currency';
 
 // color palette  constant
 const COLOR_PALETTES = {
@@ -91,6 +93,9 @@ const PortfolioHealthPieChart = ({ portfolioHealth, optimisticUpdates = null, po
   // Toggle types
   const [activeToggle, setActiveToggle] = useState('type');
   const [viewMode, setViewMode] = useState('chart'); // 'chart' or 'table'
+
+  // Get user's currency preference
+  const { currency } = useUserSettings();
 
   // Slice states
   const [showSmallSlices, setShowSmallSlices] = useState(true);
@@ -292,14 +297,9 @@ const processedData = useMemo(() => {
   }, []);
 
   // Currency formatter with consistent USD formatting
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(value);
-  };
+  const formatCurrency = useCallback((value) => {
+    return convertAndFormat(value, currency);
+  }, [currency]);
 
   // Empty section
   const isEmpty = !actualPortfolio || 

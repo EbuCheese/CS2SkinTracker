@@ -7,6 +7,8 @@ import { QuickAddItemForm, QuickSellModal, QuickWatchlistAdd } from '@/component
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { supabase } from '@/supabaseClient';
 import { formatPrice, useItemFormatting } from '@/hooks/util';
+import { convertAndFormat } from '@/hooks/util/currency';
+import { useUserSettings } from '@/contexts/UserSettingsContext';
 import { useCalculatePortfolioHealth, useChartData, usePortfolioData, useQuickActions, useRecentActivity, usePortfolioSummary, useSingleItemPrice, useWatchlist } from '@/hooks/portfolio';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -14,6 +16,9 @@ import { useToast } from '@/contexts/ToastContext';
 const InvestmentDashboard = ({ userSession }) => {
   // Add toast hook
   const toast = useToast();
+
+  // User settings hook
+  const { currency } = useUserSettings();
 
   // Display name hook
   const { displayName } = useItemFormatting();
@@ -416,7 +421,7 @@ const portfolioMetrics = useMemo(() => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm">Current Holding Value</p>
-                <p className="text-2xl font-bold text-white">{formatPrice(portfolioMetrics.currentHoldingsValue)}</p>
+                <p className="text-2xl font-bold text-white">{convertAndFormat(portfolioMetrics.currentHoldingsValue, currency)}</p>
               </div>
               <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
                 <DollarSign className="w-6 h-6 text-white" />
@@ -431,7 +436,7 @@ const portfolioMetrics = useMemo(() => {
                 <p className="text-gray-400 text-sm">Total P&L</p>
                 <div className="flex items-center space-x-2">
                   <p className={`text-2xl font-bold ${separatedPL.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {separatedPL.totalProfitLoss >= 0 ? '+' : ''}{formatPrice(separatedPL.totalProfitLoss)}
+                    {separatedPL.totalProfitLoss >= 0 ? '+' : ''}{convertAndFormat(separatedPL.totalProfitLoss, currency)}
                   </p>
                 </div>
               </div>
@@ -530,7 +535,7 @@ const portfolioMetrics = useMemo(() => {
                   <div className="flex justify-between items-center">
                     <span className="text-md text-gray-400">Realized P&L</span>
                     <span className={`text-md font-medium ${separatedPL.totalRealizedPL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {separatedPL.totalRealizedPL >= 0 ? '+' : ''}{formatPrice(separatedPL.totalRealizedPL)}
+                      {separatedPL.totalRealizedPL >= 0 ? '+' : ''}{convertAndFormat(separatedPL.totalRealizedPL, currency)}
                     </span>
                   </div>
                 </div>
@@ -540,7 +545,7 @@ const portfolioMetrics = useMemo(() => {
                   <div className="flex justify-between items-center">
                     <span className="text-md text-gray-400">Unrealized P&L</span>
                     <span className={`text-md font-medium ${separatedPL.totalUnrealizedPL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {separatedPL.totalUnrealizedPL >= 0 ? '+' : ''}{formatPrice(separatedPL.totalUnrealizedPL)}
+                      {separatedPL.totalUnrealizedPL >= 0 ? '+' : ''}{convertAndFormat(separatedPL.totalUnrealizedPL, currency)}
                     </span>
                   </div>
                 </div>
@@ -558,7 +563,7 @@ const portfolioMetrics = useMemo(() => {
           >
             <RecentActivity 
               recentActivity={recentActivity} 
-              formatPrice={formatPrice} 
+              formatPrice={(value) => convertAndFormat(value, currency)} 
             />
           </ErrorBoundary>
 

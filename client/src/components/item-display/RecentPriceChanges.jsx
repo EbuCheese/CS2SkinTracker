@@ -2,6 +2,8 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { TrendingUp, TrendingDown, ListFilterPlus, ListFilter, ChartNoAxesColumn, Loader2} from 'lucide-react';
 import { ImageWithLoading } from '@/components/ui';
 import { useItemFormatting } from '@/hooks/util';
+import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { convertAndFormat } from '@/hooks/util/currency';
 
 // Memoized sub-component for individual investment items
 const InvestmentItem = React.memo(({ 
@@ -194,22 +196,17 @@ const RecentPriceChanges = React.memo(({
 
   const { displayName, subtitle } = useItemFormatting();
 
+  // Get user's currency preference
+  const { currency } = useUserSettings();
+
   // Configuration constants
   const itemsPerPage = 5;
   const maxItemsToShow = showAll ? investments.length : 10;
 
-  // Create shared price formatter to avoid recreating on each render
-  // Uses Intl.NumberFormat for consistent currency formatting
-  const priceFormatter = useMemo(() => new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2
-  }), []);
-
   // Memoized price formatting function to prevent unnecessary re-renders of child components
   const formatPrice = useCallback((price) => {
-    return priceFormatter.format(price);
-  }, [priceFormatter]);
+    return convertAndFormat(price, currency);
+  }, [currency]);
 
   // Get recent price changes with sorting - optimized for early exit on filtering
     const priceChanges = useMemo(() => {
