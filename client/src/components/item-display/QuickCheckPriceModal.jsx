@@ -4,6 +4,7 @@ import CSItemSearch from '@/components/search/CSItemSearch';
 import { usePriceLookup } from '@/hooks/portfolio/usePriceLookup';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
 import { useScrollLock } from '@/hooks/util';
+import { convertAndFormat } from '@/hooks/util/currency';
 
 const CONDITION_OPTIONS = [
   { short: 'FN', full: 'Factory New', minFloat: 0.00, maxFloat: 0.07 },
@@ -21,6 +22,9 @@ const QuickCheckPriceModal = ({
 }) => {
   useScrollLock(isOpen);
 
+  // get user currency settings
+  const { currency } = useUserSettings();
+
   const [searchValue, setSearchValue] = useState('');
   const [selectedItem, setSelectedItem] = useState(null);
   const [priceData, setPriceData] = useState(null);
@@ -31,6 +35,11 @@ const QuickCheckPriceModal = ({
 
   const { lookupAllPrices, loading, error } = usePriceLookup(userSession);
   const { settings } = useUserSettings();
+
+  const formatPrice = useCallback((usdAmount) => {
+  return convertAndFormat(usdAmount, currency);
+}, [currency]);
+
 
   // Determine if item needs condition selection
   const needsCondition = useMemo(() => {
@@ -400,7 +409,7 @@ const QuickCheckPriceModal = ({
                       )}
                     </div>
                     <div className="text-4xl font-bold text-white mb-2">
-                      ${bestPrice.price.toFixed(2)}
+                      {formatPrice(bestPrice.price)}
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="text-green-400 text-sm font-medium capitalize">
@@ -420,7 +429,7 @@ const QuickCheckPriceModal = ({
                   <div className="pt-4 border-t border-gray-700">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-400">7-day average:</span>
-                      <span className="text-gray-300">${bestPrice.price_last_7d.toFixed(2)}</span>
+                      <span className="text-gray-300">{formatPrice(bestPrice.price_last_7d)}</span>
                     </div>
                   </div>
                 )}
@@ -429,7 +438,7 @@ const QuickCheckPriceModal = ({
                   <div className="pt-4 border-t border-gray-700">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-400">Highest bid:</span>
-                      <span className="text-blue-400">${bestPrice.highest_order_price.toFixed(2)}</span>
+                      <span className="text-blue-400">{formatPrice(bestPrice.highest_order_price)}</span>
                     </div>
                   </div>
                 )}
@@ -460,7 +469,7 @@ const QuickCheckPriceModal = ({
                           )}
                         </div>
                         <span className="text-white font-semibold">
-                          ${price.toFixed(2)}
+                          {formatPrice(price)}
                         </span>
                       </div>
                     ))}
