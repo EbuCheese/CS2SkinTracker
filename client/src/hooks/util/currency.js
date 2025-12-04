@@ -27,6 +27,13 @@ export const CURRENCY_CONFIG = {
 };
 
 /**
+ * Get current exchange rate for a currency
+ */
+export const getExchangeRate = (currency = 'USD') => {
+  return EXCHANGE_RATES[currency] || 1;
+};
+
+/**
  * Convert USD to target currency
  */
 export const convertCurrency = (usdAmount, targetCurrency = 'USD') => {
@@ -137,4 +144,30 @@ export const ensureFreshRates = async () => {
   }
   
   return await updateExchangeRates();
+};
+
+/**
+ * Convert user's input currency to USD for storage
+ */
+export const convertToUSD = (amount, fromCurrency) => {
+  if (fromCurrency === 'USD') return amount;
+  
+  const rate = getExchangeRate(fromCurrency);
+  if (!rate || rate === 0) {
+    console.error(`Invalid exchange rate for ${fromCurrency}`);
+    return amount; // Fallback to original amount
+  }
+  
+  // Divide by rate to get USD (e.g., 100 EUR / 1.087 = $91.95 USD)
+  return amount / rate;
+};
+
+/**
+ * Convert USD from storage to user's display currency
+ */
+export const convertFromUSD = (usdAmount, toCurrency) => {
+  if (toCurrency === 'USD') return usdAmount;
+  
+  const rate = getExchangeRate(toCurrency);
+  return usdAmount * rate;
 };
