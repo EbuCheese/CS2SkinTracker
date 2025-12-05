@@ -191,34 +191,34 @@ export const BuyPriceInput = ({ formData, handleFormDataChange, compact = false 
   
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-300 mb-2">
-        Purchase Price ({currencyConfig.symbol} {currency}) <span className="text-red-400">*</span>
-      </label>
-      <div className="relative">
-        {/* Use user's currency symbol */}
-        <span className={`absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 ${compact ? 'text-sm' : ''}`}>
-          {currencyConfig.symbol}
-        </span>
-        <input
-          type="number"
-          step="0.01"
-          min="0.01"
-          max="999999"
-          placeholder="0.00"
-          value={formData.buy_price}
-          onChange={(e) => handleFormDataChange('buy_price', e.target.value)}
-          className={`w-full pr-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors ${
-            compact 
-              ? 'pl-7 py-2 text-sm' 
-              : 'pl-8 py-3'
-          }`}
-          required
-        />
-      </div>
-      {/* Currency Reminder */}
-      <p className="text-xs text-gray-500 mt-1">
-        Enter the price you paid in {currencyConfig.name}
-      </p>
-    </div>
+  <label className="block text-sm font-medium text-gray-300 mb-2">
+    Purchase Price ({currencyConfig.symbol} {currency}) <span className="text-red-400">*</span>
+  </label>
+  <div className="relative">
+    {/* Use user's currency symbol */}
+    <span className={`absolute left-3 text-gray-400 ${compact ? 'text-sm top-[9px]' : 'top-[12.5px]'}`}>
+      {currencyConfig.symbol}
+    </span>
+    <input
+      type="number"
+      step="0.01"
+      min="0.01"
+      max="999999"
+      placeholder="0.00"
+      value={formData.buy_price}
+      onChange={(e) => handleFormDataChange('buy_price', e.target.value)}
+      className={`w-full pr-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors ${
+        compact 
+          ? 'pl-7 py-2 text-sm' 
+          : 'pl-8 py-3'
+      }`}
+      required
+    />
+  </div>
+  {/* Currency Reminder */}
+  <p className="text-xs text-gray-500 mt-1">
+    Enter the price you paid in {currencyConfig.name}
+  </p>
+</div>
   );
 };
