@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Loader2, Edit2, AlertTriangle, DollarSign, CalendarPlus, CalendarCheck2} from 'lucide-react';
 import { PopupManager } from '@/components/ui';
 import { EditItemModal, SellItemModal } from '@/components/forms';
 import { useItemLogic } from '@/hooks/portfolio';
 import { useScrollLock, formatDateInTimezone } from '@/hooks/util';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { convertAndFormat } from '@/hooks/util/currency';
 
 // Imports all the logic from ItemCard - this component shares the same props and logic
 const ItemList = React.memo(({ 
@@ -22,7 +23,7 @@ const ItemList = React.memo(({
   updateItemState,
   setInvestments 
 }) => {  
-    const { timezone } = useUserSettings();
+    const { timezone, currency } = useUserSettings();
   
     // Use the shared logic hook
     const {
@@ -66,6 +67,10 @@ const ItemList = React.memo(({
     });
 
   useScrollLock(popup.isOpen || showEditModal || showSellModal);
+
+  const formatPrice = useCallback((usdAmount) => {
+    return convertAndFormat(usdAmount, currency);
+  }, [currency]);
 
   const { name, skinName, condition, variant } = displayValues;
 
@@ -130,23 +135,35 @@ const ItemList = React.memo(({
             </div>
           </div>
 
-          {/* Prices */}
+          {/* Prices Section */}
           <div className="col-span-3 flex gap-2">
+            {/* Buy/Sale Price */}
             <div className="flex-1">
-              <div className="text-[10px] text-slate-400 uppercase mb-0.5">{isSoldItem ? 'Sale' : 'Buy'}</div>
+              <div className="text-[10px] text-slate-400 uppercase mb-0.5">
+                {isSoldItem ? 'Sale' : 'Buy'}
+              </div>
               <div className="text-sm font-bold text-white">
-                ${isSoldItem ? item.price_per_unit?.toLocaleString('en-US', { maximumFractionDigits: 2 }) : item.buy_price?.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                {formatPrice(isSoldItem ? item.price_per_unit : item.buy_price)}
               </div>
             </div>
+            
+            {/* Current/Buy Price */}
             <div className="flex-1">
-              <div className="text-[10px] text-slate-400 uppercase mb-0.5">{isSoldItem ? 'Buy' : 'Current'}</div>
+              <div className="text-[10px] text-slate-400 uppercase mb-0.5">
+                {isSoldItem ? 'Buy' : 'Current'}
+              </div>
               <div className="text-sm font-bold text-white flex items-center gap-1">
                 {isSoldItem ? (
-                  `$${item.buy_price_per_unit?.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                  formatPrice(item.buy_price_per_unit) 
                 ) : (
                   <>
-                    {hasValidPriceData(item) ? `$${baseMetrics.currentPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : <span className="text-gray-500 text-xs">No data</span>}
+                    {hasValidPriceData(item) ? (
+                      formatPrice(baseMetrics.currentPrice) 
+                    ) : (
+                      <span className="text-gray-500 text-xs">No data</span>
+                    )}
                     {isPriceLoading && <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
+                    {/* Manual price indicator */}
                     {item.price_source === 'manual' && (
                       <div className="relative group">
                         <svg className="w-2.5 h-2.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -157,6 +174,7 @@ const ItemList = React.memo(({
                         </div>
                       </div>
                     )}
+                    {/* Bid only indicator */}
                     {item.price_source !== 'manual' && !isNew && isBidOnlyPrice() && (
                       <div className="relative group">
                         <AlertTriangle className="w-2.5 h-2.5 text-yellow-400" />
@@ -184,17 +202,21 @@ const ItemList = React.memo(({
             </div>
           </div>
 
-          {/* P&L */}
+          {/* P&L Section */}
           <div className="col-span-2">
             <div className="text-[10px] text-slate-400 uppercase mb-0.5">P&L</div>
+            {/* P&L Amount */}
             <div className={`text-sm font-bold ${profitMetrics.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {profitMetrics.totalProfitLoss >= 0 ? '+' : '-'}${Math.abs(profitMetrics.totalProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+              {profitMetrics.totalProfitLoss >= 0 ? '+' : '-'}
+              {formatPrice(Math.abs(profitMetrics.totalProfitLoss))}
             </div>
             <div className="flex items-center gap-1">
+              {/* P&L Percentage */}
               <div className={`text-[10px] ${profitMetrics.totalProfitLoss >= 0 ? 'text-green-300/80' : 'text-red-300/80'}`}>
-                {parseFloat(profitMetrics.profitPercentage) >= 0 ? '+' : ''}{parseFloat(profitMetrics.profitPercentage).toLocaleString('en-US', { maximumFractionDigits: 2 })}%
+                {parseFloat(profitMetrics.profitPercentage) >= 0 ? '+' : ''}
+                {parseFloat(profitMetrics.profitPercentage).toLocaleString('en-US', { maximumFractionDigits: 2 })}%
               </div>
-              {/* Breakdown toggle for sold items */}
+              {/* Breakdown toggle*/}
               {!isSoldItem && salesSummary.hasAnySales && (
                 <button
                   onClick={() => setShowBreakdown(!showBreakdown)}
@@ -215,7 +237,7 @@ const ItemList = React.memo(({
             {/* Total sale value for sold items */}
             {isSoldItem && (
               <div className="text-[10px] text-slate-400">
-                total: ${item.total_sale_value?.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                total: {formatPrice(item.total_sale_value)}
               </div>
             )}
           </div>
@@ -253,26 +275,33 @@ const ItemList = React.memo(({
         </div>
       </div>
 
-      {/* Breakdown Section - Shows below when expanded */}
+      {/* Breakdown Section */}
       {showBreakdown && !isSoldItem && salesSummary.hasAnySales && (
         <div className="mt-3 pt-3 border-t border-slate-700/50">
-          <div className="grid  gap-3 text-xs">
+          <div className="grid gap-3 text-xs">
+            {/* Realized P&L */}
             <div>
               <div className="text-slate-400 mb-1">Realized P&L</div>
               <div className={`font-semibold ${salesSummary.realizedProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}
+                {formatPrice(Math.abs(salesSummary.realizedProfitLoss))}
               </div>
             </div>
+            
+            {/* Unrealized P&L */}
             <div>
               <div className="text-slate-400 mb-1">Unrealized P&L</div>
               <div className={`font-semibold ${salesSummary.unrealizedProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.unrealizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}
+                {formatPrice(Math.abs(salesSummary.unrealizedProfitLoss))}
               </div>
             </div>
+            
+            {/* Avg Sale Price */}
             <div>
               <div className="text-slate-400 mb-1">Avg Sale Price</div>
               <div className="font-semibold text-yellow-400">
-                ${salesSummary.averageSalePrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                {formatPrice(salesSummary.averageSalePrice)}
               </div>
             </div>
           </div>
