@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Loader2, Edit2, ChartNoAxesColumnIncreasing, AlertTriangle, DollarSign, CalendarPlus, CalendarCheck2, Wallet, Package } from 'lucide-react';
 import { PopupManager } from '@/components/ui';
 import { EditItemModal, SellItemModal } from '@/components/forms';
 import { useItemLogic } from '@/hooks/portfolio';
 import { useScrollLock, formatDateInTimezone } from '@/hooks/util';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { convertAndFormat } from '@/hooks/util/currency';
 
   // comparison prop function
   const areItemsEqual = (prevProps, nextProps) => {
@@ -78,6 +79,13 @@ const ItemCard = React.memo(({
 }) => {  
   // User settings hook
   const { timezone } = useUserSettings();
+
+  const { currency } = useUserSettings();
+  
+  // format price 
+  const formatPrice = useCallback((usdAmount) => {
+    return convertAndFormat(usdAmount, currency);
+  }, [currency]);
 
   // Use the shared logic hook
   const {
@@ -220,8 +228,8 @@ const { name, skinName, condition } = displayValues;
           profitMetrics.totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'
         }`}>
           <span>
-            {profitMetrics.totalProfitLoss >= 0 ? '+' : '-'}$
-            {Math.abs(profitMetrics.totalProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+            {profitMetrics.totalProfitLoss >= 0 ? '+' : '-'}
+            {formatPrice(Math.abs(profitMetrics.totalProfitLoss))}
           </span>
         </div>
         <div className={`text-xs ${
@@ -233,7 +241,7 @@ const { name, skinName, condition } = displayValues;
         {/* Total sale breakdown for sold items */}
         {isSoldItem && (
           <div className="mt-1 text-[11px] text-slate-400">
-            total: ${item.total_sale_value?.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+            total: {formatPrice(item.total_sale_value)}
           </div>
         )}
         
@@ -258,13 +266,15 @@ const { name, skinName, condition } = displayValues;
             {showBreakdown && (
               <div className="mt-1 text-[11px] text-slate-400 leading-tight space-y-0 text-right">
                 <div>
-                  {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.realizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })} rlzd
+                  {salesSummary.realizedProfitLoss >= 0 ? '+' : '-'}
+                  {formatPrice(Math.abs(salesSummary.realizedProfitLoss))} rlzd
                 </div>
                 <div>
-                  {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}${Math.abs(salesSummary.unrealizedProfitLoss).toLocaleString('en-US', { maximumFractionDigits: 2 })} unrlzd
+                  {salesSummary.unrealizedProfitLoss >= 0 ? '+' : '-'}
+                  {formatPrice(Math.abs(salesSummary.unrealizedProfitLoss))} unrlzd
                 </div>
                 <div className="text-yellow-400">
-                  avg: ${salesSummary.averageSalePrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                  avg: {formatPrice(salesSummary.averageSalePrice)}
                 </div>
               </div>
             )}
@@ -287,10 +297,7 @@ const { name, skinName, condition } = displayValues;
           </span>
         </div>
         <div className="text-sm font-bold text-white">
-          ${isSoldItem ? 
-            item.price_per_unit?.toLocaleString('en-US', { maximumFractionDigits: 2 }) : 
-            item.buy_price?.toLocaleString('en-US', { maximumFractionDigits: 2 })
-          }
+          {formatPrice(isSoldItem ? item.price_per_unit : item.buy_price)}
         </div>
       </div>
       
@@ -308,11 +315,11 @@ const { name, skinName, condition } = displayValues;
         </div>
         <div className="text-sm font-bold text-white">
           {isSoldItem ? (
-            `$${item.buy_price_per_unit?.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+            formatPrice(item.buy_price_per_unit)
           ) : (
             <div className="flex items-center space-x-1">
               {hasValidPriceData(item) ? (
-                <span>${baseMetrics.currentPrice.toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
+                <span>{formatPrice(baseMetrics.currentPrice)}</span>
               ) : (
                 <span className="text-gray-500 text-sm">No data</span>
               )}
