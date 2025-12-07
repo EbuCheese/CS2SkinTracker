@@ -19,8 +19,9 @@ import {
 } from 'lucide-react';
 import CSItemSearch from '@/components/search/CSItemSearch';
 import PopupManager from '@/components/ui/PopupManager';
-import { usePriceLookup, useWatchlist, useWatchlistFiltering  } from '@/hooks/portfolio';
+import { usePriceLookup, useWatchlist, useWatchlistFiltering } from '@/hooks/portfolio';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { convertAndFormat, convertToUSD, convertFromUSD } from '@/hooks/util/currency';
 import { useToast } from '@/contexts/ToastContext';
 import { useScrollLock, formatDateInTimezone } from '@/hooks/util';
 
@@ -63,6 +64,7 @@ const WatchlistPage = ({ userSession }) => {
   } = useWatchlist(userSession);
 
   const toast = useToast();
+  const { currency } = useUserSettings();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedItems, setSelectedItems] = useState(new Set());
@@ -775,7 +777,11 @@ const WatchlistRow = ({
   const isEditing = editingBaseline?.editing;
   const isShowingMarketplaceSwitch = switchingMarketplace === item.id;
   
-  const { timezone } = useUserSettings();
+  const { timezone, currency } = useUserSettings();
+
+  const formatPrice = useCallback((usdAmount) => {
+    return convertAndFormat(usdAmount, currency);
+  }, [currency]);
 
   // Parse available prices
   const availablePrices = useMemo(() => {
@@ -799,7 +805,9 @@ const WatchlistRow = ({
   const handleSaveTarget = async () => {
     const targetNum = parseFloat(targetValue);
     if (targetNum && targetNum > 0) {
-      await onUpdateWatchlistItem(item.id, { target_price: targetNum });
+      // Convert user input to USD for storage
+      const targetUSD = convertToUSD(targetNum, currency);
+      await onUpdateWatchlistItem(item.id, { target_price: targetUSD });
       setEditingTarget(false);
     }
   };
@@ -926,7 +934,7 @@ const WatchlistRow = ({
             </div>
           ) : (
             <div>
-              <div className="text-white font-medium">${item.baseline_price.toFixed(2)}</div>
+              <div className="text-white font-medium">{formatPrice(item.baseline_price)}</div>
               {/* Show Manual or Marketplace */}
               {item.baseline_manually_edited ? (
                 <div className="text-blue-400 text-xs flex items-center justify-center gap-1">
@@ -948,7 +956,7 @@ const WatchlistRow = ({
         <td className="p-3 text-center">
           {hasPrice ? (
             <div>
-              <div className="text-white font-medium">${item.current_price.toFixed(2)}</div>
+              <div className="text-white font-medium">{formatPrice(item.current_price)}</div>
               <div className="text-gray-500 text-xs">
                 {item.current_marketplace.toUpperCase()}
                 {item.is_bid_price && (
@@ -988,7 +996,7 @@ const WatchlistRow = ({
               <div className={`text-xs ${
                 isGaining ? 'text-green-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-400'
               }`}>
-                {priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)}
+                {priceChange >= 0 ? '+' : '-'}{formatPrice(Math.abs(priceChange))}
               </div>
             </div>
           ) : (
@@ -1035,7 +1043,7 @@ const WatchlistRow = ({
               <div className={`text-xs ${
                 isGaining ? 'text-green-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-400'
               }`}>
-                {priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)}
+                {priceChange >= 0 ? '+' : '-'}{formatPrice(Math.abs(priceChange))}
               </div>
               
               {/* Target Price Indicator */}
@@ -1075,10 +1083,14 @@ const WatchlistRow = ({
                   ) : (
                     <div 
                       className="flex items-center gap-1 text-blue-400 cursor-pointer hover:text-blue-300"
-                      onClick={() => setEditingTarget(true)}
+                      onClick={() => {
+                        const targetInUserCurrency = convertFromUSD(item.target_price, currency);
+                        setTargetValue(targetInUserCurrency.toFixed(2));
+                        setEditingTarget(true);
+                      }}
                       title="Click to edit target price"
                     >
-                      <span>Target: ${item.target_price.toFixed(2)}</span>
+                      <span>Target: {formatPrice(item.target_price)}</span>
                     </div>
                   )}
                 </div>
@@ -1147,7 +1159,7 @@ const WatchlistRow = ({
                   <TrendingUp className="w-4 h-4" />
                 </button>
                   <button
-                    onClick={() => onRequestRemoveConfirm(item.id, item.full_name)} // CHANGE THIS
+                    onClick={() => onRequestRemoveConfirm(item.id, item.full_name)}
                     className="p-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded transition-colors"
                     title="Remove from watchlist"
                   >
@@ -1234,7 +1246,7 @@ const WatchlistRow = ({
                     </div>
                     
                     <div className="text-lg font-bold text-white mb-1">
-                      ${priceData.price.toFixed(2)}
+                      {formatPrice(priceData.price)}
                     </div>
                     
                     <div className={`text-xs font-medium ${
@@ -1255,13 +1267,13 @@ const WatchlistRow = ({
                       
                       {priceData.marketplace === 'steam' && priceData.price_last_7d && (
                         <div className="text-xs text-gray-500 mt-1">
-                          7d: ${priceData.price_last_7d.toFixed(2)}
+                          7d: {formatPrice(priceData.price_last_7d)}
                         </div>
                       )}
                       
                       {priceData.marketplace === 'buff163' && priceData.highest_order_price && (
                         <div className="text-xs text-gray-500 mt-1">
-                          Bid: ${priceData.highest_order_price.toFixed(2)}
+                          Bid: {formatPrice(priceData.highest_order_price)}
                         </div>
                       )}
                     </div>
@@ -1302,6 +1314,8 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
   const [selectedVariant, setSelectedVariant] = useState('normal');
   
   useScrollLock(true);
+  const { currency } = useUserSettings();
+  const currencyConfig = CURRENCY_CONFIG[currency] || CURRENCY_CONFIG.USD;
 
   // converts database types back to searchable types
   const SEARCH_TYPE_MAP = {
@@ -1424,15 +1438,18 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
   }, [selectedCondition, selectedVariant, needsCondition, selectedItem?.id, settings.marketplacePriority]);
 
   // handle adding the item to watchlist
-  const handleAdd = async () => {
+    const handleAdd = async () => {
     if (!isFormComplete) return;
+
+    // Convert target price to USD if provided
+    const targetPriceUSD = targetPrice ? convertToUSD(parseFloat(targetPrice), currency) : null;
 
     await onAdd(
       selectedItem,
       selectedItem.initialPrice,
       selectedItem.marketplace,
       {
-        targetPrice: targetPrice ? parseFloat(targetPrice) : null,
+        targetPrice: targetPriceUSD,
         notes: notes.trim() || null
       }
     );
@@ -1728,11 +1745,11 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     <div className="flex items-center gap-2">
                       <Target className="w-4 h-4" />
-                      Target Price (Optional)
+                      Target Price (Optional) ({currencyConfig.symbol} {currency})
                     </div>
                   </label>
                   <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    {currencyConfig.symbol}
                     <input
                       type="number"
                       step="0.01"
@@ -1744,7 +1761,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
                     />
                   </div>
                   <p className="text-gray-500 text-xs mt-1">
-                    Set a target price to track when the item reaches your goal
+                    Set a target price in {currencyConfig.name} to track your goal
                   </p>
                 </div>
 
