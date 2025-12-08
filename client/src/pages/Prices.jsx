@@ -7,6 +7,7 @@ import { usePriceLookup } from '@/hooks/portfolio/usePriceLookup';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
 import { QuickWatchlistAdd } from '@/components/forms';
 import { useWatchlist } from '@/hooks/portfolio';
+import { convertAndFormat } from '@/hooks/util/currency';
 
 const ITEM_TYPES = [
   { value: 'all', label: 'All' },
@@ -25,6 +26,7 @@ const PricesPage = ({ userSession }) => {
   const location = useLocation();
   const { lookupMaps } = useCSData();
   const { addToWatchlist, refreshWatchlist } = useWatchlist(userSession);
+  const { currency } = useUserSettings();
 
   const [selectedType, setSelectedType] = useState('all');
   const [searchValue, setSearchValue] = useState('');
@@ -653,7 +655,11 @@ const MarketplacePriceCard = ({ marketplace, prices }) => {
 const PriceComparisonTable = ({ variantLabel, configs }) => {
   const [expandedRow, setExpandedRow] = useState(null);
   
-  const { settings: contextSettings } = useUserSettings();
+  const { settings: contextSettings, currency } = useUserSettings();
+
+  const formatPrice = useCallback((usdAmount) => {
+    return convertAndFormat(usdAmount, currency);
+  }, [currency]);
 
   return (
     <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
@@ -756,29 +762,28 @@ const PriceComparisonTable = ({ variantLabel, configs }) => {
                     })
                     .map(marketplace => {
                       const price = config.prices[marketplace]?.[0];
-                      const isPreferred = contextSettings.marketplacePriority?.[0] === marketplace;
                       const isBestPrice = price && !price.is_bid_price && lowestPrice && price.price === lowestPrice;
                       
-                      return (
-                        <td key={marketplace} className="py-3 px-3 text-center">
-                          {price ? (
-                          <div className="inline-flex items-center space-x-0">
-                            <span className={`font-semibold text-sm px-1 py-0.5 rounded ${
-                              isBestPrice ? 'bg-green-500/20 text-green-400' : 'text-white'
-                            }`}>
-                              ${price.price.toFixed(2)}
-                            </span>
-                            {price.is_bid_price && (
-                              <AlertTriangle className="w-3 h-3 mt-0.5 text-yellow-400" />
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-gray-600 text-sm">—</span>
-                        )}
-                        </td>
-                      );
-                    })
-                  }
+                       return (
+                            <td key={marketplace} className="py-3 px-3 text-center">
+                              {price ? (
+                                <div className="inline-flex items-center space-x-0">
+                                  <span className={`font-semibold text-sm px-1 py-0.5 rounded ${
+                                    isBestPrice ? 'bg-green-500/20 text-green-400' : 'text-white'
+                                  }`}>
+                                    {formatPrice(price.price)}
+                                  </span>
+                                  {price.is_bid_price && (
+                                    <AlertTriangle className="w-3 h-3 mt-0.5 text-yellow-400" />
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-gray-600 text-sm">—</span>
+                              )}
+                            </td>
+                          );
+                        })
+                      }
                   <td className="py-3 text-center">
                     <svg 
                       className={`w-4 h-4 text-gray-400 transition-transform mx-auto ${
@@ -796,68 +801,67 @@ const PriceComparisonTable = ({ variantLabel, configs }) => {
                 {/* Expanded Details Row */}
                 {expandedRow === idx && (
                   <tr className="bg-gray-700/20">
-                    <td colSpan="6" className="p-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {/* Sort by same marketplace order */}
-                        {['csfloat', 'buff163', 'steam', 'skinport']
-                          .sort((a, b) => {
-                            const aIndex = contextSettings.marketplacePriority?.indexOf(a) ?? 999;
-                            const bIndex = contextSettings.marketplacePriority?.indexOf(b) ?? 999;
-                            return aIndex - bIndex;
-                          })
-                          .map(marketplace => {
-                            const price = config.prices[marketplace]?.[0];
-                            if (!price) return null; // Skip if no price data
-                            
-                            return (
-                              <div key={marketplace} className="bg-gray-800/50 rounded-lg p-3 border border-gray-600/30">
-                                <div className="text-sm text-gray-300 capitalize font-semibold mb-2">
-                                  {marketplace === 'csfloat' ? 'CSFloat' :
-                                  marketplace === 'buff163' ? 'Buff163' :
-                                  marketplace === 'steam' ? 'Steam' : 'Skinport'}
-                                </div>
+                        <td colSpan="6" className="p-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {['csfloat', 'buff163', 'steam', 'skinport']
+                              .sort((a, b) => {
+                                const aIndex = contextSettings.marketplacePriority?.indexOf(a) ?? 999;
+                                const bIndex = contextSettings.marketplacePriority?.indexOf(b) ?? 999;
+                                return aIndex - bIndex;
+                              })
+                              .map(marketplace => {
+                                const price = config.prices[marketplace]?.[0];
+                                if (!price) return null;
                                 
-                                <div className="space-y-2">
-                                  {/* Main Price */}
-                                  <div className="text-lg font-bold text-white">
-                                    ${price.price.toFixed(2)}
-                                  </div>
-                                  
-                                  {/* Buff163 - Show bid/ask details */}
-                                  {marketplace === 'buff163' && (
-                                    <>
-                                      {price.is_bid_price && (
-                                        <div className="flex items-center space-x-1 text-xs text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded">
-                                          <AlertTriangle className="w-3 h-3" />
-                                          <span>Bid only (no sellers)</span>
-                                        </div>
+                                return (
+                                  <div key={marketplace} className="bg-gray-800/50 rounded-lg p-3 border border-gray-600/30">
+                                    <div className="text-sm text-gray-300 capitalize font-semibold mb-2">
+                                      {marketplace === 'csfloat' ? 'CSFloat' :
+                                      marketplace === 'buff163' ? 'Buff163' :
+                                      marketplace === 'steam' ? 'Steam' : 'Skinport'}
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                      {/* Main Price */}
+                                      <div className="text-lg font-bold text-white">
+                                        {formatPrice(price.price)}
+                                      </div>
+                                      
+                                      {/* Buff163 details */}
+                                      {marketplace === 'buff163' && (
+                                        <>
+                                          {price.is_bid_price && (
+                                            <div className="flex items-center space-x-1 text-xs text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded">
+                                              <AlertTriangle className="w-3 h-3" />
+                                              <span>Bid only (no sellers)</span>
+                                            </div>
+                                          )}
+                                          {!price.is_bid_price && price.highest_order_price && (
+                                            <div className="text-xs text-gray-400">
+                                              Highest bid: {formatPrice(price.highest_order_price)}
+                                            </div>
+                                          )}
+                                        </>
                                       )}
-                                      {!price.is_bid_price && price.highest_order_price && (
+                                      
+                                      {/* Steam historical data */}
+                                      {marketplace === 'steam' && price.price_last_7d && (
                                         <div className="text-xs text-gray-400">
-                                          Highest bid: ${price.highest_order_price.toFixed(2)}
-                                        </div>
-                                      )}
-                                    </>
-                                  )}
-                                  
-                                  {/* Steam - Historical data */}
-                                  {marketplace === 'steam' && price.price_last_7d && (
-                                  <div className="text-xs text-gray-400">
-                                    7d avg: ${price.price_last_7d.toFixed(2)}
-                                    {price.price !== price.price_last_7d && (
-                                      <span className={`ml-1 font-semibold ${
-                                        price.price > price.price_last_7d ? 'text-red-400' : 'text-green-400'
-                                      }`}>
-                                        {price.price > price.price_last_7d ? '+' : '-'}
-                                        {Math.abs(((price.price - price.price_last_7d) / price.price_last_7d) * 100).toFixed(1)}%
-                                      </span>
-                                    )}
-  
-                                      {price.price_last_30d && (
-                                        <div className="text-xs text-gray-400">
-                                          30d: ${price.price_last_30d.toFixed(2)}
-                                        </div>
-                                      )}
+                                          7d avg: {formatPrice(price.price_last_7d)}
+                                          {price.price !== price.price_last_7d && (
+                                            <span className={`ml-1 font-semibold ${
+                                              price.price > price.price_last_7d ? 'text-red-400' : 'text-green-400'
+                                            }`}>
+                                              {price.price > price.price_last_7d ? '+' : '-'}
+                                              {Math.abs(((price.price - price.price_last_7d) / price.price_last_7d) * 100).toFixed(1)}%
+                                            </span>
+                                          )}
+                                          
+                                          {price.price_last_30d && (
+                                            <div className="text-xs text-gray-400">
+                                              30d: {formatPrice(price.price_last_30d)} 
+                                            </div>
+                                        )}
                                       {/* Show which timeframe is used for main price */}
                                       <div className="text-xs text-gray-500">
                                         Source: {price.price_last_24h ? '24h' : 
