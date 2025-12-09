@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Loader2 } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
 import { formatDateInTimezone, useItemFormatting } from '@/hooks/util';
+import { convertToUSD, convertFromUSD, convertAndFormat, CURRENCY_CONFIG } from '@/hooks/util/currency';
 
 const SellItemModal = ({ 
   isOpen, 
@@ -14,9 +15,13 @@ const SellItemModal = ({
   onConfirmSale,
   isLoading = false 
 }) => {
-  const { timezone } = useUserSettings();
+  const { timezone, currency } = useUserSettings();
 
   const toast = useToast();
+
+  // Get currency config
+  const currencySymbol = CURRENCY_CONFIG[currency]?.symbol || '$';
+  const currencyName = CURRENCY_CONFIG[currency]?.name || 'USD';
 
   const { displayName: formatDisplayName, subtitle: formatSubtitle } = useItemFormatting();
 
@@ -29,6 +34,11 @@ const SellItemModal = ({
     formatSubtitle(item, { showQuantity: false }),
     [item, formatSubtitle]
   );
+
+  // Format price helper
+  const formatPrice = useCallback((usdAmount) => {
+    return convertAndFormat(usdAmount, currency);
+  }, [currency]);
 
   const [soldPrice, setSoldPrice] = useState('');
   const [soldQuantity, setSoldQuantity] = useState(1);
@@ -48,13 +58,22 @@ const SellItemModal = ({
     
     if (!soldPrice || !soldQuantity || isNaN(pricePerUnit) || isNaN(quantity)) return null;
     
+    // Convert buy price from USD to user's currency for comparison
+    const buyPriceInUserCurrency = convertFromUSD(buyPrice, currency);
+
     const totalSaleValue = pricePerUnit * quantity;
-    const profitLoss = (pricePerUnit - buyPrice) * quantity;
-    const investment = buyPrice * quantity;
+    const profitLoss = (pricePerUnit - buyPriceInUserCurrency) * quantity;
+    const investment = buyPriceInUserCurrency * quantity;
     const percentage = investment > 0 ? ((profitLoss / investment) * 100).toFixed(2) : '0.00';
     
-    return { totalSaleValue, profitLoss, percentage };
-  }, [soldPrice, soldQuantity, buyPrice]);
+    return { 
+      totalSaleValue, 
+      profitLoss, 
+      percentage,
+      investment,
+      buyPriceInUserCurrency 
+    };
+  }, [soldPrice, soldQuantity, buyPrice, currency]);
 
   const validateSaleInput = () => {
     const priceNum = parseFloat(soldPrice);
@@ -71,18 +90,22 @@ const SellItemModal = ({
     return { isValid: true, error: null };
   };
 
-  const handleSubmit = () => {
-  const validation = validateSaleInput();
-  if (!validation.isValid) {
-    toast.error(validation.error, 'Invalid Input');
-    return;
-  }
+  const handleSubmit = async () => {
+    const validation = validateSaleInput();
+    if (!validation.isValid) {
+      toast.error(validation.error, 'Invalid Input');
+      return;
+    }
 
-  const pricePerUnit = parseFloat(soldPrice);
-  const quantity = parseInt(soldQuantity);
-  
-  onConfirmSale(quantity, pricePerUnit);
-};
+    const userInputPrice = parseFloat(soldPrice); // Price in user's currency
+    const quantity = parseInt(soldQuantity);
+    
+    // Convert user's input to USD for storage
+    const priceInUSD = convertToUSD(userInputPrice, currency);
+    
+    // Send USD price to backend
+    onConfirmSale(quantity, priceInUSD);
+  };
 
   if (!isOpen) return null;
 
@@ -176,17 +199,26 @@ const SellItemModal = ({
           
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
-              Sale price per item ($)
+              Sale price per item ({currencySymbol} {currency})
             </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0.01"
-              placeholder="Enter sale price per item"
-              value={soldPrice}
-              onChange={(e) => setSoldPrice(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
-            />
+            <div className="relative">
+              {/* Currency symbol prefix */}
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">
+                {currencySymbol}
+              </span>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                placeholder={`Enter sale price in ${currency}`}
+                value={soldPrice}
+                onChange={(e) => setSoldPrice(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-orange-500 focus:outline-none"
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Price per item in {currencyName}
+            </p>
           </div>
 
           {/* Preview */}
@@ -196,16 +228,26 @@ const SellItemModal = ({
               <div className="text-sm text-gray-300 space-y-2">
                 <div className="flex justify-between">
                   <span>Total sale value:</span>
-                  <span className="text-white font-medium">${salePreview.totalSaleValue.toFixed(2)}</span>
+                  <span className="text-white font-medium">
+                    {currencySymbol}{salePreview.totalSaleValue.toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Your buy price:</span>
-                  <span className="text-gray-400">${(buyPrice * soldQuantity).toFixed(2)}</span>
+                  <span className="text-gray-400">
+                    {formatPrice(buyPrice * soldQuantity)}
+                  </span>
                 </div>
                 <div className="border-t border-gray-600 pt-2">
-                  <div className={`flex justify-between font-medium ${salePreview.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <div className={`flex justify-between font-medium ${
+                    salePreview.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
                     <span>Profit/Loss:</span>
-                    <span>{salePreview.profitLoss >= 0 ? '+' : '-'}${Math.abs(salePreview.profitLoss).toFixed(2)} ({salePreview.percentage}%)</span>
+                    <span>
+                      {salePreview.profitLoss >= 0 ? '+' : '-'}
+                      {currencySymbol}{(Math.abs(salePreview.profitLoss).toFixed(2))} 
+                      ({salePreview.percentage}%)
+                    </span>
                   </div>
                 </div>
               </div>

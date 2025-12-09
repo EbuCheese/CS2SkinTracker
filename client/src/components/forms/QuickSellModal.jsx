@@ -3,6 +3,8 @@ import { Search, X, TrendingUp, TrendingDown, Loader2, Save, DollarSign, History
 import { useScrollLock, useItemFormatting } from '@/hooks/util';
 import { useItemSearch } from '@/hooks/portfolio';
 import { ImageWithLoading } from '@/components/ui';
+import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { convertAndFormat, convertToUSD, convertFromUSD, CURRENCY_CONFIG } from '@/hooks/util/currency';
 
 const QuickSellModal = ({ 
   isOpen, 
@@ -13,6 +15,15 @@ const QuickSellModal = ({
   supabase
 }) => {
   useScrollLock(isOpen);
+
+  // get user currency
+  const { currency } = useUserSettings();
+  const currencyConfig = CURRENCY_CONFIG[currency] || CURRENCY_CONFIG.USD;
+
+  // format price
+  const formatPrice = useCallback((usdAmount) => {
+    return convertAndFormat(usdAmount, currency);
+  }, [currency]);
 
   // Search and selection state
   const [searchQuery, setSearchQuery] = useState('');
@@ -106,14 +117,14 @@ const QuickSellModal = ({
   useEffect(() => {
     if (selectedItem) {
       setSoldQuantity(Math.min(1, selectedItem.quantity));
-      // Use current price as default if available, otherwise leave empty for user input
       if (selectedItem.hasValidPrice) {
-        setSoldPrice(selectedItem.currentPrice.toFixed(2));
+        const priceInUserCurrency = convertFromUSD(selectedItem.currentPrice, currency);
+        setSoldPrice(priceInUserCurrency.toFixed(2));
       } else {
         setSoldPrice('');
       }
     }
-  }, [selectedItem]);
+  }, [selectedItem, currency]);
 
   const handleItemSelect = useCallback((item) => {
     setSelectedItem(item);
@@ -159,10 +170,10 @@ const QuickSellModal = ({
       return;
     }
 
-    const pricePerUnit = parseFloat(soldPrice);
+    const pricePerUnitUserCurrency = parseFloat(soldPrice);
     const quantity = parseInt(soldQuantity);
     
-    if (isNaN(pricePerUnit) || pricePerUnit <= 0) {
+    if (isNaN(pricePerUnitUserCurrency) || pricePerUnitUserCurrency <= 0) {
       setError('Please enter a valid price greater than 0');
       return;
     }
@@ -176,17 +187,20 @@ const QuickSellModal = ({
     setError('');
 
     try {
+      // CONVERT TO USD before saving
+      const pricePerUnitUSD = convertToUSD(pricePerUnitUserCurrency, currency);
+      
       const { data: saleResult, error: saleError } = await supabase.rpc('process_investment_sale', {
         p_investment_id: selectedItem.id,
         p_user_id: userSession.id,
         p_quantity_to_sell: quantity,
-        p_price_per_unit: pricePerUnit,
+        p_price_per_unit: pricePerUnitUSD, // Store USD
         p_sale_notes: null
       });
       
       if (saleError) throw new Error(`Sale failed: ${saleError.message}`);
       
-      onSaleComplete(selectedItem.id, quantity, pricePerUnit, saleResult.remaining_quantity);
+      onSaleComplete(selectedItem.id, quantity, pricePerUnitUSD, saleResult.remaining_quantity);
       
       setSelectedItem(null);
       setSoldPrice('');
@@ -205,29 +219,36 @@ const QuickSellModal = ({
   const salePreview = useMemo(() => {
     if (!selectedItem || !soldPrice || !soldQuantity) return null;
     
-    const pricePerUnit = parseFloat(soldPrice);
+    const pricePerUnit = parseFloat(soldPrice); // User's input in their currency
     const quantity = parseInt(soldQuantity);
-    const buyPrice = parseFloat(selectedItem.buy_price) || 0;
+    const buyPriceUSD = parseFloat(selectedItem.buy_price) || 0;
+    const buyPriceUserCurrency = convertFromUSD(buyPriceUSD, currency);
     
     if (isNaN(pricePerUnit) || isNaN(quantity)) return null;
     
+    // All calculations in user's currency for preview
     const totalSaleValue = pricePerUnit * quantity;
-    const profitLoss = (pricePerUnit - buyPrice) * quantity;
-    const totalInvestment = buyPrice * quantity;
+    const profitLoss = (pricePerUnit - buyPriceUserCurrency) * quantity;
+    const totalInvestment = buyPriceUserCurrency * quantity;
     const profitPercentage = totalInvestment > 0 ? ((profitLoss / totalInvestment) * 100) : 0;
     
-    // Compare with historical performance (only if available)
-    const vsHistoricalAvg = selectedItem.hasSalesHistory && selectedItem.averageSalePrice > 0
-      ? pricePerUnit - selectedItem.averageSalePrice 
+    // Compare with historical performance
+    const avgSalePriceUSD = selectedItem.hasSalesHistory && selectedItem.averageSalePrice > 0
+      ? convertFromUSD(selectedItem.averageSalePrice, currency)
+      : null;
+    
+    const vsHistoricalAvg = avgSalePriceUSD
+      ? pricePerUnit - avgSalePriceUSD
       : null;
     
     return { 
       totalSaleValue, 
       profitLoss, 
       profitPercentage: Number(profitPercentage.toFixed(1)),
-      vsHistoricalAvg
+      vsHistoricalAvg,
+      buyPriceUserCurrency // Store for display
     };
-  }, [selectedItem, soldPrice, soldQuantity]);
+  }, [selectedItem, soldPrice, soldQuantity, currency]);
 
   if (!isOpen) return null;
 
@@ -325,7 +346,7 @@ const QuickSellModal = ({
                           {/* Current price with null handling */}
                           <div className="text-white font-medium">
                             {item.hasValidPrice ? (
-                              `$${item.currentPrice.toFixed(2)}`
+                              formatPrice(item.currentPrice)
                             ) : (
                               <span className="text-gray-500 text-sm">No price data</span>
                             )}
@@ -355,7 +376,7 @@ const QuickSellModal = ({
                         {/* Show average sale price if available */}
                         {item.hasSalesHistory && item.averageSalePrice > 0 && (
                           <div className="text-xs text-gray-500">
-                            Avg sale: ${item.averageSalePrice.toFixed(2)}
+                            Avg sale: {formatPrice(item.averageSalePrice)}
                           </div>
                         )}
                       </div>
@@ -390,7 +411,7 @@ const QuickSellModal = ({
                       <span>Available: {selectedItem.quantity}</span>
                       {selectedItem.hasSalesHistory && selectedItem.averageSalePrice > 0 && (
                         <span className="text-blue-400">
-                          Previously sold {selectedItem.total_sold_quantity} @ avg ${selectedItem.averageSalePrice.toFixed(2)}
+                          Previously sold {selectedItem.total_sold_quantity} @ avg {formatPrice(selectedItem.averageSalePrice)}
                         </span>
                       )}
                     </div>
@@ -401,7 +422,7 @@ const QuickSellModal = ({
                         <div className="text-xs text-gray-500">Current Price</div>
                         <div className="text-white font-medium">
                           {selectedItem.hasValidPrice ? (
-                            `$${selectedItem.currentPrice.toFixed(2)}`
+                            formatPrice(selectedItem.currentPrice) 
                           ) : (
                             <span className="text-gray-500 text-sm flex items-center space-x-1">
                               <AlertTriangle className="w-3 h-3 mt-0.5" />
@@ -411,20 +432,16 @@ const QuickSellModal = ({
                         </div>
                       </div>
                       {selectedItem.hasValidPrice && (
-                        <div>
-                          <div className="text-xs text-gray-500">Unreal P&L</div>
-                          <div className={`font-medium text-sm ${
-                            selectedItem.totalPL >= 0 ? 'text-green-400' : 'text-red-400'
-                          }`}>
-                            {selectedItem.totalPL >= 0 ? '+' : ''}${selectedItem.totalPL.toFixed(2)}
-                          </div>
+                        <div className={`font-medium text-sm ${
+                          selectedItem.totalPL >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {selectedItem.totalPL >= 0 ? '+' : ''}
+                          {formatPrice(selectedItem.totalPL)}
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
-                
-                
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -444,22 +461,28 @@ const QuickSellModal = ({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Sale price per item ($)
+                    Sale price per item ({currencyConfig.symbol} {currency})
                     {selectedItem.hasSalesHistory && selectedItem.averageSalePrice > 0 && (
                       <span className="text-xs text-blue-400 ml-1">
-                        (historical avg: ${selectedItem.averageSalePrice.toFixed(2)})
+                        (historical avg: {formatPrice(selectedItem.averageSalePrice)})
                       </span>
                     )}
                   </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={soldPrice}
-                    onChange={handlePriceChange}
-                    placeholder={selectedItem.hasValidPrice ? "" : "Enter sale price"}
-                    className="w-full px-3 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-orange-500 focus:outline-none transition-colors duration-200"
-                  />
+                  <div className="relative">
+                    {/* ADD currency symbol */}
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">
+                      {currencyConfig.symbol}
+                    </span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={soldPrice}
+                      onChange={handlePriceChange}
+                      placeholder={selectedItem.hasValidPrice ? "" : `Enter sale price in ${currency}`}
+                      className="w-full pl-8 pr-3 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:border-orange-500 focus:outline-none transition-colors duration-200"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -470,20 +493,22 @@ const QuickSellModal = ({
                     <div>
                       <span className="text-gray-400 block">Buy Price (each)</span>
                       <span className="text-white font-medium">
-                        ${(parseFloat(selectedItem.buy_price) || 0).toFixed(2)}
+                        {formatPrice(parseFloat(selectedItem.buy_price) || 0, currency)}
                       </span>
                     </div>
                     <div>
                       <span className="text-gray-400 block">Sale Price (each)</span>
-                      <span className="text-white font-medium">${parseFloat(soldPrice).toFixed(2)}</span>
+                      <span className="text-white font-medium">
+                        {currencyConfig.symbol}{parseFloat(soldPrice).toFixed(2)}
+                      </span>
                     </div>
                     <div>
                       <span className="text-gray-400 block">Profit per Item</span>
                       <span className={`font-medium ${
-                        (parseFloat(soldPrice) - (parseFloat(selectedItem.buy_price) || 0)) >= 0 ? 'text-green-400' : 'text-red-400'
+                        (parseFloat(soldPrice) - salePreview.buyPriceUserCurrency) >= 0 ? 'text-green-400' : 'text-red-400'
                       }`}>
-                        {(parseFloat(soldPrice) - (parseFloat(selectedItem.buy_price) || 0)) >= 0 ? '+' : '-'}
-                        ${Math.abs(parseFloat(soldPrice) - (parseFloat(selectedItem.buy_price) || 0)).toFixed(2)}
+                        {(parseFloat(soldPrice) - salePreview.buyPriceUserCurrency) >= 0 ? '+' : '-'}
+                        {currencyConfig.symbol}{Math.abs(parseFloat(soldPrice) - salePreview.buyPriceUserCurrency).toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -492,23 +517,26 @@ const QuickSellModal = ({
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-gray-400">Total sale value:</span>
                       <span className="text-white font-medium">
-                        ${salePreview.totalSaleValue.toFixed(2)}
+                        {currencyConfig.symbol}{salePreview.totalSaleValue.toFixed(2)}
                       </span>
                     </div>
+
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-gray-400">Total Profit/Loss:</span>
                       <span className={`font-medium ${
                         salePreview.profitLoss >= 0 ? 'text-green-400' : 'text-red-400'
                       }`}>
-                        {salePreview.profitLoss >= 0 ? '+' : '-'}${Math.abs(salePreview.profitLoss).toFixed(2)} ({salePreview.profitPercentage}%)
+                        {salePreview.profitLoss >= 0 ? '+' : '-'}
+                        {currencyConfig.symbol}{Math.abs(salePreview.profitLoss).toFixed(2)} ({salePreview.profitPercentage}%)
                       </span>
                     </div>
-                    {/* Show comparison with historical average */}
+
                     {salePreview.vsHistoricalAvg !== null && (
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-500">vs. Historical avg:</span>
                         <span className={`${salePreview.vsHistoricalAvg >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {salePreview.vsHistoricalAvg >= 0 ? '+' : '-'}${Math.abs(salePreview.vsHistoricalAvg).toFixed(2)}
+                          {salePreview.vsHistoricalAvg >= 0 ? '+' : ''}
+                          {currencyConfig.symbol}{Math.abs(salePreview.vsHistoricalAvg).toFixed(2)}
                         </span>
                       </div>
                     )}
@@ -517,16 +545,22 @@ const QuickSellModal = ({
               )}
 
               {error && (
-                <div className="bg-red-500/20 border border-red-500/30 text-red-400 p-4 rounded-lg">
+                <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm">
                   {error}
                 </div>
               )}
 
-              <div className="flex items-center space-x-3">
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleBackToSearch}
+                  className="flex-1 px-4 py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors duration-200"
+                >
+                  Cancel
+                </button>
                 <button
                   onClick={handleSellConfirm}
                   disabled={isLoading || !soldPrice || !soldQuantity}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 font-medium"
+                  className="flex-1 px-4 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center space-x-2"
                 >
                   {isLoading ? (
                     <>
@@ -539,13 +573,6 @@ const QuickSellModal = ({
                       <span>Confirm Sale</span>
                     </>
                   )}
-                </button>
-
-                <button
-                  onClick={handleBackToSearch}
-                  className="px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200 font-medium"
-                >
-                  Cancel
                 </button>
               </div>
             </div>
