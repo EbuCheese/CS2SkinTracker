@@ -252,11 +252,14 @@ const WatchlistPage = ({ userSession }) => {
   };
 
   // edit the baseline price we are tracking from
-  const startEditingBaseline = (itemId, currentBaseline) => {
+  const startEditingBaseline = (itemId, currentBaselineUSD) => {
+    // Convert USD to user currency for editing
+    const baselineInUserCurrency = convertFromUSD(currentBaselineUSD, currency);
+    
     setEditingBaselines({
       ...editingBaselines,
       [itemId]: {
-        baseline: currentBaseline.toString(),
+        baseline: baselineInUserCurrency.toFixed(2),
         editing: true
       }
     });
@@ -274,13 +277,15 @@ const WatchlistPage = ({ userSession }) => {
     const editData = editingBaselines[itemId];
     if (!editData) return;
 
-    const baseline = parseFloat(editData.baseline);
-    if (baseline <= 0) {
+    const baselineInUserCurrency = parseFloat(editData.baseline);
+
+    const baselineUSD = convertToUSD(baselineInUserCurrency, currency);
+    if (baselineUSD <= 0) {
       toast.error('Baseline must be positive', 'Invalid Input');
       return;
     }
 
-    await editBaseline(itemId, baseline);
+    await editBaseline(itemId, baselineUSD);
     cancelEditingBaseline(itemId);
   };
 
@@ -1202,7 +1207,7 @@ const WatchlistRow = ({
                     {isCurrent && <span className="ml-1">✓</span>}
                     {mpData && !isCurrent && (
                       <span className="ml-1 text-xs opacity-70">
-                        ${mpData.price.toFixed(2)}
+                        {formatPrice(mpData.price)}
                       </span>
                     )}
                   </button>
