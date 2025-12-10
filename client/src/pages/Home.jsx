@@ -334,10 +334,13 @@ const portfolioMetrics = useMemo(() => {
         format: 'simple' 
       });
 
+      const formattedSaleValue = convertAndFormat(saleValue, currency);
+      const formattedProfit = `${saleProfitLoss >= 0 ? '+' : ''}${convertAndFormat(Math.abs(saleProfitLoss), currency)}`;
+
       if (isFullSale) {
-        toast.fullSaleCompleted(detailedName, quantitySold, saleValue, saleProfitLoss);
+        toast.fullSaleCompleted(detailedName, quantitySold, formattedSaleValue, formattedProfit);
       } else {
-        toast.partialSaleCompleted(detailedName, quantitySold, remainingQuantity, saleValue, saleProfitLoss);
+        toast.partialSaleCompleted(detailedName, quantitySold, remainingQuantity, formattedSaleValue, formattedProfit);
       }
 
   }, [investments, userSession.id, setInvestments, setSoldItems, toast]);
