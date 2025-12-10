@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useItemFormatting, formatDateInTimezone } from '@/hooks/util';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
 import { useCSData } from '@/contexts/CSDataContext';
+import { convertFromUSD, convertToUSD, formatCurrency, CURRENCY_CONFIG } from '@/hooks/util/currency';
 
 const CONDITION_OPTIONS = [
   { value: '', label: 'Select condition' },
@@ -78,11 +79,24 @@ const EditItemModal = ({
   onSave, 
   isLoading = false 
 }) => {
-  const { timezone } = useUserSettings();
+  const { timezone, currency } = useUserSettings();
   const { lookupMaps, data } = useCSData();
+
 
   const [formData, setFormData] = useState({});
   const [errors, setErrors] = useState({});
+
+  const formatPriceInput = useCallback((usdAmount) => {
+    if (!usdAmount) return '';
+    return convertFromUSD(usdAmount, currency).toFixed(
+      CURRENCY_CONFIG[currency]?.decimals || 2
+    );
+  }, [currency]);
+
+  const currencySymbol = useMemo(() => 
+    CURRENCY_CONFIG[currency]?.symbol || '$',
+    [currency]
+  );
 
   const csItemData = useMemo(() => {
     if (!item || isSoldItem) return null;
@@ -220,7 +234,7 @@ const itemSubtitle = useMemo(() => {
       if (isSoldItem) {
         setFormData({
           quantity_sold: item.quantity_sold || 1,
-          price_per_unit: item.price_per_unit || 0,
+          price_per_unit: formatPriceInput(item.price_per_unit),
           notes: item.notes || ''
         });
       } else {
@@ -238,15 +252,19 @@ const itemSubtitle = useMemo(() => {
           condition: item.condition || '',
           variant: item.variant || 'normal',
           quantity: item.quantity || 1,
-          buy_price: item.buy_price || 0,
+          buy_price: formatPriceInput(item.buy_price),
           notes: item.notes || '',
           price_source: effectivePriceSource,
-          manual_price: item.market_price_override || item.current_price || ''
-        });
+          manual_price: item.market_price_override 
+          ? formatPriceInput(item.market_price_override)
+          : item.current_price 
+            ? formatPriceInput(item.current_price)
+            : ''
+      });
       }
       setErrors({});
     }
-  }, [isOpen, item, isSoldItem, getAvailableMarketplaces]);
+  }, [isOpen, item, isSoldItem, getAvailableMarketplaces, formatPriceInput]);
 
   const handleChange = useCallback((field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -398,7 +416,7 @@ const itemSubtitle = useMemo(() => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Sale Price (each)
+                    Sale Price (each) {currencySymbol}
                   </label>
                   <input
                     type="number"
@@ -496,7 +514,7 @@ const itemSubtitle = useMemo(() => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Buy Price (each)
+                    Buy Price (each) {currencySymbol}
                   </label>
                   <input
                     type="number"
@@ -536,7 +554,7 @@ const itemSubtitle = useMemo(() => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center space-x-1">
-                    <span>Current Price</span>
+                    <span>Current Price {currencySymbol}</span>
                     {formData.price_source === 'manual' && (
                       <div className="relative group">
                         <Info className="w-3 h-3 mt-0.5 text-gray-500 hover:text-gray-400 cursor-help" />
@@ -551,8 +569,13 @@ const itemSubtitle = useMemo(() => {
                     step="0.01"
                     min="0.01"
                     value={formData.price_source === 'manual' ? (formData.manual_price || '') : 
-                      (availableMarketplaces.find(mp => mp.marketplace === formData.price_source)?.price?.toFixed(2) || 
-                      item.current_price?.toFixed(2) || '')}
+                      (availableMarketplaces.find(mp => mp.marketplace === formData.price_source)
+                        ? convertFromUSD(
+                            availableMarketplaces.find(mp => mp.marketplace === formData.price_source).price,
+                            currency
+                          ).toFixed(CURRENCY_CONFIG[currency]?.decimals || 2)
+                        : formatPriceInput(item.current_price) || ''
+                      )}
                     onChange={(e) => handleChange('manual_price', e.target.value)}
                     disabled={formData.price_source !== 'manual'}
                     className={`w-full px-3 py-2 border rounded-lg text-white focus:outline-none transition-colors ${
