@@ -329,7 +329,7 @@ const portfolioMetrics = useMemo(() => {
       }));
 
       // Show toast
-      const detailedName = displayName(newItem, { 
+      const detailedName = displayName(soldItem, { 
         includeCondition: true, 
         format: 'simple' 
       });
