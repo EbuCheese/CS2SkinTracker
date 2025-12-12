@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
+import { convertAndFormat } from '@/hooks/util/currency';
 
 // PopupManager - A versatile modal component for displaying various types of dialogs
 const PopupManager = ({ 
@@ -143,8 +144,12 @@ const PopupManager = ({
               {/* Data preview section with styled background */}
               <div className="bg-gray-700/50 p-3 rounded">
                 {data.revertValue !== undefined ? (
-                  // Revert operation - just show the sale value being removed
-                  <div>Sale value to remove: ${data.revertValue?.toFixed(2)}</div>
+                  // Revert operation - convert and format the value
+                  <div>Sale value to remove: {
+                    data.isConverted === false 
+                      ? convertAndFormat(data.revertValue, data.currency || 'USD')
+                      : `$${data.revertValue?.toFixed(2)}`
+                  }</div>
                 ) : (
                   // Sale operation - show full breakdown
                   <>
