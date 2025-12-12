@@ -274,15 +274,6 @@ const updateItemState = useCallback((itemId, updates) => {
       totalUnrealizedPL: (prev.totalUnrealizedPL || 0) - unrealizedPLDecrease
     }));
     
-    // Show success toast
-    const detailedName = buildDetailedItemName(removedItem);
-    const isFullSale = remainingQuantity === 0;
-    
-    if (isFullSale) {
-      toast.fullSaleCompleted(detailedName, quantitySold, saleProceeds, realizedProfit);
-    } else {
-      toast.partialSaleCompleted(detailedName, quantitySold, remainingQuantity, saleProceeds, realizedProfit);
-    }
   } else {
     // Fallback: remove from investments (for cases where soldItemData is not provided)
     setInvestments(prev => prev.filter(inv => inv.id !== itemId));
