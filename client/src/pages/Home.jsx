@@ -335,7 +335,7 @@ const portfolioMetrics = useMemo(() => {
       });
 
       const formattedSaleValue = convertAndFormat(saleValue, currency);
-      const formattedProfit = `${saleProfitLoss >= 0 ? '+' : ''}${convertAndFormat(Math.abs(saleProfitLoss), currency)}`;
+      const formattedProfit = `${saleProfitLoss >= 0 ? '+' : '-'}${convertAndFormat(Math.abs(saleProfitLoss), currency)}`;
 
       if (isFullSale) {
         toast.fullSaleCompleted(detailedName, quantitySold, formattedSaleValue, formattedProfit);
