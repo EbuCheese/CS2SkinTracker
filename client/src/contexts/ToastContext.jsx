@@ -51,29 +51,29 @@ export const ToastProvider = ({ children }) => {
 
   // ENHANCED INVESTMENT-SPECIFIC METHODS WITH METADATA SUPPORT
 
-  const fullSaleCompleted = (itemName, quantity, saleValue, profitLoss, options = {}) => {
+  const fullSaleCompleted = (itemName, quantity, formattedSaleValue, formattedProfitLoss, options = {}) => {
     return addToast({
       type: 'sale',
       title: 'Full Sale Completed',
       message: itemName,
       metadata: {
-        saleAmount: `$${saleValue.toFixed(2)} sale`,
-        profitLoss: `${profitLoss >= 0 ? '+' : '-'}$${Math.abs(profitLoss).toFixed(2)} p/l`,
+        saleAmount: `${formattedSaleValue} sale`,
+        profitLoss: `${formattedProfitLoss} p/l`,
         quantity: `${quantity}x sold`
       },
       duration: 5000,
       ...options
     });
-};
+  };
 
-  const partialSaleCompleted = (itemName, soldQty, totalQty, saleValue, profitLoss, options = {}) => {
+  const partialSaleCompleted = (itemName, soldQty, totalQty, formattedSaleValue, formattedProfitLoss, options = {}) => {
     return addToast({
       type: 'sale',
       title: 'Partial Sale Completed',
       message: itemName,
       metadata: {
-        saleAmount: `$${saleValue.toFixed(2)} sale`,
-        profitLoss: `${profitLoss >= 0 ? '+' : '-'}$${Math.abs(profitLoss).toFixed(2)} p/l`,
+        saleAmount: `${formattedSaleValue} sale`,
+        profitLoss: `${formattedProfitLoss} p/l`,
         quantity: `${soldQty} of ${totalQty + soldQty} sold`
       },
       duration: 5000,
@@ -81,13 +81,13 @@ export const ToastProvider = ({ children }) => {
     });
   };
 
-  const itemAdded = (itemName, quantity = 1, buyPrice, options = {}) => {
+  const itemAdded = (itemName, quantity, formattedBuyPrice, options = {}) => {
     return addToast({
       type: 'add',
       title: 'Item Added',
       message: itemName,
       metadata: {
-        amount: `$${buyPrice.toFixed(2)} each`,
+        amount: `${formattedBuyPrice} each`,
         item: `${quantity}x added`
       },
       duration: 5000,
@@ -143,19 +143,19 @@ export const ToastProvider = ({ children }) => {
     });
   };
 
-  const saleReverted = (itemName, quantity, saleValueLost, wasNewInvestment, { wasOriginalDatePreserved = true, ...options } = {}) => {
-  return addToast({
-    type: 'revert',
-    title: wasNewInvestment ? 'Investment Recreated' : 'Investment Restored',
-    message: itemName,
-    metadata: {
-      saleAmount: `$${saleValueLost.toFixed(2)} sale reversed`,
-      quantity: `${quantity}x restored`
-    },
-    duration: 5000,
-    ...options
-  });
-};
+  const saleReverted = (itemName, quantity, formattedSaleValueLost, wasNewInvestment, { wasOriginalDatePreserved = true, ...options } = {}) => {
+    return addToast({
+      type: 'revert',
+      title: wasNewInvestment ? 'Investment Recreated' : 'Investment Restored',
+      message: itemName,
+      metadata: {
+        saleAmount: `${formattedSaleValueLost} sale reversed`,
+        quantity: `${quantity}x restored`
+      },
+      duration: 5000,
+      ...options
+    });
+  };
 
 const itemRemovedFromWatchlist = (itemName, options = {}) => {
   return addToast({
