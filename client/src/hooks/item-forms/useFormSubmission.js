@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
 import { useToast } from '@/contexts/ToastContext';
 import { useItemFormatting } from '@/hooks/util';
+import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { convertAndFormat } from '@/hooks/util/currency';
 
 // Maps category names to database type identifiers
 const TYPE_MAP = {
@@ -41,6 +43,7 @@ const ERROR_MESSAGES = {
 export const useFormSubmission = (supabase) => {
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
+  const { currency } = useUserSettings();
 
   // useItemFormatting for detailed name
    const { displayName } = useItemFormatting();
@@ -105,8 +108,9 @@ export const useFormSubmission = (supabase) => {
         format: 'compact' 
       });
 
+      const formattedBuyPrice = convertAndFormat(insertData.buy_price, currency);
       // Show success toast using the enhanced method
-      toast.itemAdded(detailedName, insertData.quantity, insertData.buy_price);
+      toast.itemAdded(detailedName, insertData.quantity, formattedBuyPrice);
 
       // Update UI and close modal on success
       onAdd(insertData);
