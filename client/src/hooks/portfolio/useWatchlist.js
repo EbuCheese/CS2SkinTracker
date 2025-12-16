@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/supabaseClient';
 import { useToast } from '@/contexts/ToastContext';
 import { useItemFormatting } from '@/hooks/util';
+import { convertToUSD } from '@/hooks/util/currency';
+import { useUserSettings } from '@/contexts/UserSettingsContext';
 
 // Maps category names to database type identifiers
 const TYPE_MAP = {
@@ -33,6 +35,7 @@ export const useWatchlist = (userSession) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const toast = useToast();
+  const { currency } = useUserSettings();
   const { displayName } = useItemFormatting();
 
   // Fetch all watchlist items for user with prices using the RPC function
@@ -80,6 +83,9 @@ export const useWatchlist = (userSession) => {
         itemType = 'liquid';
       }
 
+      // CONVERT initial price to USD if needed
+      const initialPriceUSD = convertToUSD(parseFloat(initialPrice), currency);
+
       // Create watchlist item data
       const watchlistItem = {
         type: itemType,
@@ -87,9 +93,9 @@ export const useWatchlist = (userSession) => {
         variant: item.variant || item.selectedVariant || 'normal',
         condition: item.condition || null,
         image_url: item.image || item.image_url || null,
-        initial_price: parseFloat(initialPrice),
+        initial_price: initialPriceUSD,
         initial_marketplace: marketplace,
-        target_price: options.targetPrice ? parseFloat(options.targetPrice) : null,
+        target_price: options.targetPrice ? convertToUSD(parseFloat(options.targetPrice), currency) : null,
         alert_enabled: options.alertEnabled || false,
         alert_on_drop: options.alertOnDrop || false,
         alert_threshold_percent: options.alertThreshold ? parseFloat(options.alertThreshold) : null,
@@ -118,7 +124,7 @@ export const useWatchlist = (userSession) => {
       toast.error('Failed to add item to watchlist', 'Error');
       return { success: false, error: err.message };
     }
-  }, [userSession, displayName, toast, fetchWatchlist]);
+  }, [userSession, displayName, toast, fetchWatchlist, currency]);
 
   // Remove item from watchlist using RPC function
   const removeFromWatchlist = useCallback(async (id) => {
