@@ -3,6 +3,7 @@ import { supabase } from '@/supabaseClient';
 import { formatDateInTimezone, useItemFormatting } from '@/hooks/util';
 import { useToast } from '@/contexts/ToastContext';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
+import { convertToUSD, convertAndFormat } from '@/hooks/util/currency';
 
 /**
  * Shared logic hook for both ItemCard and ItemList components
@@ -22,7 +23,7 @@ export const useItemLogic = ({
   setInvestments
 }) => {
   // Hooks
-  const { timezone } = useUserSettings();
+  const { timezone, currency } = useUserSettings();
   const toast = useToast();
   const { displayName } = useItemFormatting();
 
@@ -309,16 +310,17 @@ export const useItemLogic = ({
     setShowSellModal(true);
   }, []);
 
-  const handleSellSubmit = useCallback(async (quantity, pricePerUnit) => {
+  const handleSellSubmit = useCallback(async (quantity, pricePerUnitUSD) => {
     setShowSellModal(false);
     
-    const totalSaleValue = pricePerUnit * quantity;
-    const profitLoss = (pricePerUnit - baseMetrics.buyPrice) * quantity;
+    // pricePerUnitUSD is already in USD from SellItemModal - don't convert!
+    const totalSaleValue = pricePerUnitUSD * quantity;
+    const profitLoss = (pricePerUnitUSD - baseMetrics.buyPrice) * quantity;
     
     await handleAsyncOperation(
       'PARTIAL_SALE',
       handleConfirmedSale,
-      quantity, pricePerUnit, totalSaleValue, profitLoss
+      quantity, pricePerUnitUSD, totalSaleValue, profitLoss
     );
   }, [baseMetrics.buyPrice, handleAsyncOperation]);
 
@@ -360,6 +362,20 @@ export const useItemLogic = ({
         item_type: saleResult.item_type || item.type
       };
       
+      const detailedName = displayName(item, { 
+        includeCondition: true, 
+        format: 'simple' 
+      });
+
+      const formattedSaleValue = convertAndFormat(totalSaleValue, currency);
+      const formattedProfit = `${profitLoss >= 0 ? '+' : '-'}${convertAndFormat(Math.abs(profitLoss), currency)}`;
+
+      if (isFullSale) {
+        toast.fullSaleCompleted(detailedName, quantity, formattedSaleValue, formattedProfit);
+      } else {
+        toast.partialSaleCompleted(detailedName, quantity, remainingQuantity, formattedSaleValue, formattedProfit);
+      }
+
       if (isFullSale) {
         onRemove?.(item.id, false, soldItemData, false);
       } else {
@@ -380,7 +396,7 @@ export const useItemLogic = ({
     } finally {
       setAsyncState({ isLoading: false, operation: null, error: null });
     }
-  }, [item, userSession, onUpdate, onRemove, toast, getErrorMessage, closePopup]);
+  }, [item, userSession, onUpdate, onRemove, toast, getErrorMessage, closePopup, displayName, currency, convertAndFormat]);
 
   // Revert Sale Handler
   const handleRevertSale = useCallback(async () => {
@@ -394,7 +410,9 @@ export const useItemLogic = ({
       title: 'Revert Sale',
       message: `Revert the sale of ${quantityToRestore}x "${fullItemName}" back to your inventory?`,
       data: {
-        revertValue: saleValueToLose
+        revertValue: saleValueToLose, 
+        currency: currency, 
+        isConverted: false               
       },
       onConfirm: () => handleAsyncOperation(
         'REVERT_SALE',
@@ -403,7 +421,7 @@ export const useItemLogic = ({
       confirmText: 'Revert Sale',
       cancelText: 'Cancel'
     });
-  }, [isSoldItem, item.quantity_sold, item.total_sale_value, fullItemName, handleAsyncOperation, showPopup]);
+  }, [isSoldItem, item.quantity_sold, item.total_sale_value, fullItemName, handleAsyncOperation, showPopup, currency]);
 
   // Confirmed Revert Handler
   const handleConfirmedRevert = useCallback(async () => {
@@ -449,7 +467,8 @@ export const useItemLogic = ({
           onUpdate(relatedInvestmentId, updatedInvestment, false, null, true);
         }
         
-        toast.saleReverted(fullItemName, quantityRestored, saleValueLost, false);
+        const formattedSaleValueLost = convertAndFormat(saleValueLost, currency);
+        toast.saleReverted(fullItemName, quantityRestored, formattedSaleValueLost, false);
         
       } else if (revertResult.type === 'investment_recreated') {
         const wasOriginalDatePreserved = revertResult.original_created_at !== null;
@@ -479,13 +498,8 @@ export const useItemLogic = ({
         
         onUpdate(revertResult.new_investment_id, newInvestmentData, false, null, true);
       
-        toast.saleReverted(
-          fullItemName, 
-          revertResult.quantity_restored, 
-          revertResult.sale_value_lost, 
-          true,
-          wasOriginalDatePreserved
-        );
+        const formattedSaleValueLost = convertAndFormat(revertResult.sale_value_lost, currency);
+        toast.saleReverted(fullItemName, revertResult.quantity_restored, formattedSaleValueLost, true, wasOriginalDatePreserved);
       }
       
       let investmentIdToRefresh = null;
@@ -530,58 +544,42 @@ export const useItemLogic = ({
 
   // Edit Submit Handler
   const handleEditSubmit = useCallback(async (formData) => {
-    await handleAsyncOperation('EDIT_SUBMIT', async () => {
-      const updateData = {
-        condition: formData.condition,
-        variant: formData.variant,
-        quantity: parseInt(formData.quantity),
-        buy_price: parseFloat(formData.buy_price),
-        notes: formData.notes?.trim() === '' ? null : (formData.notes?.trim() || null)
-      };
+  await handleAsyncOperation('EDIT_SUBMIT', async () => {
+    
+    // STEP 1: Convert and validate all inputs
+    const buyPriceUserCurrency = parseFloat(formData.buy_price);
+    const quantityNum = parseInt(formData.quantity);
+    
+    // Validation
+    if (quantityNum < 1 || quantityNum > 9999) {
+      throw new Error('Quantity must be between 1 and 9999');
+    }
+    
+    if (isNaN(buyPriceUserCurrency) || buyPriceUserCurrency <= 0) {
+      throw new Error('Buy price must be greater than 0');
+    }
+    
+    // Convert buy price to USD for database
+    const buyPriceUSD = convertToUSD(buyPriceUserCurrency, currency);
+    
+    // Build base update data
+    const updateData = {
+      condition: formData.condition,
+      variant: formData.variant,
+      quantity: quantityNum,
+      buy_price: buyPriceUSD,
+      notes: formData.notes?.trim() === '' ? null : (formData.notes?.trim() || null)
+    };
 
-      if (updateData.quantity < 1 || updateData.quantity > 9999) {
-        throw new Error('Quantity must be between 1 and 9999');
-      }
+    // STEP 2: Handle manual price override
+    let currentPriceUSD = item.current_price; // Default to existing
+    let manualPriceWasSet = false;
+    
+    if (formData.price_source === 'manual') {
+      const manualPriceValue = formData.manual_price ? parseFloat(formData.manual_price) : null;
       
-      if (updateData.buy_price <= 0) {
-        throw new Error('Buy price must be greater than 0');
-      }
-
-      if (formData.price_source === 'manual') {
-        const manualPriceValue = formData.manual_price ? parseFloat(formData.manual_price) : null;
-        
-        if (manualPriceValue === null || manualPriceValue === '') {
-          const { error: priceError } = await supabase.rpc('set_investment_price_override', {
-            p_investment_id: item.id,
-            p_user_id: userSession.id,
-            p_override_price: null,
-            p_use_override: false
-          });
-          
-          if (priceError) throw priceError;
-        } else if (isNaN(manualPriceValue) || manualPriceValue <= 0) {
-          throw new Error('Manual price must be greater than 0 or left empty to remove override');
-        } else {
-          const { error: priceError } = await supabase.rpc('set_investment_price_override', {
-            p_investment_id: item.id,
-            p_user_id: userSession.id,
-            p_override_price: manualPriceValue,
-            p_use_override: true
-          });
-          
-          if (priceError) throw priceError;
-        }
-        
-      } else if (formData.price_source !== item.price_source || item.preferred_marketplace_override) {
-        const { error: marketplaceError } = await supabase.rpc('set_investment_marketplace_override', {
-          p_investment_id: item.id,
-          p_user_id: userSession.id,
-          p_marketplace: formData.price_source
-        });
-        
-        if (marketplaceError) throw marketplaceError;
-        
-      } else {
+      if (manualPriceValue === null || manualPriceValue === '') {
+        // User wants to remove manual override
         const { error: priceError } = await supabase.rpc('set_investment_price_override', {
           p_investment_id: item.id,
           p_user_id: userSession.id,
@@ -591,87 +589,216 @@ export const useItemLogic = ({
         
         if (priceError) throw priceError;
         
-        const { error: marketplaceError } = await supabase.rpc('set_investment_marketplace_override', {
+        // Keep existing price until refresh
+        currentPriceUSD = item.current_price;
+        
+      } else if (isNaN(manualPriceValue) || manualPriceValue <= 0) {
+        throw new Error('Manual price must be greater than 0 or left empty to remove override');
+        
+      } else {
+        // User is setting a new manual price
+        // Convert from user currency to USD
+        currentPriceUSD = convertToUSD(manualPriceValue, currency);
+        
+        const { error: priceError } = await supabase.rpc('set_investment_price_override', {
           p_investment_id: item.id,
           p_user_id: userSession.id,
-          p_marketplace: null
+          p_override_price: currentPriceUSD,
+          p_use_override: true
         });
         
-        if (marketplaceError) throw marketplaceError;
+        if (priceError) throw priceError;
+        
+        manualPriceWasSet = true;
       }
-
-      const { error } = await supabase.rpc('update_investment_with_context', {
-        investment_id: item.id,
-        investment_data: updateData,
-        context_user_id: userSession.id
-      });
-
-      if (error) throw error;
       
-      const itemIdentityChanged = 
-        formData.condition !== item.condition ||
-        formData.variant !== item.variant;
-
-      const updatedItem = {
-        ...item,
-        ...updateData,
-        market_price_override: formData.price_source === 'manual' ? parseFloat(formData.manual_price) : null,
-        use_override: formData.price_source === 'manual',
-        preferred_marketplace_override: formData.price_source === 'global' ? null : 
-          (formData.price_source === 'manual' ? item.preferred_marketplace_override : formData.price_source),
-        
-        current_price: formData.price_source === 'manual' ? parseFloat(formData.manual_price) :
-          (getAvailableMarketplaces().find(mp => mp.marketplace === formData.price_source)?.price || item.current_price),
-        
-        price_source: formData.price_source === 'manual' ? 'manual' : 
-          (formData.price_source === 'global' ? (item.price_source === 'manual' ? 'csfloat' : item.price_source) : formData.price_source),
-        
-        unrealized_profit_loss: (
-          (formData.price_source === 'manual' ? parseFloat(formData.manual_price) :
-            (getAvailableMarketplaces().find(mp => mp.marketplace === formData.price_source)?.price || item.current_price)
-          ) - updateData.buy_price
-        ) * updateData.quantity,
-        
-        original_quantity: Math.max(item.original_quantity || item.quantity, updateData.quantity)
-      };
-
-      onUpdate(item.id, updatedItem, false);
-
-      if (itemIdentityChanged) {
-        updateItemState(item.id, { isPriceLoading: true });
-        
-        setTimeout(() => {
-          refreshSingleItemPrice(
-            item.id,
-            userSession,
-            (itemId, refreshedItemData) => {
-              setInvestments(prev => prev.map(inv =>
-                inv.id === itemId ? refreshedItemData : inv
-              ));
-              updateItemState(itemId, { isPriceLoading: false });
-            },
-            (itemId, error) => {
-              console.error('Failed to refresh price after edit:', error);
-              updateItemState(itemId, { isPriceLoading: false });
-              toast.warning('Price data will be updated on next refresh');
-            }
-          );
-        }, 1000);
+    } else if (formData.price_source !== item.price_source || item.preferred_marketplace_override) {
+      // STEP 3: Handle marketplace switch
+      
+      // User is switching to a marketplace
+      const { error: marketplaceError } = await supabase.rpc('set_investment_marketplace_override', {
+        p_investment_id: item.id,
+        p_user_id: userSession.id,
+        p_marketplace: formData.price_source
+      });
+      
+      if (marketplaceError) throw marketplaceError;
+      
+      // Get the price from selected marketplace
+      const selectedMarketplace = getAvailableMarketplaces().find(
+        mp => mp.marketplace === formData.price_source
+      );
+      
+      if (selectedMarketplace && selectedMarketplace.price) {
+        currentPriceUSD = selectedMarketplace.price; // Already in USD
       }
+      
+    } else {
+      // STEP 4: Clear both overrides (back to global)
+      
+      // Clear manual price override
+      const { error: priceError } = await supabase.rpc('set_investment_price_override', {
+        p_investment_id: item.id,
+        p_user_id: userSession.id,
+        p_override_price: null,
+        p_use_override: false
+      });
+      
+      if (priceError) throw priceError;
+      
+      // Clear marketplace override
+      const { error: marketplaceError } = await supabase.rpc('set_investment_marketplace_override', {
+        p_investment_id: item.id,
+        p_user_id: userSession.id,
+        p_marketplace: null
+      });
+      
+      if (marketplaceError) throw marketplaceError;
+      
+      // Keep existing price until refresh
+      currentPriceUSD = item.current_price;
+    }
 
-      toast.itemUpdated(fullItemName);
-      setShowEditModal(false);
-
-    }).catch(err => {
-      toast.error(getErrorMessage(err));
+    // STEP 5: Update base investment data
+    const { error } = await supabase.rpc('update_investment_with_context', {
+      investment_id: item.id,
+      investment_data: updateData,
+      context_user_id: userSession.id
     });
-  }, [item, userSession, onUpdate, getAvailableMarketplaces, updateItemState, refreshSingleItemPrice, setInvestments, toast, fullItemName, getErrorMessage, handleAsyncOperation]);
+
+    if (error) throw error;
+    
+
+    // STEP 6: Calculate all metrics in USD
+    
+    // Calculate unrealized P&L (USD)
+    const unrealizedPL = (currentPriceUSD - buyPriceUSD) * quantityNum;
+    
+    // Keep existing realized P&L (not being edited)
+    const realizedPL = parseFloat(item.realized_profit_loss) || 0;
+    
+    // Calculate original quantity for tracking
+    const originalQty = Math.max(
+      item.original_quantity || item.quantity, 
+      quantityNum
+    );
+    
+ 
+    // STEP 7: Build optimistic update (all USD)
+    const updatedItem = {
+      ...item,
+      
+      // Base fields
+      condition: updateData.condition,
+      variant: updateData.variant,
+      quantity: quantityNum,
+      buy_price: buyPriceUSD, // USD
+      notes: updateData.notes,
+      
+      // Price fields (USD)
+      current_price: currentPriceUSD, // USD
+      market_price_override: formData.price_source === 'manual' ? currentPriceUSD : null,
+      use_override: formData.price_source === 'manual',
+      
+      // Price source tracking
+      price_source: formData.price_source === 'manual' ? 'manual' : 
+        (formData.price_source === 'global' ? 
+          (item.price_source === 'manual' ? 'csfloat' : item.price_source) : 
+          formData.price_source),
+      
+      preferred_marketplace_override: formData.price_source === 'global' ? null : 
+        (formData.price_source === 'manual' ? item.preferred_marketplace_override : formData.price_source),
+      
+      // Calculated metrics (all USD)
+      unrealized_profit_loss: unrealizedPL,
+      realized_profit_loss: realizedPL,
+      
+      // Sales tracking (unchanged)
+      total_sold_quantity: item.total_sold_quantity || 0,
+      total_sale_value: item.total_sale_value || 0,
+      average_sale_price: item.average_sale_price || 0,
+      
+      // Quantity tracking
+      original_quantity: originalQty,
+      
+      // Timestamps
+      created_at: item.created_at,
+      updated_at: new Date().toISOString(),
+      
+      // Keep other fields
+      available_prices: item.available_prices,
+      image_url: item.image_url,
+      name: item.name,
+      skin_name: item.skin_name,
+      type: item.type,
+      user_id: item.user_id,
+      id: item.id,
+    };
+
+
+    // STEP 8: Check if price refresh is needed
+    const itemIdentityChanged = 
+      formData.condition !== item.condition ||
+      formData.variant !== item.variant;
+
+    // Update UI with optimistic data
+    onUpdate(item.id, updatedItem, false);
+
+    // STEP 9: Trigger price refresh if needed
+    if (itemIdentityChanged) {
+      // Condition or variant changed - need fresh prices
+      updateItemState(item.id, { isPriceLoading: true });
+      
+      setTimeout(() => {
+        refreshSingleItemPrice(
+          item.id,
+          userSession,
+          (itemId, refreshedItemData) => {
+            setInvestments(prev => prev.map(inv =>
+              inv.id === itemId ? refreshedItemData : inv
+            ));
+            updateItemState(itemId, { isPriceLoading: false });
+          },
+          (itemId, error) => {
+            console.error('Failed to refresh price after edit:', error);
+            updateItemState(itemId, { isPriceLoading: false });
+            toast.warning('Price data will be updated on next refresh');
+          }
+        );
+      }, 1000);
+    }
+
+    // STEP 10: Show success and close modal
+    toast.itemUpdated(fullItemName);
+    setShowEditModal(false);
+
+  }).catch(err => {
+    // Error handling - will be caught by handleAsyncOperation
+    console.error('Error in handleEditSubmit:', err);
+    toast.error(getErrorMessage(err));
+    throw err; // Re-throw so handleAsyncOperation can handle loading state
+  });
+}, [
+  item, 
+  userSession, 
+  currency,
+  onUpdate, 
+  getAvailableMarketplaces, 
+  updateItemState, 
+  refreshSingleItemPrice, 
+  setInvestments, 
+  toast, 
+  fullItemName, 
+  getErrorMessage, 
+  handleAsyncOperation,
+  supabase
+]);
 
   // Sold Edit Submit Handler
   const handleSoldEditFormSubmit = useCallback(async (formData) => {
     await handleAsyncOperation('EDIT_SOLD_SUBMIT', async () => {
       const quantity = parseInt(formData.quantity_sold);
-      const pricePerUnit = parseFloat(formData.price_per_unit);
+      const pricePerUnit = convertToUSD(parseFloat(formData.price_per_unit), currency);
       
       if (quantity < 1 || quantity > 9999) {
         throw new Error('Quantity must be between 1 and 9999');
