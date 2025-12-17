@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Search, X, TrendingUp, TrendingDown, Loader2, Save, DollarSign, History, AlertTriangle } from 'lucide-react';
 import { useScrollLock, useItemFormatting } from '@/hooks/util';
 import { useItemSearch } from '@/hooks/portfolio';
@@ -19,6 +19,10 @@ const QuickSellModal = ({
   // get user currency
   const { currency } = useUserSettings();
   const currencyConfig = CURRENCY_CONFIG[currency] || CURRENCY_CONFIG.USD;
+
+  // ref for input focus
+  const searchInputRef = useRef(null);
+  const priceInputRef = useRef(null);
 
   // format price
   const formatPrice = useCallback((usdAmount) => {
@@ -92,7 +96,7 @@ const QuickSellModal = ({
   // Use the new useItemSearch hook instead of manual filtering
   const { filteredItems, hasActiveSearch } = useItemSearch(availableItemsWithProfits, searchQuery);
 
-  // Event handlers (keeping your existing logic)
+  // Event handlers
   const handleEscapeKey = useCallback((event) => {
     if (event.key === 'Escape' && onClose) {
       onClose();
@@ -103,6 +107,22 @@ const QuickSellModal = ({
     document.addEventListener('keydown', handleEscapeKey);
     return () => document.removeEventListener('keydown', handleEscapeKey);
   }, [handleEscapeKey]);
+
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (selectedItem && priceInputRef.current) {
+      setTimeout(() => {
+        priceInputRef.current?.focus();
+      }, 100);
+    }
+  }, [selectedItem]);
 
   useEffect(() => {
     if (isOpen) {
@@ -117,23 +137,14 @@ const QuickSellModal = ({
   useEffect(() => {
     if (selectedItem) {
       setSoldQuantity(Math.min(1, selectedItem.quantity));
-      if (selectedItem.hasValidPrice) {
-        const priceInUserCurrency = convertFromUSD(selectedItem.currentPrice, currency);
-        setSoldPrice(priceInUserCurrency.toFixed(2));
-      } else {
-        setSoldPrice('');
-      }
+      setSoldPrice('');
     }
   }, [selectedItem, currency]);
 
   const handleItemSelect = useCallback((item) => {
     setSelectedItem(item);
     setSoldQuantity(Math.min(1, item.quantity));
-    if (item.hasValidPrice) {
-      setSoldPrice(item.currentPrice.toFixed(2));
-    } else {
-      setSoldPrice('');
-    }
+    setSoldPrice('');
     setError('');
   }, []);
 
@@ -146,6 +157,11 @@ const QuickSellModal = ({
     setSoldPrice('');
     setSoldQuantity(1);
     setError('');
+    
+    // Focus search input when returning to search
+    setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 100);
   }, []);
 
   const handleQuantityChange = useCallback((e) => {
@@ -279,6 +295,7 @@ const QuickSellModal = ({
               <div className="relative mb-6">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
+                  ref={searchInputRef}
                   type="text"
                   placeholder="Search items to sell... (try weapon names, skins, conditions)"
                   value={searchQuery}
@@ -469,11 +486,11 @@ const QuickSellModal = ({
                     )}
                   </label>
                   <div className="relative">
-                    {/* ADD currency symbol */}
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-medium">
                       {currencyConfig.symbol}
                     </span>
                     <input
+                      ref={priceInputRef}
                       type="number"
                       step="0.01"
                       min="0.01"
@@ -559,7 +576,7 @@ const QuickSellModal = ({
                 </button>
                 <button
                   onClick={handleSellConfirm}
-                  disabled={isLoading || !soldPrice || !soldQuantity}
+                  disabled={isLoading || !soldPrice || soldQuantity < 1 || parseFloat(soldPrice || '0') <= 0}
                   className="flex-1 px-4 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center space-x-2"
                 >
                   {isLoading ? (
