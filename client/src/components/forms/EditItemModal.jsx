@@ -558,8 +558,8 @@ const itemSubtitle = useMemo(() => {
                     {formData.price_source === 'manual' && (
                       <div className="relative group">
                         <Info className="w-3 h-3 mt-0.5 text-gray-500 hover:text-gray-400 cursor-help" />
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                          Leave empty and save to remove manual pricing
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 w-42">
+                          Leave empty and save to use automatic pricing
                         </div>
                       </div>
                     )}
