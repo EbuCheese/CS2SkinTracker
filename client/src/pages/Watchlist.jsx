@@ -8,22 +8,20 @@ import {
   Loader2,
   RefreshCw,
   RotateCcw,
-  Eraser,
-  BrushCleaning,
   AlertCircle,
   Edit2,
   Save,
   X,
-  DollarSign,
-  Target
+  ArrowLeftRight,
+  Goal
 } from 'lucide-react';
 import CSItemSearch from '@/components/search/CSItemSearch';
 import PopupManager from '@/components/ui/PopupManager';
 import { usePriceLookup, useWatchlist, useWatchlistFiltering } from '@/hooks/portfolio';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
-import { convertAndFormat, convertToUSD, convertFromUSD } from '@/hooks/util/currency';
+import { convertAndFormat, convertToUSD, convertFromUSD, CURRENCY_CONFIG } from '@/hooks/util/currency';
 import { useToast } from '@/contexts/ToastContext';
-import { useScrollLock, formatDateInTimezone } from '@/hooks/util';
+import { useScrollLock } from '@/hooks/util';
 
 // map the item types to display
 const ITEM_TYPES = [
@@ -653,7 +651,6 @@ const WatchlistPage = ({ userSession }) => {
                   <th className="p-3 text-center text-sm font-medium text-gray-300">Current Price</th>
                   <th className="p-3 text-center text-sm font-medium text-gray-300">Change</th>
                   <th className="p-3 text-center text-sm font-medium text-gray-300">Tracking</th>
-                  <th className="p-3 text-center text-sm font-medium text-gray-300">Added</th>
                   <th className="p-3 text-center text-sm font-medium text-gray-300">Actions</th>
                 </tr>
               </thead>
@@ -920,22 +917,6 @@ const WatchlistRow = ({
                 className="w-24 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-white text-sm text-center"
                 placeholder="0.00"
               />
-              <div className="flex gap-1 mt-1">
-                <button 
-                  onClick={() => onSaveBaseline(item.id)} 
-                  className="p-1 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded transition-colors"
-                  title="Save"
-                >
-                  <Save className="w-3 h-3" />
-                </button>
-                <button 
-                  onClick={() => onCancelEditBaseline(item.id)}
-                  className="p-1 bg-gray-600/20 hover:bg-gray-600/30 text-gray-400 rounded transition-colors"
-                  title="Cancel"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
             </div>
           ) : (
             <div>
@@ -946,7 +927,7 @@ const WatchlistRow = ({
                   <span>Manual</span>
                 </div>
               ) : (
-                <div className="text-gray-500 text-xs">{item.baseline_marketplace.toUpperCase()}</div>
+                <div className="text-gray-500 text-xs">{item.initial_marketplace?.toUpperCase() || 'Auto'}</div>
               )}
               <div className="text-gray-500 text-xs mt-0.5">
                 {daysSinceBaseline === 0 ? 'Today' : 
@@ -968,12 +949,11 @@ const WatchlistRow = ({
                   <span className="text-yellow-400 ml-1">(Bid)</span>
                 )}
               </div>
-              {/* Add this placeholder to match the "X days ago" in baseline */}
               <div className="text-gray-500 text-xs mt-0.5 h-[16px]">
                 {availablePrices.length > 1 ? (
                   <button
                     onClick={() => setShowAllPrices(!showAllPrices)}
-                    className="text-blue-400 hover:text-blue-300 pr-1"
+                    className="text-blue-400 hover:text-blue-300"
                   >
                     {showAllPrices ? 'Hide' : `+${availablePrices.length - 1} more`}
                   </button>
@@ -987,10 +967,11 @@ const WatchlistRow = ({
           )}
         </td>
         
-        {/* Change From Baseline */}
+        {/* Change & Target Column */}
         <td className="p-3 text-center">
           {hasPrice && priceChange !== null ? (
             <div className="flex flex-col items-center">
+              {/* Price Change */}
               <div className={`font-bold flex items-center ${
                 isGaining ? 'text-green-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-400'
               }`}>
@@ -1001,7 +982,66 @@ const WatchlistRow = ({
               <div className={`text-xs ${
                 isGaining ? 'text-green-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-400'
               }`}>
-                {priceChange >= 0 ? '+' : '-'}{formatPrice(Math.abs(priceChange))}
+                {priceChange >= 0 ? '+' : ''}{formatPrice(priceChange)}
+              </div>
+              
+              {/* Target Price Section */}
+              <div className="mt-1 pt-1 border-t border-gray-700/50 w-full">
+                {editingTarget ? (
+                  <div className="flex items-center gap-1 justify-center">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={targetValue}
+                      onChange={(e) => setTargetValue(e.target.value)}
+                      placeholder="Target"
+                      autoFocus
+                      className="w-20 px-1 py-0.5 bg-gray-700 border border-gray-600 rounded text-white text-xs text-center"
+                    />
+                    <button 
+                      onClick={handleSaveTarget} 
+                      className="p-0.5 text-green-400 hover:text-green-300"
+                      title="Save"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setTargetValue(item.target_price || '');
+                        setEditingTarget(false);
+                      }}
+                      className="p-0.5 text-gray-400 hover:text-gray-300"
+                      title="Cancel"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : item.target_price ? (
+                  <div 
+                    className="flex items-center gap-1 text-blue-400 cursor-pointer hover:text-blue-300 justify-center text-xs"
+                    onClick={() => {
+                      const targetInUserCurrency = convertFromUSD(item.target_price, currency);
+                      setTargetValue(targetInUserCurrency.toFixed(2));
+                      setEditingTarget(true);
+                    }}
+                    title="Click to edit target"
+                  >
+                    <Goal className="w-3 h-3" />
+                    <span>{formatPrice(item.target_price)}</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setTargetValue('');
+                      setEditingTarget(true);
+                    }}
+                    className="text-xs text-gray-600 hover:text-gray-400 flex items-center gap-1 justify-center w-full"
+                  >
+                    <Goal className="w-3 h-3" />
+                    <span>Set target</span>
+                  </button>
+                )}
               </div>
             </div>
           ) : (
@@ -1022,108 +1062,12 @@ const WatchlistRow = ({
             <span className="text-gray-500">—</span>
           )}
         </td>
-        
-        {/* Added Date */}
-        <td className="p-3 text-center">
-          <div className="text-gray-400 text-sm">
-            {formatDateInTimezone(item.created_at, timezone, {
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric'
-            })}
-          </div>
-        </td>
-        
-        <td className="p-3 text-center">
-          {hasPrice && priceChange !== null ? (
-            <div className="flex flex-col items-center">
-              {/* Existing price change display */}
-              <div className={`font-bold flex items-center ${
-                isGaining ? 'text-green-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-400'
-              }`}>
-                {isGaining ? <TrendingUp className="w-4 h-4 mr-1" /> : 
-                 priceChange < 0 ? <TrendingDown className="w-4 h-4 mr-1" /> : null}
-                {isGaining ? '+' : ''}{priceChangePercent.toFixed(2)}%
-              </div>
-              <div className={`text-xs ${
-                isGaining ? 'text-green-400' : priceChange < 0 ? 'text-red-400' : 'text-gray-400'
-              }`}>
-                {priceChange >= 0 ? '+' : '-'}{formatPrice(Math.abs(priceChange))}
-              </div>
-              
-              {/* Target Price Indicator */}
-              {(item.target_price || editingTarget) && (
-                <div className="mt-1 text-xs">
-                  {editingTarget ? (
-                    <div className="flex items-center gap-1">
-                      <DollarSign className="w-3 h-3 text-gray-400" />
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        value={targetValue}
-                        onChange={(e) => setTargetValue(e.target.value)}
-                        placeholder="0.00"
-                        autoFocus
-                        className="w-20 px-1 py-0.5 bg-gray-700 border border-gray-600 rounded text-white text-xs text-center"
-                      />
-                      <button 
-                        onClick={handleSaveTarget} 
-                        className="p-0.5 text-green-400 hover:text-green-300"
-                        title="Save"
-                      >
-                        <Save className="w-3.5 h-3.5" />
-                      </button>
-                      <button 
-                        onClick={() => {
-                          setTargetValue(item.target_price || '');
-                          setEditingTarget(false);
-                        }}
-                        className="p-0.5 text-gray-400 hover:text-gray-300"
-                        title="Cancel"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div 
-                      className="flex items-center gap-1 text-blue-400 cursor-pointer hover:text-blue-300"
-                      onClick={() => {
-                        const targetInUserCurrency = convertFromUSD(item.target_price, currency);
-                        setTargetValue(targetInUserCurrency.toFixed(2));
-                        setEditingTarget(true);
-                      }}
-                      title="Click to edit target price"
-                    >
-                      <span>Target: {formatPrice(item.target_price)}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Show "Set target" button only when NOT editing and no target exists */}
-              {!item.target_price && !editingTarget && (
-                <button
-                  onClick={() => {
-                    setTargetValue('');
-                    setEditingTarget(true);
-                  }}
-                  className="mt-1 text-xs text-gray-600 hover:text-gray-400 flex items-center gap-1"
-                  title="Set a target price"
-                >
-                  Set target
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="text-gray-500 text-sm">—</div>
-          )}
-        </td>
 
         {/* Actions */}
         <td className="p-3 text-center">
           <div className="flex items-center justify-center gap-1">
             {isEditing ? (
+              // Editing baseline mode
               <>
                 <button
                   onClick={() => onSaveBaseline(item.id)}
@@ -1161,15 +1105,15 @@ const WatchlistRow = ({
                   className="p-1.5 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded transition-colors"
                   title="Switch marketplace"
                 >
-                  <TrendingUp className="w-4 h-4" />
+                  <ArrowLeftRight className="w-4 h-4" />
                 </button>
-                  <button
-                    onClick={() => onRequestRemoveConfirm(item.id, item.full_name)}
-                    className="p-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded transition-colors"
-                    title="Remove from watchlist"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                <button
+                  onClick={() => onRequestRemoveConfirm(item.id, item.full_name)}
+                  className="p-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded transition-colors"
+                  title="Remove from watchlist"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </>
             )}
           </div>
@@ -1179,7 +1123,7 @@ const WatchlistRow = ({
       {/* Marketplace Switcher Row */}
       {isShowingMarketplaceSwitch && (
         <tr className="bg-gray-700/20 border-t border-gray-600">
-          <td colSpan="8" className="p-3">
+          <td colSpan="7" className="p-3">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm text-gray-300 font-medium">Switch tracking to:</span>
               {['csfloat', 'buff163', 'steam', 'skinport'].map(mp => {
@@ -1227,7 +1171,7 @@ const WatchlistRow = ({
       {/* Expandable Marketplace Comparison */}
       {showAllPrices && availablePrices.length > 1 && (
         <tr className="bg-gray-700/20 border-t border-gray-600">
-          <td colSpan="8" className="p-4">
+          <td colSpan="7" className="p-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {availablePrices.map((priceData) => {
                 const isCurrent = priceData.marketplace === item.current_marketplace;
@@ -1318,7 +1262,6 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
   const [selectedCondition, setSelectedCondition] = useState('');
   const [selectedVariant, setSelectedVariant] = useState('normal');
   
-  useScrollLock(true);
   const { currency } = useUserSettings();
   const currencyConfig = CURRENCY_CONFIG[currency] || CURRENCY_CONFIG.USD;
 
@@ -1748,13 +1691,15 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
                 { /* Target Price Input */ }
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    <div className="flex items-center gap-2">
-                      <Target className="w-4 h-4" />
+                    <div className="flex items-center gap-1">
+                      <Goal className="w-4 h-4" />
                       Target Price (Optional) ({currencyConfig.symbol} {currency})
                     </div>
                   </label>
                   <div className="relative">
-                    {currencyConfig.symbol}
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      {currencyConfig.symbol}
+                    </span>
                     <input
                       type="number"
                       step="0.01"
@@ -1762,7 +1707,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
                       placeholder="0.00"
                       value={targetPrice}
                       onChange={(e) => setTargetPrice(e.target.value)}
-                      className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none"
+                      className="w-full pr-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:border-orange-500 focus:outline-none transition-colors pl-8 py-2"
                     />
                   </div>
                   <p className="text-gray-500 text-xs mt-1">
@@ -1797,7 +1742,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
                       <p className="font-medium mb-1">How Tracking Works</p>
                       <ul className="text-xs space-y-1 text-blue-300/80">
                         <li>• Current prices auto-update from your primary marketplace</li>
-                        <li>• Initial price tracks your starting point for % change</li>
+                        <li>• Baseline price tracks your starting point for % change</li>
                         <li>• You can edit both prices anytime to adjust tracking</li>
                       </ul>
                     </div>
