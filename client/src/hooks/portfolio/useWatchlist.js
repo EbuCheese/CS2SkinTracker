@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/supabaseClient';
 import { useToast } from '@/contexts/ToastContext';
 import { useItemFormatting } from '@/hooks/util';
-import { convertToUSD } from '@/hooks/util/currency';
+import { convertToUSD, convertFromUSD, convertAndFormat } from '@/hooks/util/currency';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
 
 // Maps category names to database type identifiers
@@ -253,8 +253,12 @@ const editBaseline = useCallback(async (id, newBaseline) => {
     if (error) throw error;
 
     await fetchWatchlist();
+    
+    // Convert the USD baseline back to user currency for the toast
+    const formattedPrice = convertAndFormat(parseFloat(newBaseline), currency);
+    
     toast.info(
-      `Baseline set to $${parseFloat(newBaseline).toFixed(2)}`, 
+      `Baseline set to ${formattedPrice}`, 
       item?.full_name || 'Baseline Updated'
     );
 
@@ -264,7 +268,7 @@ const editBaseline = useCallback(async (id, newBaseline) => {
     toast.error('Failed to edit baseline', 'Error');
     return { success: false, error: err.message };
   }
-}, [userSession, toast, fetchWatchlist, watchlist]);
+}, [userSession, toast, fetchWatchlist, watchlist, currency, convertFromUSD, convertAndFormat]);
 
   // Bulk remove items using RPC function
   const bulkRemove = useCallback(async (ids) => {
