@@ -62,6 +62,15 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
     submitForm
   });
 
+  // Helper to convert plural tab names to singular
+  const getSingularType = (type) => {
+    if (type === 'All') return '';
+    if (type === 'Patches') return 'Patch';
+    if (type === 'music_kits') return 'Music Kit';
+    // Remove trailing 's' for other types (Liquids → Liquid, Cases → Case, etc.)
+    return type.endsWith('s') ? type.slice(0, -1) : type;
+  };
+
   // Renders form sections specific to craft items
   const renderCraftSections = () => (
     <>
@@ -172,7 +181,9 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
 
         {/* Modal Header */}
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-semibold text-white">Add {type} Item</h3>
+          <h3 className="text-xl font-semibold text-white">
+            {type === 'All' ? 'Add Item' : `Add ${getSingularType(type)} Item`}
+          </h3>
           <button 
             onClick={onClose} 
             className="text-gray-400 hover:text-white transition-colors"
@@ -208,7 +219,9 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
             ) : (
               // Normal State
               <>
-                <span>Add {type} Item</span>
+                <span>
+                  {type === 'All' ? 'Add Item' : `Add ${getSingularType(type)} Item`}
+                </span>
                 {/* Show quantity indicator for multi-item additions */}
                 {formData.quantity > 1 && (
                   <span className="text-orange-200">({formData.quantity}x)</span>
