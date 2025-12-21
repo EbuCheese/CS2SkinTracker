@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Search, Loader2, TrendingUp, AlertTriangle, Eye  } from 'lucide-react';
+import { Search, Loader2, TrendingUp, AlertTriangle, Eye, X  } from 'lucide-react';
 import CSItemSearch from '@/components/search/CSItemSearch';
 import { useCSData } from '@/contexts/CSDataContext';
 import { usePriceLookup } from '@/hooks/portfolio/usePriceLookup';
@@ -147,15 +147,30 @@ const filteredMarketPrices = useMemo(() =>
         {/* Search */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-2">Search Items</label>
-          <CSItemSearch
-            type={selectedType}
-            onSelect={handleItemSelect}
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            maxResults={30}
-            showLargeView={true}
-            maxHeight="550px"
-          />
+          <div className="relative">
+            <CSItemSearch
+              type={selectedType}
+              onSelect={handleItemSelect}
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              maxResults={30}
+              showLargeView={true}
+              maxHeight="550px"
+            />
+            {searchValue && (
+              <button
+                onClick={() => {
+                  setSearchValue('');
+                  setSelectedItem(null);
+                  setAllPrices([]);
+                }}
+                className="absolute right-3 top-2.5 w-5 h-5 text-gray-400 hover:text-white transition-colors z-10"
+                style={{ marginTop: '2px' }}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Loading State */}
