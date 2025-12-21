@@ -34,17 +34,20 @@ Whether you're flipping custom crafts, selling knives, or holding long-term inve
 
 ### <img src="./readme-icons/eye.svg" width="22" alt="Eye"/> **Watchlist Items**  
 - Keep an eye on items you’re interested in  
-- Compare initial vs. current prices from multiple markets  
+- Compare baseline vs. current prices from multiple markets  
 - Filter and spot trending items  
+- Set target prices you want to reach
+- Edit, Reset, Switch Marketplace, Delete items
 
 ### <img src="./readme-icons/chart-pie-slice.svg" width="22" alt="Pie Chart"/> **Portfolio Health & Diversity**  
 - Analyze asset allocation (knives, gloves, weapons, stickers, etc.)  
 - Understand diversification, risk, and allocation through charts  
 
-### <img src="./readme-icons/lightning.svg" width="22" alt="Lightning"/> **Quick Actions**  
-- Quick Add Investment  
-- Quick Record Sale  
+### <img src="./readme-icons/lightning.svg" width="22" alt="Lightning"/> **Quick Actions** 
 - Quick Check Market Prices  
+- Quick Add Investment  
+- Quick Record Sale   
+- Quick Add Watchlist
 
 ### <img src="./readme-icons/key.svg" width="22" alt="Key"/> **Beta Access via Invite Code**  
 - Invite-only access using beta keys  
