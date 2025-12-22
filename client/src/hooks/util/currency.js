@@ -158,7 +158,7 @@ export const convertToUSD = (amount, fromCurrency) => {
     return amount; // Fallback to original amount
   }
   
-  // Divide by rate to get USD (e.g., 100 EUR / 1.087 = $91.95 USD)
+  // Divide by rate to get USD value
   return amount / rate;
 };
 

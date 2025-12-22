@@ -49,7 +49,7 @@ export const ToastProvider = ({ children }) => {
   const info = (message, title = '', options = {}) =>
     addToast({ type: 'info', title, message, ...options });
 
-  // ENHANCED INVESTMENT-SPECIFIC METHODS WITH METADATA SUPPORT
+  // INVESTMENT-SPECIFIC METHODS WITH METADATA SUPPORT
 
   const fullSaleCompleted = (itemName, quantity, formattedSaleValue, formattedProfitLoss, options = {}) => {
     return addToast({
@@ -156,6 +156,8 @@ export const ToastProvider = ({ children }) => {
       ...options
     });
   };
+
+// WATCHLIST-SPECIFIC TOAST METHODS
 
 const itemRemovedFromWatchlist = (itemName, options = {}) => {
   return addToast({

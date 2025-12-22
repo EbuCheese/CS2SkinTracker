@@ -313,7 +313,7 @@ export const useItemLogic = ({
   const handleSellSubmit = useCallback(async (quantity, pricePerUnitUSD) => {
     setShowSellModal(false);
     
-    // pricePerUnitUSD is already in USD from SellItemModal - don't convert!
+    // values in USD
     const totalSaleValue = pricePerUnitUSD * quantity;
     const profitLoss = (pricePerUnitUSD - baseMetrics.buyPrice) * quantity;
     
