@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, forwardRef } from 'react';
 import { Search } from 'lucide-react';
 import { useCSData } from '@/contexts/CSDataContext';
 import { useAdvancedDebounce } from '@/hooks/util';
@@ -21,7 +21,7 @@ const getTypeDisplayName = (type) => {
 };
 
 // CSItemSearch Component - Advanced search interface for CS2 items
-const CSItemSearch = ({ 
+const CSItemSearch = forwardRef(({ 
   type = 'all', 
   placeholder, 
   onSelect, 
@@ -33,12 +33,16 @@ const CSItemSearch = ({
   showLargeView = false,
   excludeSpecialItems = false,
   maxHeight = '320px'
-}) => {
+}, ref) => {
   // Context and state management
   const { searchIndices, unifiedSearchIndex, loading: globalLoading, error: globalError, getSearchIndexForType } = useCSData();
   const [results, setResults] = useState([]); // Current search results
   const [isOpen, setIsOpen] = useState(false); // Dropdown visibility
   const [selectedVariant, setSelectedVariant] = useState({}); // Variant selection per item
+
+  // Create internal ref if external ref not provided
+  const internalRef = useRef(null);
+  const inputRef = ref || internalRef;
 
   const defaultPlaceholder = placeholder || `Search ${getTypeDisplayName(type)}...`;
 
@@ -301,6 +305,7 @@ const CSItemSearch = ({
       <div className="relative">
         <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
         <input
+          ref={inputRef}
           type="text"
           placeholder={defaultPlaceholder}
           value={value}
@@ -342,7 +347,7 @@ const CSItemSearch = ({
       )}
     </div>
   );
-};
+});
 
 // OptimizedSearchResultItem - Individual search result item component
 const OptimizedSearchResultItem = React.memo(({ 
@@ -764,6 +769,7 @@ const itemSource = useMemo(() => {
   );
 });
 
+CSItemSearch.displayName = 'CSItemSearch';
 OptimizedSearchResultItem.displayName = 'OptimizedSearchResultItem';
 
 export default CSItemSearch;
