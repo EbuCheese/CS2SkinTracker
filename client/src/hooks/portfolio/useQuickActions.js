@@ -31,8 +31,8 @@ export const useQuickActions = (setShowQuickPrice, setShowQuickAdd, setShowQuick
       title: 'Track New Item',
       description: 'Add to your price watchlist',
       icon: Eye,
-      color: 'from-orange-500 to-red-600',
-      hoverColor: 'hover:from-orange-600 hover:to-red-700',
+      color: 'from-yellow-500 to-amber-600',
+      hoverColor: 'hover:from-yellow-600 hover:to-amber-700',
       onClick: () => setShowQuickWatchlistAdd(true)
     },
     {
@@ -42,5 +42,5 @@ export const useQuickActions = (setShowQuickPrice, setShowQuickAdd, setShowQuick
       color: 'from-rose-500 to-pink-600',
       hoverColor: 'hover:from-rose-600 hover:to-pink-700',
     },
-  ], [setShowQuickAdd, setShowQuickAdd, setShowQuickSell, setShowQuickWatchlistAdd]);
+  ], [setShowQuickAdd, setShowQuickPrice, setShowQuickSell, setShowQuickWatchlistAdd]);
 };
