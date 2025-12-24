@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, memo, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, memo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, Plus, Loader2, Lightbulb } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
@@ -8,6 +8,7 @@ import {
   useFormSubmission, 
   useFormLogic 
 } from '@/hooks/item-forms';
+import CSItemSearch from '@/components/search/CSItemSearch';
 import {
   VariantBadge,
   ImageUploadSection,
@@ -30,6 +31,8 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
 
   const [searchValue, setSearchValue] = useState(''); // Search input state for item selection
   const { submitting, handleSubmit: submitForm } = useFormSubmission(supabase); // Form submission state and handler
+
+  const searchInputRef = useRef(null);
 
   const handleNavigateToCrafts = () => {
     onClose(); // Close the modal first
@@ -65,6 +68,14 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
     submitForm
   });
 
+  useEffect(() => {
+    if (searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+    }
+  }, []);
+
   // Handles search input changes for item selection
   const handleSearchChange = useCallback((e) => {
     const value = e.target.value;
@@ -99,17 +110,22 @@ const QuickAddItemForm = memo(({ onClose, onAdd, userSession, className = '' }) 
 
       {/* conditional rendering with direct form */}
       <div className="space-y-6">
-        {/* Unified search - no category needed */}
-        <ItemSelectionSection
-          type="All"
-          searchType="all"  // 'all' to search unified index
-          formData={formData}
-          handleFormDataChange={handleFormDataChange}
-          handleItemSelect={handleItemSelect}
-          searchValue={searchValue}
-          onSearchChange={handleSearchChange}
-          compact={true}
-        />
+          {/* Replace ItemSelectionSection with direct CSItemSearch */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Search for an item
+            </label>
+            <CSItemSearch
+              ref={searchInputRef}
+              type="all"
+              onSelect={handleItemSelect}
+              value={searchValue}
+              onChange={handleSearchChange}
+              maxResults={30}
+              showLargeView={true}
+              excludeSpecialItems={false}
+            />
+          </div>
 
         {/* Display selected item with variant controls */}
         <SelectedItemDisplay
