@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { X, Eye, Loader2, Target, DollarSign, AlertCircle } from 'lucide-react';
 import CSItemSearch from '@/components/search/CSItemSearch';
 import { usePriceLookup } from '@/hooks/portfolio/usePriceLookup';
@@ -35,6 +35,16 @@ const QuickWatchlistAdd = ({
 
   const { lookupAllPrices, loading, error } = usePriceLookup(userSession);
   const { settings } = useUserSettings();
+
+  const searchInputRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && preSelectedItem) {
@@ -228,6 +238,7 @@ const QuickWatchlistAdd = ({
               Search for an item to track
             </label>
             <CSItemSearch
+              ref={searchInputRef}
               type="all"
               onSelect={handleItemSelect}
               value={searchValue}

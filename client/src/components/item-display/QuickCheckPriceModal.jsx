@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { X, Search, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
 import CSItemSearch from '@/components/search/CSItemSearch';
 import { usePriceLookup } from '@/hooks/portfolio/usePriceLookup';
@@ -36,10 +36,19 @@ const QuickCheckPriceModal = ({
   const { lookupAllPrices, loading, error } = usePriceLookup(userSession);
   const { settings } = useUserSettings();
 
-  const formatPrice = useCallback((usdAmount) => {
-  return convertAndFormat(usdAmount, currency);
-}, [currency]);
+  const searchInputRef = useRef(null);
 
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+    }
+  }, [isOpen]);
+
+  const formatPrice = useCallback((usdAmount) => {
+    return convertAndFormat(usdAmount, currency);
+  }, [currency]);
 
   // Determine if item needs condition selection
   const needsCondition = useMemo(() => {
@@ -247,6 +256,7 @@ const QuickCheckPriceModal = ({
               Search for an item
             </label>
             <CSItemSearch
+              ref={searchInputRef}
               type="all"
               onSelect={handleItemSelect}
               value={searchValue}
