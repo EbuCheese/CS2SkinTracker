@@ -1,6 +1,7 @@
-import React, { memo } from 'react';
+import React, { memo, useRef, useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
+import CSItemSearch from '@/components/search/CSItemSearch';
 import { 
   VariantBadge, 
   ImageUploadSection, 
@@ -24,6 +25,20 @@ import {
 const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
   // Form submission hook - handles the actual submission process
   const { submitting, handleSubmit: submitForm } = useFormSubmission(supabase);
+
+  const searchInputRef = useRef(null);
+
+  // local craft value state
+  const [craftSearchValue, setCraftSearchValue] = useState('');
+
+  useEffect(() => {
+    if (searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+    }
+  }, []);
+
 
   // from useItemform hook
   const {
@@ -75,14 +90,23 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
   const renderCraftSections = () => (
     <>
       {/* Base Skin Selection - Crafts use existing skins as base */}
-      <ItemSelectionSection
-        type={type}
-        searchType="liquids"
-        formData={formData}
-        handleFormDataChange={handleFormDataChange}
-        handleItemSelect={handleItemSelect}
-        handleSkinSelect={handleSkinSelect}
-      />
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          Select Base Skin
+        </label>
+        <CSItemSearch
+          ref={searchInputRef}
+          type="liquids"
+          onSelect={(item) => {
+            handleSkinSelect(item);
+            setCraftSearchValue('');
+          }}
+          value={craftSearchValue} 
+          onChange={(e) => setCraftSearchValue(e.target.value)}
+          maxResults={30}
+          showLargeView={true}
+        />
+      </div>
 
       {/* Display Selected Base Skin with Variant Controls */}
       <SelectedItemDisplay
@@ -130,14 +154,20 @@ const AddItemForm = memo(({ type, onClose, onAdd, userSession }) => {
   return (
     <>
       {/* Item Selection - Search in appropriate category */}
-      <ItemSelectionSection
-        type={type}
-        searchType={type.toLowerCase()}
-        formData={formData}
-        handleFormDataChange={handleFormDataChange}
-        handleItemSelect={handleItemSelect}
-        handleSkinSelect={handleSkinSelect}
-      />
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          Search for an item
+        </label>
+        <CSItemSearch
+          ref={searchInputRef}
+          type={type.toLowerCase()}
+          onSelect={handleItemSelect || handleSkinSelect}
+          value={formData?.name || ''}
+          onChange={(e) => handleFormDataChange('name', e.target.value)}
+          maxResults={30}
+          showLargeView={true}
+        />
+      </div>
 
       {/* Display Selected Item with Variant Controls */}
       <SelectedItemDisplay
