@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Search, Loader2, TrendingUp, AlertTriangle, Eye, X  } from 'lucide-react';
 import CSItemSearch from '@/components/search/CSItemSearch';
@@ -39,6 +39,18 @@ const PricesPage = ({ userSession }) => {
 
   const { lookupAllPrices, loading, error } = usePriceLookup(userSession);
   const [showQuickWatchlistAdd, setShowQuickWatchlistAdd] = useState(false);
+
+  const searchInputRef = useRef(null);
+
+  useEffect(() => {
+  const timer = setTimeout(() => {
+    if (searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, 200); // Slightly longer delay to ensure component is ready
+  
+  return () => clearTimeout(timer);
+}, [selectedType]); // Runs on mount AND when type changes
 
     useEffect(() => {
       if (location.state?.preSelectedItem) {
@@ -149,6 +161,7 @@ const filteredMarketPrices = useMemo(() =>
           <label className="block text-sm font-medium text-gray-300 mb-2">Search Items</label>
           <div className="relative">
             <CSItemSearch
+              ref={searchInputRef}
               type={selectedType}
               onSelect={handleItemSelect}
               value={searchValue}
