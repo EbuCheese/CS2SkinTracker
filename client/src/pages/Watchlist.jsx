@@ -1265,6 +1265,8 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
   const { currency } = useUserSettings();
   const currencyConfig = CURRENCY_CONFIG[currency] || CURRENCY_CONFIG.USD;
 
+  const searchInputRef = useRef(null);
+
   // converts database types back to searchable types
   const SEARCH_TYPE_MAP = {
     'liquid': 'skins',
@@ -1372,6 +1374,14 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
     }
   };
 
+  useEffect(() => {
+      if (searchInputRef.current) {
+        setTimeout(() => {
+          searchInputRef.current?.focus();
+        }, 100);
+      }
+    }, []);
+
   // refetch prices when condition changes
   useEffect(() => {
     if (!needsCondition || !selectedCondition || !selectedItem) return;
@@ -1451,6 +1461,7 @@ const ImprovedAddModal = ({ userSession, onClose, onAdd }) => {
                 Search Item
               </label>
               <CSItemSearch
+                ref={searchInputRef}
                 type={searchType === 'all' ? 'all' : (SEARCH_TYPE_MAP[searchType] || searchType)}
                 value={searchValue}
                 onChange={(e) => {
