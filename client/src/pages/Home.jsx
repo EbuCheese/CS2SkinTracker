@@ -420,20 +420,29 @@ const portfolioMetrics = useMemo(() => {
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {/* Current Holdings Value Card */}
-          <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+          <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 group">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm">Current Holding Value</p>
                 <p className="text-2xl font-bold text-white">{convertAndFormat(portfolioMetrics.currentHoldingsValue, currency)}</p>
               </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-white" />
+              <div className="relative">
+                {/* Glow effect behind icon */}
+                <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-red-600 opacity-15 rounded-xl blur-md group-hover:blur-lg transition-all duration-300" />
+                
+                {/* Main icon container with tilt */}
+                <div className="relative w-12 h-12 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                  <DollarSign className="w-6 h-6 text-white" />
+                </div>
+                
+                {/* Animated ring on hover */}
+                <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-red-600 opacity-0 group-hover:opacity-30 rounded-xl group-hover:scale-125 transition-all duration-500 blur-sm" />
               </div>
             </div>
           </div>
 
           {/* Total Profit/Loss Card */}
-          <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+          <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 group">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm">Total P&L</p>
@@ -443,14 +452,23 @@ const portfolioMetrics = useMemo(() => {
                   </p>
                 </div>
               </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg flex items-center justify-center">
-                <Activity className="w-6 h-6 text-white" />
+              <div className="relative">
+                {/* Glow effect behind icon */}
+                <div className="absolute inset-0 bg-gradient-to-br from-green-500 to-emerald-600 opacity-20 rounded-xl blur-md group-hover:blur-lg transition-all duration-300" />
+                
+                {/* Main icon container with tilt */}
+                <div className="relative w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                  <Activity className="w-6 h-6 text-white" />
+                </div>
+                
+                {/* Animated ring on hover */}
+                <div className="absolute inset-0 bg-gradient-to-br from-green-500 to-emerald-600 opacity-0 group-hover:opacity-30 rounded-xl group-hover:scale-125 transition-all duration-500 blur-sm" />
               </div>
             </div>
           </div>
           
           {/* Overall Growth Percentage Card */}
-          <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50">
+          <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 group">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm">Overall Growth</p>
@@ -458,8 +476,17 @@ const portfolioMetrics = useMemo(() => {
                   {portfolioMetrics.profitPercentage >= 0 ? '+' : ''}{portfolioMetrics.profitPercentage.toFixed(2)}%
                 </p>
               </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-white" />
+              <div className="relative">
+                {/* Glow effect behind icon */}
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-cyan-600 opacity-20 rounded-xl blur-md group-hover:blur-lg transition-all duration-300" />
+                
+                {/* Main icon container with tilt */}
+                <div className="relative w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl flex items-center justify-center shadow-lg transform group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                  <TrendingUp className="w-6 h-6 text-white" />
+                </div>
+                
+                {/* Animated ring on hover */}
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-cyan-600 opacity-0 group-hover:opacity-30 rounded-xl group-hover:scale-125 transition-all duration-500 blur-sm" />
               </div>
             </div>
           </div>
@@ -511,19 +538,25 @@ const portfolioMetrics = useMemo(() => {
                     <button
                       key={index}
                       onClick={action.onClick}
-                      className={`
-                        w-full p-4 rounded-lg bg-gradient-to-r ${action.color} 
-                        hover:${action.hoverColor} active:scale-95 
-                        transform hover:scale-105 transition-all duration-200 
-                        shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed
-                        relative overflow-hidden group
-                      `}
+                      className="relative group w-full"
+                      disabled={!action.onClick}
                     >
-                      <div className="flex items-center space-x-3">
-                        <Icon className="w-6 h-6 text-white" />
-                        <div className="text-left">
-                          <h3 className="font-medium text-white">{action.title}</h3>
-                          <p className="text-sm text-white/80">{action.description}</p>
+                      {/* Subtle glow effect */}
+                      <div className={`absolute inset-0 bg-gradient-to-r ${action.color} opacity-0 group-hover:opacity-20 transition-opacity duration-300 rounded-lg blur-lg`} />
+                      
+                      {/* Main button */}
+                      <div className={`
+                        relative w-full p-4 rounded-lg bg-gradient-to-r ${action.color} 
+                        transform group-hover:scale-[1.02] active:scale-[0.99]
+                        transition-all duration-200 shadow-lg group-hover:shadow-xl 
+                        disabled:opacity-50 disabled:cursor-not-allowed
+                      `}>
+                        <div className="flex items-center space-x-3">
+                          <Icon className="w-6 h-6 text-white" />
+                          <div className="text-left">
+                            <h3 className="font-medium text-white">{action.title}</h3>
+                            <p className="text-sm text-white/80">{action.description}</p>
+                          </div>
                         </div>
                       </div>
                     </button>
