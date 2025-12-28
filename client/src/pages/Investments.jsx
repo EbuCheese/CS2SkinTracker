@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Search, Plus, X, DollarSign, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { supabase } from '@/supabaseClient';
-import { ItemCard, ItemList } from '@/components/item-display';
+import { ItemCard, ItemList, ImagePopupModal } from '@/components/item-display';
 import { AddItemForm } from '@/components/forms'
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { useScrollLock, useAdvancedDebounce, useItemFormatting } from '@/hooks/util';
@@ -22,6 +22,13 @@ const InvestmentsPage = ({ userSession }) => {
   const [searchQuery, setSearchQuery] = useState('');        // User's search input
   const [showAddForm, setShowAddForm] = useState(false);     // Add item modal visibility
   const [itemToDelete, setItemToDelete] = useState(null);    // Item selected for deletion
+
+  // popup image states
+  const [imageModalState, setImageModalState] = useState({
+    isOpen: false,
+    imageUrl: null,
+    itemName: null
+  });
 
   // unified item id state
   const [itemStates, setItemStates] = useState(new Map());
@@ -71,7 +78,7 @@ const InvestmentsPage = ({ userSession }) => {
   const { mainTabs, soldTab, searchPlaceholder, getAddButtonText, getTabDisplayName } = usePortfolioTabs(activeTab);
 
   // lock scroll on add form or delete message  
-  useScrollLock(showAddForm || !!itemToDelete);
+  useScrollLock(showAddForm || !!itemToDelete || imageModalState.isOpen);
   
   const memoizedCurrentItems = useMemo(() => {
   // Build a lookup map for related investments (faster than repeated .find())
@@ -147,15 +154,32 @@ const InvestmentsPage = ({ userSession }) => {
   });
 }, [displayName]);
 
-// Helper function to update item state
-const updateItemState = useCallback((itemId, updates) => {
-  setItemStates(prev => {
-    const newMap = new Map(prev);
-    const current = newMap.get(itemId) || { isNew: false, isPriceLoading: false };
-    newMap.set(itemId, { ...current, ...updates });
-    return newMap;
-  });
-}, []);
+  // Helper function to update item state
+  const updateItemState = useCallback((itemId, updates) => {
+    setItemStates(prev => {
+      const newMap = new Map(prev);
+      const current = newMap.get(itemId) || { isNew: false, isPriceLoading: false };
+      newMap.set(itemId, { ...current, ...updates });
+      return newMap;
+    });
+  }, []);
+
+  // Image modal handlers
+  const handleOpenImageModal = useCallback((imageUrl, itemName) => {
+    setImageModalState({
+      isOpen: true,
+      imageUrl,
+      itemName
+    });
+  }, []);
+
+  const handleCloseImageModal = useCallback(() => {
+    setImageModalState({
+      isOpen: false,
+      imageUrl: null,
+      itemName: null
+    });
+  }, []);
 
   // STABLE CALLBACKS: Prevent unnecessary re-renders
   const handleItemUpdate = useCallback((itemId, updates, shouldRefresh = false, soldItemData = null, isRelatedUpdate = false) => {
@@ -827,6 +851,7 @@ const handleAddItem = useCallback((newItem) => {
                     refreshSingleItemPrice={refreshSingleItemPrice}
                     updateItemState={updateItemState}
                     setInvestments={setInvestments}
+                    onOpenImageModal={handleOpenImageModal}
                   />
                 </ErrorBoundary>
               ))}
@@ -855,6 +880,7 @@ const handleAddItem = useCallback((newItem) => {
                     refreshSingleItemPrice={refreshSingleItemPrice}
                     updateItemState={updateItemState}
                     setInvestments={setInvestments}
+                    onOpenImageModal={handleOpenImageModal}
                   />
                 </ErrorBoundary>
               ))}
@@ -957,6 +983,14 @@ const handleAddItem = useCallback((newItem) => {
           </div>
         </div>
       )}
+
+      {/* Image Popup Modal at page level */}
+      <ImagePopupModal
+        isOpen={imageModalState.isOpen}
+        onClose={handleCloseImageModal}
+        imageUrl={imageModalState.imageUrl}
+        itemName={imageModalState.itemName}
+      />
     </div>
   );
 };
