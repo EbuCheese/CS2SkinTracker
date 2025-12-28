@@ -1,5 +1,6 @@
 export { default as ItemCard } from './ItemCard'
 export { default as ItemList } from './ItemList'
+export { default as ImagePopupModal } from './ImagePopupModal'
 export { default as RecentPriceChanges } from './RecentPriceChanges'
 export { default as RecentActivity } from './RecentActivity'
 export {default as QuickCheckPriceModal} from './QuickCheckPriceModal'
