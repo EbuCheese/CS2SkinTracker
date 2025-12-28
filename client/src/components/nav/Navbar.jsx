@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, TrendingUp, Home, Search, Briefcase, Eye, Wrench, User } from 'lucide-react';
+import { Menu, X, Home, Search, Briefcase, Eye, Wrench, User } from 'lucide-react';
 
 // Navbar Component - Responsive navigation bar for SkinWatch CS Investment Tracker
 const Navbar = ({ userSession, onLogout }) => {
@@ -30,23 +30,24 @@ const Navbar = ({ userSession, onLogout }) => {
         <div className="flex justify-between items-center h-16">
           
           {/* Logo Section */}
-          <div className="flex items-center space-x-3">
+          <Link to="/" className="flex items-center space-x-3 group">
             {/* Logo Image Container */}
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-lg">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-lg transition-transform duration-200 group-hover:scale-105">
               <img 
                 src="/skinwatch_logo_rounded.png" 
                 alt="SkinWatch Logo" 
+                className="transition-opacity duration-200 group-hover:opacity-80"
               />
             </div>
 
             {/* Brand Text - Hidden on small screens */}
             <div className="hidden sm:block">
-              <h1 className="text-xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent">
+              <h1 className="text-xl font-bold bg-gradient-to-r from-orange-400 to-red-500 bg-clip-text text-transparent transition-all duration-200 group-hover:from-orange-300 group-hover:to-red-400">
                 SkinWatch
               </h1>
               <p className="text-xs text-gray-400 -mt-1">CS Investment Tracker</p>
             </div>
-          </div>
+          </Link>
 
           {/* Desktop Navigation Menu */}
           <div className="hidden md:block">
@@ -60,7 +61,7 @@ const Navbar = ({ userSession, onLogout }) => {
                     to={item.href}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 group relative overflow-hidden ${
                       active
-                        ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/25'
+                        ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-md shadow-orange-500/25'
                         : 'text-gray-300 hover:text-white hover:bg-white/10'
                     }`}
                   >
@@ -110,7 +111,7 @@ const Navbar = ({ userSession, onLogout }) => {
                 onClick={() => setIsOpen(false)} // Close mobile menu on item click
                 className={`w-full text-left px-4 py-3 rounded-lg text-base font-medium transition-all duration-200 flex items-center space-x-3 ${
                   active
-                    ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg'
+                    ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-md'
                     : 'text-gray-300 hover:text-white hover:bg-white/10'
                 }`}
               >
