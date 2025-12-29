@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { Loader2, Edit2, ChartNoAxesColumnIncreasing, AlertTriangle, DollarSign, CalendarPlus, CalendarCheck2, Wallet, Package } from 'lucide-react';
 import { PopupManager } from '@/components/ui';
+import { ImagePopupModal } from '@/components/item-display';
 import { EditItemModal, SellItemModal } from '@/components/forms';
 import { useItemLogic } from '@/hooks/portfolio';
 import { useScrollLock, formatDateInTimezone } from '@/hooks/util';
@@ -75,7 +76,8 @@ const ItemCard = React.memo(({
   relatedInvestment = null, 
   refreshSingleItemPrice,
   updateItemState,
-  setInvestments 
+  setInvestments,
+  onOpenImageModal 
 }) => {  
   // User settings hook
   const { timezone } = useUserSettings();
@@ -141,20 +143,37 @@ const { name, skinName, condition } = displayValues;
       <div className="flex items-start space-x-3 min-w-0 flex-1">
         {/* Image Container with Variant Badges */}
         <div className="relative group">
-          <div className={`w-20 h-20 bg-gradient-to-br from-slate-700/30 to-gray-700/30 rounded-2xl overflow-hidden border border-slate-600/40 shadow-lg ${profitMetrics.isFullySold ? 'backdrop-blur-[1px]' : ''}`}>
+          <button
+            onClick={() => onOpenImageModal?.(item.image_url, fullItemName)}
+            className="w-20 h-20 bg-gradient-to-br from-slate-700/30 to-gray-700/30 rounded-2xl overflow-hidden border border-slate-600/40 shadow-lg hover:border-orange-400/50 transition-all duration-200 cursor-pointer"
+            disabled={!item.image_url}
+          >
             {item.image_url ? (
               <img 
                 src={item.image_url} 
                 alt={name || 'Item image'}
-                className="w-full h-full object-contain p-1"
-                style={{ 
-                  textIndent: '-9999px' 
-                }}
+                className="w-full h-full object-contain p-1 transition-transform duration-200 group-hover:scale-110"
               />
             ) : (
-              <div className="text-gray-400 text-xs text-center flex items-center justify-center h-full">No Image</div>
+              <div className="text-gray-400 text-xs text-center flex items-center justify-center h-full">
+                No Image
+              </div>
             )}
-          </div>
+          </button>
+          
+          {/* Hover overlay hint */}
+          {item.image_url && (
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 rounded-2xl pointer-events-none flex items-center justify-center">
+              <svg 
+                className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+              </svg>
+            </div>
+          )}
   
       {/* Variant badges */}
       {variantBadge && (
