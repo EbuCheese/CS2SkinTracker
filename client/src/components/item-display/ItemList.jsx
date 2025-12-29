@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { Loader2, Edit2, AlertTriangle, DollarSign, CalendarPlus, CalendarCheck2} from 'lucide-react';
 import { PopupManager } from '@/components/ui';
+import { ImagePopupModal } from '@/components/item-display';
 import { EditItemModal, SellItemModal } from '@/components/forms';
 import { useItemLogic } from '@/hooks/portfolio';
 import { useScrollLock, formatDateInTimezone } from '@/hooks/util';
@@ -21,7 +22,8 @@ const ItemList = React.memo(({
   relatedInvestment = null, 
   refreshSingleItemPrice,
   updateItemState,
-  setInvestments 
+  setInvestments, 
+  onOpenImageModal
 }) => {  
     const { timezone, currency } = useUserSettings();
   
@@ -81,21 +83,46 @@ const ItemList = React.memo(({
       <div className="flex items-center gap-4">
         
         {/* Image - Smaller in list view */}
-        <div className="relative flex-shrink-0">
-          <div className={`w-16 h-16 bg-gradient-to-br from-slate-700/30 to-gray-700/30 rounded-xl overflow-hidden border border-slate-600/40 ${profitMetrics.isFullySold ? 'backdrop-blur-[1px]' : ''}`}>
+        <div className="relative flex-shrink-0 group">
+          <button
+            onClick={() => onOpenImageModal?.(item.image_url, fullItemName)}
+            className={`w-16 h-16 bg-gradient-to-br from-slate-700/30 to-gray-700/30 rounded-xl overflow-hidden border border-slate-600/40 shadow-lg transition-all duration-200 ${
+              item.image_url 
+                ? 'hover:border-orange-400/50 cursor-pointer' 
+                : 'cursor-not-allowed opacity-60'
+            } ${profitMetrics.isFullySold ? 'backdrop-blur-[1px]' : ''}`}
+            disabled={!item.image_url}
+            aria-label={item.image_url ? "Click to view full size" : "No image available"}
+          >
             {item.image_url ? (
               <img 
                 src={item.image_url} 
                 alt={displayValues.name || 'Item image'}
-                className="w-full h-full object-contain p-1"
-                style={{ 
-                  textIndent: '-9999px' 
-                }}
+                className="w-full h-full object-contain p-1 transition-transform duration-200 group-hover:scale-110"
               />
             ) : (
-              <div className="text-gray-400 text-xs text-center flex items-center justify-center h-full">No Image</div>
+              <div className="text-gray-400 text-xs text-center flex flex-col items-center justify-center h-full px-1">
+                <svg className="w-6 h-6 mb-0.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-[9px]">No Image</span>
+              </div>
             )}
-          </div>
+          </button>
+          
+          {/* Hover overlay - only show if image exists */}
+          {item.image_url && (
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 rounded-xl pointer-events-none flex items-center justify-center">
+              <svg 
+                className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+              </svg>
+            </div>
+          )}
           
           {/* Variant badges */}
           {variantBadge && (
