@@ -332,70 +332,69 @@ const QuickSellModal = ({
                     <div
                       key={item.id}
                       onClick={() => handleItemSelect(item)}
-                      className="flex items-center space-x-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-orange-500/50 hover:bg-gray-800 cursor-pointer transition-all duration-200"
+                      className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 p-4 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-orange-500/50 hover:bg-gray-800 cursor-pointer transition-all duration-200"
                     >
-                      <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
-                        <ImageWithLoading
-                          src={item.image_url}
-                          alt={item.name}
-                          fallbackClassName="w-full h-full flex items-center justify-center text-white text-xs font-medium"
-                        />
-                      </div>
+                      <div className="flex items-center space-x-4 min-w-0 flex-1">
+                        <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                          <ImageWithLoading
+                            src={item.image_url}
+                            alt={item.name}
+                            fallbackClassName="w-full h-full flex items-center justify-center text-white text-xs font-medium"
+                          />
+                        </div>
 
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-white truncate">{displayName(item)}</h3>
-                        <div className="flex items-center space-x-2 mt-1">
-                          <span className="text-xs text-gray-400">
-                            {subtitle(item)}
-                          </span>
-                          {/* Sales history indicator */}
-                          {item.hasSalesHistory && (
-                            <div className="flex items-center space-x-1 text-xs text-blue-400">
-                              <History className="w-3 h-3" />
-                              <span>Sold {item.total_sold_quantity}</span>
-                            </div>
-                          )}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium text-white truncate">{displayName(item)}</h3>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+                            <span className="text-xs text-gray-400">
+                              {subtitle(item)}
+                            </span>
+                            {item.hasSalesHistory && (
+                              <div className="flex items-center space-x-1 text-xs text-blue-400">
+                                <History className="w-3 h-3" />
+                                <span>Sold {item.total_sold_quantity}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="text-right flex-shrink-0">
-                        <div className="flex items-center space-x-2 mb-1">
-                          {/* Current price with null handling */}
-                          <div className="text-white font-medium">
-                            {item.hasValidPrice ? (
-                              formatPrice(item.currentPrice)
-                            ) : (
-                              <span className="text-gray-500 text-sm">No price data</span>
+                      <div className="flex items-center justify-between sm:justify-end sm:text-right flex-shrink-0 gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <div className="text-white font-medium">
+                              {item.hasValidPrice ? (
+                                formatPrice(item.currentPrice)
+                              ) : (
+                                <span className="text-gray-500 text-sm">No price data</span>
+                              )}
+                            </div>
+                            
+                            {item.hasValidPrice && (
+                              <div className={`text-xs flex items-center space-x-1 px-2 py-1 rounded-full font-medium ${
+                                item.totalPL >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                              }`}>
+                                {item.totalPL >= 0 ? 
+                                  <TrendingUp className="w-3 h-3" /> : 
+                                  <TrendingDown className="w-3 h-3" />
+                                }
+                                <span>{Math.abs(item.totalPercentage)}%</span>
+                              </div>
+                            )}
+                            
+                            {!item.hasValidPrice && (
+                              <div className="flex items-center text-amber-400">
+                                <AlertTriangle className="w-4 h-4" />
+                              </div>
                             )}
                           </div>
                           
-                          {/* Profit display - only show if we have valid price data */}
-                          {item.hasValidPrice && (
-                            <div className={`text-xs flex items-center space-x-1 px-2 py-1 mt-1 rounded-full font-medium ${
-                              item.totalPL >= 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-                            }`}>
-                              {item.totalPL >= 0 ? 
-                                <TrendingUp className="w-3 h-3" /> : 
-                                <TrendingDown className="w-3 h-3" />
-                              }
-                              <span>{Math.abs(item.totalPercentage)}%</span>
-                            </div>
-                          )}
-                          
-                          {/* Show warning icon for items without price data */}
-                          {!item.hasValidPrice && (
-                            <div className="flex items-center text-amber-400 mt-1">
-                              <AlertTriangle className="w-4 h-4" />
+                          {item.hasSalesHistory && item.averageSalePrice > 0 && (
+                            <div className="text-xs text-gray-500 whitespace-nowrap">
+                              Avg: {formatPrice(item.averageSalePrice)}
                             </div>
                           )}
                         </div>
-                        
-                        {/* Show average sale price if available */}
-                        {item.hasSalesHistory && item.averageSalePrice > 0 && (
-                          <div className="text-xs text-gray-500">
-                            Avg sale: {formatPrice(item.averageSalePrice)}
-                          </div>
-                        )}
                       </div>
                     </div>
                   ))
@@ -411,29 +410,32 @@ const QuickSellModal = ({
                 <span>← Back to search</span>
               </button>
 
-              {/* Enhanced item display with null-safe price handling */}
+              {/* Enhanced item display - around line 320 */}
               <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-                <div className="flex items-center space-x-4">
-                  <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
-                    <ImageWithLoading
-                      src={selectedItem.image_url}
-                      alt={selectedItem.name}
-                      fallbackClassName="w-full h-full flex items-center justify-center text-white text-sm font-medium"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-medium text-white truncate">{displayName(selectedItem)}</h3>
-                    <div className="flex items-center space-x-3 mt-1 text-sm text-gray-400">
-                      <span>{subtitle(selectedItem, { showQuantity: false })}</span>
-                      <span>Available: {selectedItem.quantity}</span>
+                <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
+                  <div className="flex items-center space-x-4 min-w-0 flex-1">
+                    <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0">
+                      <ImageWithLoading
+                        src={selectedItem.image_url}
+                        alt={selectedItem.name}
+                        fallbackClassName="w-full h-full flex items-center justify-center text-white text-sm font-medium"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-white truncate">{displayName(selectedItem)}</h3>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-gray-400">
+                        <span>{subtitle(selectedItem, { showQuantity: false })}</span>
+                        <span>Available: {selectedItem.quantity}</span>
+                      </div>
                       {selectedItem.hasSalesHistory && selectedItem.averageSalePrice > 0 && (
-                        <span className="text-blue-400">
-                          Previously sold {selectedItem.total_sold_quantity} @ avg {formatPrice(selectedItem.averageSalePrice)}
-                        </span>
+                        <div className="text-xs text-blue-400 mt-1">
+                          Prev sold {selectedItem.total_sold_quantity} @ avg {formatPrice(selectedItem.averageSalePrice)}
+                        </div>
                       )}
                     </div>
                   </div>
-                  <div className="text-right">
+                  
+                  <div className="text-left sm:text-right flex-shrink-0">
                     <div className="space-y-1">
                       <div>
                         <div className="text-xs text-gray-500">Current Price</div>
@@ -461,8 +463,8 @@ const QuickSellModal = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+              <div className="flex flex-col gap-4">
+                <div className="w-full">
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Quantity to sell
                   </label>
@@ -476,11 +478,11 @@ const QuickSellModal = ({
                   />
                 </div>
 
-                <div>
+                <div className="w-full">
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Sale price per item ({currencyConfig.symbol} {currency})
+                    <span className="block">Sale price per item ({currencyConfig.symbol} {currency})</span>
                     {selectedItem.hasSalesHistory && selectedItem.averageSalePrice > 0 && (
-                      <span className="text-xs text-blue-400 ml-1">
+                      <span className="block text-xs text-blue-400 mt-1">
                         (historical avg: {formatPrice(selectedItem.averageSalePrice)})
                       </span>
                     )}
