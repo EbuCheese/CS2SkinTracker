@@ -397,18 +397,22 @@ const processedData = useMemo(() => {
 
   // Custom tooltip component for pie chart hover interactions
   const CustomTooltip = React.memo(({ active, payload, coordinate }) => {
+  // Disable hover tooltip on touch devices
+  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  
+  if (isTouchDevice) {
+    return null; // Don't show hover tooltips on mobile
+  }
+  
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     
-    // Prevent hover tooltip when sticky tooltip is open for the same slice
     if (stickyTooltip && stickyTooltip.name === data.name) {
       return null;
     }
     
-    // Get slice color for styling
     const sliceColor = getItemColor(data);
     
-    // Adjust tooltip position to avoid overlap with sticky tooltips
     const tooltipStyle = data.isGrouped ? {} : {
       transform: 'translateX(-65%)',
       marginLeft: '-15px'
@@ -440,7 +444,6 @@ const processedData = useMemo(() => {
           <p className="text-gray-300 text-sm">
             <span className="text-purple-400">Items:</span> {data.count}
           </p>
-          {/* Interactive hint for items in item view */}
           {activeToggle === 'item' && (
             <p className="text-yellow-400 text-xs mt-1">
               {selectedSlice === data.name 
@@ -522,47 +525,63 @@ const StickyTooltip = React.memo(() => {
   if (!stickyTooltip) return null;
   
   const data = stickyTooltip;
-  const hasItemBreakdown = data.items && data.items.length > 0;
+  const hasItemBreakdown = data.items && data.items.length > 0 && activeToggle === 'item';
   const sliceColor = getItemColor(data);
   
   const processedItems = useMemo(() => {
-  if (!hasItemBreakdown) return [];
-  
-  const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
-                              consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
-                              actualPortfolio.totalValue || 
-                              data.value;
-  
-  const allItems = data.isGrouped && data.items
-    ? data.items.flatMap(categoryItem => 
-        (categoryItem.items || []).map(actualItem => ({
-          ...actualItem,
-          displayName: buildItemDisplayName(actualItem),
-          categoryName: categoryItem.name,
-          categoryPercentage: categoryItem.percentage
-        }))
-      )
-    : data.items.map(item => ({
-        ...item,
-        displayName: buildItemDisplayName(item)
-      }));
-  
-  return allItems
-    .map((item, i) => {
-      const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
-      const itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
-      
-      return {
-        ...item,
-        itemPercentage,
-        originalIndex: i
-      };
-    })
-    .sort((a, b) => b.itemPercentage - a.itemPercentage);
-}, [data, hasItemBreakdown, actualPortfolio.typeBreakdown, consolidatedBreakdown, actualPortfolio.totalValue]);
+    if (!hasItemBreakdown) return [];
+    
+    const totalPortfolioValue = actualPortfolio.typeBreakdown?.reduce((sum, type) => sum + type.value, 0) || 
+                                consolidatedBreakdown?.reduce((sum, item) => sum + item.value, 0) || 
+                                actualPortfolio.totalValue || 
+                                data.value;
+    
+    const allItems = data.isGrouped && data.items
+      ? data.items.flatMap(categoryItem => 
+          (categoryItem.items || []).map(actualItem => ({
+            ...actualItem,
+            displayName: buildItemDisplayName(actualItem),
+            categoryName: categoryItem.name,
+            categoryPercentage: categoryItem.percentage
+          }))
+        )
+      : data.items.map(item => ({
+          ...item,
+          displayName: buildItemDisplayName(item)
+        }));
+    
+    return allItems
+      .map((item, i) => {
+        const individualValue = (parseFloat(item.current_price || 0) * parseFloat(item.quantity || 0));
+        const itemPercentage = totalPortfolioValue > 0 ? ((individualValue / totalPortfolioValue) * 100) : 0;
+        
+        return {
+          ...item,
+          itemPercentage,
+          originalIndex: i
+        };
+      })
+      .sort((a, b) => b.itemPercentage - a.itemPercentage);
+  }, [data, hasItemBreakdown, actualPortfolio.typeBreakdown, consolidatedBreakdown, actualPortfolio.totalValue]);
 
   // Fixed positioning - simple left/right placement
   const getTooltipStyle = () => {
+    const isMobile = window.innerWidth < 640;
+    
+    if (isMobile) {
+      return {
+        left: '50%',
+        top: '40%',
+        transform: 'translate(-50%, -50%)',
+        width: 'auto',
+        maxWidth: '200px',
+        minWidth: '160px',
+        maxHeight: '80vh',
+        overflowY: 'auto',
+        borderColor: sliceColor
+      };
+    }
+    
     if (tooltipPosition.side === 'left') {
       return {
         left: '13px',
@@ -588,7 +607,7 @@ const StickyTooltip = React.memo(() => {
     <div 
       className="absolute bg-gray-900/95 border-2 rounded-lg p-2 shadow-xl backdrop-blur-sm z-50 pointer-events-auto"
       style={getTooltipStyle()}
-      onClick={(e) => e.stopPropagation()} // Prevent clicks inside tooltip from bubbling up
+      onClick={(e) => e.stopPropagation()}
     >
       {/* Header with close button */}
       <div className="flex items-start justify-between mb-2 gap-2">
@@ -607,13 +626,13 @@ const StickyTooltip = React.memo(() => {
             setSelectedSlice(null);
           }}
           className="text-gray-400 hover:text-white text-sm flex-shrink-0 mt-0.5"
-          style={{ minWidth: '16px' }} // Ensure button doesn't shrink
+          style={{ minWidth: '16px' }}
         >
           ✕
         </button>
       </div>
 
-      {/* Summary information */}
+      {/* Summary information - always show */}
       <div className="space-y-1">
         <p className="text-gray-300 text-sm">
           <span className="text-green-400">Value:</span> {formatCurrency(data.value)}
@@ -625,7 +644,7 @@ const StickyTooltip = React.memo(() => {
           <span className="text-purple-400">Items:</span> {data.count}
         </p>
 
-        {/* Show individual item breakdown if available */}
+        {/* Show individual item breakdown ONLY in item view */}
         {hasItemBreakdown && (
           <div className="mt-2 pt-2 border-t border-gray-600">
             <p className="text-yellow-400 text-xs mb-1">
@@ -646,16 +665,14 @@ const StickyTooltip = React.memo(() => {
                       </div>
                     </div>
                     <div className="ml-1 flex items-center gap-0.5">
-                    {/* Quantity badge */}
-                    <span className="text-xs text-blue-300 bg-blue-900/40 px-1.5 py-0.5 rounded">
-                      {item.quantity}x
-                    </span>
-                    {/* Percentage badge */}
-                    <span className="text-xs text-gray-400 bg-gray-800/60 px-1.5 py-0.5 rounded">
-                      {formatPercentage(item.itemPercentage)}
-                    </span>
+                      <span className="text-xs text-blue-300 bg-blue-900/40 px-1.5 py-0.5 rounded">
+                        {item.quantity}x
+                      </span>
+                      <span className="text-xs text-gray-400 bg-gray-800/60 px-1.5 py-0.5 rounded">
+                        {formatPercentage(item.itemPercentage)}
+                      </span>
+                    </div>
                   </div>
-                </div>
                 ))}
               </div>
             </div>
@@ -715,27 +732,6 @@ const StickyTooltip = React.memo(() => {
     return baseHoldingsValue + optimisticHoldingsUpdate;
   }, [currentData, optimisticUpdates, portfolioSummary]);
 
-  // Handle clicks on distribution list items
-  const handleDistributionItemClick = useCallback((item, event) => {
-  if (activeToggle === 'item') {
-    const isCurrentlySelected = selectedSlice === item.name;
-    if (isCurrentlySelected) {
-      setStickyTooltip(null);
-      setSelectedSlice(null);
-    } else {
-      // For list clicks, default to right side but could be enhanced
-      // to detect which side of the screen the list is on
-      setTooltipPosition({ side: 'right', x: 0, y: 250 });
-      setStickyTooltip(item);
-      setSelectedSlice(item.name);
-    }
-  } else {
-    // For type view, just handle selection without sticky tooltip
-    setStickyTooltip(null);
-    setSelectedSlice(selectedSlice === item.name ? null : item.name);
-  }
-}, [selectedSlice, activeToggle]);
-
   // Handle toggle changes between type and item views
   const handleToggleChange = useCallback((newToggle) => {
     setActiveToggle(newToggle);
@@ -745,43 +741,69 @@ const StickyTooltip = React.memo(() => {
 
   // Handle pie chart slice clicks
   const handleSliceClick = useCallback((data, index, event) => {
-  if (activeToggle === 'item') {
-    const isCurrentlySelected = selectedSlice === data.name;
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    
+    if (activeToggle === 'item') {
+      // Item view: show sticky tooltip with item breakdown
+      const isCurrentlySelected = selectedSlice === data.name;
+      if (isCurrentlySelected) {
+        setStickyTooltip(null);
+        setSelectedSlice(null);
+      } else {
+        const chartContainer = event.currentTarget.closest('.recharts-wrapper') || event.currentTarget.closest('[data-chart-container]');
+        const containerRect = chartContainer?.getBoundingClientRect();
+        
+        if (containerRect) {
+          const clickX = event.clientX - containerRect.left;
+          const containerWidth = containerRect.width;
+          const centerX = containerWidth / 2;
+          const side = clickX < centerX ? 'left' : 'right';
+          
+          setTooltipPosition({
+            side,
+            x: clickX,
+            y: event.clientY - containerRect.top
+          });
+        } else {
+          setTooltipPosition({ side: 'right', x: 0, y: 250 });
+        }
+        
+        setStickyTooltip(data);
+        setSelectedSlice(data.name);
+      }
+    } else {
+      // Type view: show simple tooltip on mobile, just highlight on desktop
+      if (isTouchDevice) {
+        const isCurrentlySelected = selectedSlice === data.name;
+        if (isCurrentlySelected) {
+          setStickyTooltip(null);
+          setSelectedSlice(null);
+        } else {
+          setTooltipPosition({ side: 'right', x: 0, y: 250 });
+          setStickyTooltip(data); // Will show simple tooltip (no item breakdown)
+          setSelectedSlice(data.name);
+        }
+      } else {
+        // Desktop: just toggle selection for highlighting
+        setStickyTooltip(null);
+        setSelectedSlice(selectedSlice === data.name ? null : data.name);
+      }
+    }
+  }, [selectedSlice, activeToggle]);
+
+  // Handle clicks on distribution list items
+  const handleDistributionItemClick = useCallback((item, event) => {
+    const isCurrentlySelected = selectedSlice === item.name;
+    
     if (isCurrentlySelected) {
       setStickyTooltip(null);
       setSelectedSlice(null);
     } else {
-      // Get the chart container to calculate relative position
-      const chartContainer = event.currentTarget.closest('.recharts-wrapper') || event.currentTarget.closest('[data-chart-container]');
-      const containerRect = chartContainer?.getBoundingClientRect();
-      
-      if (containerRect) {
-        const clickX = event.clientX - containerRect.left;
-        const containerWidth = containerRect.width;
-        const centerX = containerWidth / 2;
-        
-        // Determine which side to show tooltip based on click position
-        const side = clickX < centerX ? 'left' : 'right';
-        
-        setTooltipPosition({
-          side,
-          x: clickX,
-          y: event.clientY - containerRect.top
-        });
-      } else {
-        // Fallback to right side if we can't determine position
-        setTooltipPosition({ side: 'right', x: 0, y: 250 });
-      }
-      
-      setStickyTooltip(data);
-      setSelectedSlice(data.name);
+      setTooltipPosition({ side: 'right', x: 0, y: 250 });
+      setStickyTooltip(item); // Will show simple tooltip for type view, detailed for item view
+      setSelectedSlice(item.name);
     }
-  } else {
-    // For type view, just handle selection without sticky tooltip
-    setStickyTooltip(null);
-    setSelectedSlice(selectedSlice === data.name ? null : data.name);
-  }
-}, [selectedSlice, activeToggle]);
+  }, [selectedSlice]);
 
   // Handle clicks outside chart elements to deselect
   const handleChartContainerClick = useCallback((e) => {
@@ -800,18 +822,18 @@ const StickyTooltip = React.memo(() => {
 
   // Table view component for tabular data display
   const TableView = () => (
-    <div className="flex-shrink-0" style={{ height: '500px' }}>
+  <div className="flex-shrink-0" style={{ height: '500px' }}>
     <div className="h-full overflow-auto pr-2">
-    <table className="w-full text-sm">
-      {/* Sticky header */}
-      <thead className="sticky top-0 bg-gray-800/90 backdrop-blur-sm">
-        <tr className="border-b border-gray-600">
-          <th className="text-left py-3 px-1 text-gray-300">Item</th>
-          <th className="text-right py-3 text-gray-300">Value</th>
-          <th className="text-right py-3 text-gray-300">Share</th>
-          <th className="text-right py-3 px-1 text-gray-300">Count</th>
-        </tr>
-      </thead>
+      <table className="w-full text-sm">
+        {/* Sticky header */}
+        <thead className="sticky top-0 bg-gray-800/90 backdrop-blur-sm">
+          <tr className="border-b border-gray-600">
+            <th className="text-left py-3 px-1 text-gray-300">Item</th>
+            <th className="text-right py-3 px-1 text-gray-300 hidden sm:table-cell">Value</th>
+            <th className="text-right py-3 px-1 text-gray-300">Share</th>
+            <th className="text-right py-3 px-1 text-gray-300 hidden md:table-cell">Count</th>
+          </tr>
+        </thead>
 
         {/* Data rows */}
         <tbody>
@@ -822,25 +844,42 @@ const StickyTooltip = React.memo(() => {
             >
               {/* Item name with color indicator */}
               <td className="py-4 px-1">
-                <div className="flex items-center space-x-3">
-                  <div 
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: getItemColor(item, currentData) }}
-                  />
-                  <span className="text-gray-300">
-                    {item.name}
-                  </span>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div 
+                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: getItemColor(item, currentData) }}
+                    />
+                    <span className="text-gray-300 truncate">
+                      {item.name}
+                    </span>
+                  </div>
+                  {/* Show value and count on mobile below name */}
+                  <div className="flex items-center gap-3 text-xs sm:hidden ml-6">
+                    <span className="font-medium text-white">
+                      {formatCurrency(item.value)}
+                    </span>
+                    <span className="text-gray-400">
+                      {item.count} items
+                    </span>
+                  </div>
                 </div>
               </td>
 
-              {/* Financial data columns */}
-              <td className="py-4 text-right font-medium text-white">
+              {/* Value column - hidden on mobile */}
+              <td className="py-4 px-1 text-right font-medium text-white hidden sm:table-cell">
                 {formatCurrency(item.value)}
               </td>
-              <td className="py-4 text-right text-gray-300">
-                {formatPercentage(item.percentage)}
+              
+              {/* Share column - always visible */}
+              <td className="py-4 px-1 text-right">
+                <div className="text-gray-300 font-medium">
+                  {formatPercentage(item.percentage)}
+                </div>
               </td>
-              <td className="py-4 px-1 text-right text-gray-400">
+              
+              {/* Count column - hidden on mobile and tablet */}
+              <td className="py-4 px-1 text-right text-gray-400 hidden md:table-cell">
                 {item.count}
               </td>
             </tr>
@@ -848,8 +887,8 @@ const StickyTooltip = React.memo(() => {
         </tbody>
       </table>
     </div>
-    </div>
-  );
+  </div>
+);
 
   // Main render
   return (
@@ -859,6 +898,11 @@ const StickyTooltip = React.memo(() => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-semibold text-white">Portfolio Distribution</h2>
+          {viewMode === 'chart' && (
+            <p className="text-xs text-gray-500 mt-1 sm:hidden">
+              Tap slices or distribution for details
+            </p>
+          )}
           <p className="text-sm text-gray-400 mt-1">
             Total: {formatCurrency(currentTotal)}
           </p>
