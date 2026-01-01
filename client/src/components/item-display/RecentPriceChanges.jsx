@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { TrendingUp, TrendingDown, ListFilterPlus, ListFilter, ChartNoAxesColumn, Loader2} from 'lucide-react';
+import { TrendingUp, TrendingDown, ListFilter, Loader2} from 'lucide-react';
 import { ImageWithLoading } from '@/components/ui';
 import { useItemFormatting } from '@/hooks/util';
 import { useUserSettings } from '@/contexts/UserSettingsContext';
@@ -16,92 +16,97 @@ const InvestmentItem = React.memo(({
   isWatchlistItem = false 
 }) => {
   return (
-    <div className={`flex items-center justify-between p-4 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-colors duration-200 ${isNew ? 'animate-slide-in-from-top' : ''}`}>
-      {/* Left side: Image and item details */}
-      <div className="flex items-center space-x-4">
-        {/* Image container with loading states */}
-        <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 relative">
-          <ImageWithLoading
-            src={investment.image_url}
-            alt={displayName(investment)}
-            customFallback={
-              <span className="text-xs font-medium text-white">
-                {investment.name.substring(0, 2).toUpperCase()}
-              </span>
-            }
-          />
-        </div>
+    <div className={`p-3 sm:p-4 bg-gray-700/30 rounded-lg border border-gray-600/30 hover:bg-gray-700/50 transition-colors duration-200 ${isNew ? 'animate-slide-in-from-top' : ''}`}>
+      {/* Mobile: stacked layout, Desktop: side-by-side */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        {/* Left side: Image and item details */}
+        <div className="flex items-center space-x-3 mb-3 sm:mb-0 sm:space-x-4 min-w-0 flex-1">
+          {/* Image container with loading states */}
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg overflow-hidden bg-gray-700 flex-shrink-0 relative">
+            <ImageWithLoading
+              src={investment.image_url}
+              alt={displayName(investment)}
+              customFallback={
+                <span className="text-xs font-medium text-white">
+                  {investment.name.substring(0, 2).toUpperCase()}
+                </span>
+              }
+            />
+          </div>
 
-        {/* Item information */}
-        <div className="min-w-0 flex-1">
-          {/* Item name with optional skin name */}
-          <h3 className="font-medium text-white truncate">
-            {displayName(investment)}
-          </h3>
-          {/*  Conditional subtitle based on item type */}
-          <p className="text-sm text-gray-400">
-            {isWatchlistItem ? (
-              // Watchlist subtitle: show condition and marketplace
-              <>
-                {investment.condition && <span>{investment.condition}</span>}
-                {investment.condition && investment.current_marketplace && <span> • </span>}
-                {investment.current_marketplace && (
-                  <span className="text-blue-400">{investment.current_marketplace.toUpperCase()}</span>
-                )}
-              </>
-            ) : (
-              // Portfolio subtitle: existing logic with quantity
-              subtitle(investment)
-            )}
-          </p>
-        </div>
-      </div>
-      
-      {/* Right side */}
-      <div className="text-right flex-shrink-0">
-        <div className="flex items-center space-x-2">
-          <span className="text-white font-medium flex items-center space-x-1">
-            {isPriceLoading ? (
-              <span className="text-gray-400 text-sm">Loading...</span>
-            ) : (
-              <span>{formatPrice(investment.current_price)}</span>
-            )}
-            {isPriceLoading && (
-              <div className="relative group">
-                <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                  Loading current price...
-                </div>
-              </div>
-            )}
-          </span>
-          
-          {!isPriceLoading && !isNaN(investment.changePercent) && (
-            <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${
-              investment.trend === 'up'
-                ? 'bg-green-500/20 text-green-400'
-                : 'bg-red-500/20 text-red-400'
-            }`}>
-              {investment.trend === 'up' ? (
-                <TrendingUp className="w-3 h-3" />
+          {/* Item information */}
+          <div className="min-w-0 flex-1">
+            {/* Item name with optional skin name */}
+            <h3 className="font-medium text-white truncate text-base">
+              {displayName(investment)}
+            </h3>
+            {/*  Conditional subtitle based on item type */}
+            <p className="text-sm text-gray-400 truncate">
+              {isWatchlistItem ? (
+                // Watchlist subtitle: show condition and marketplace
+                <>
+                  {investment.condition && <span>{investment.condition}</span>}
+                  {investment.condition && investment.current_marketplace && <span> • </span>}
+                  {investment.current_marketplace && (
+                    <span className="text-blue-400">{investment.current_marketplace.toUpperCase()}</span>
+                  )}
+                </>
               ) : (
-                <TrendingDown className="w-3 h-3" />
+                // Portfolio subtitle: existing logic with quantity
+                subtitle(investment)
               )}
-              <span>{Math.abs(investment.changePercent).toFixed(1)}%</span>
-            </div>
-          )}
-          
-          {isPriceLoading && (
-            <div className="flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-500/20 text-gray-400">
-              <span>---%</span>
-            </div>
-          )}
+            </p>
+          </div>
         </div>
-        {/* Label based on item type */}
-        <p className="text-sm text-gray-400">
-          from {formatPrice(investment.buy_price)}
-          {isWatchlistItem && <span className="text-gray-500"> (baseline)</span>}
-        </p>
+        
+        {/* Right side - below on mobile, right on desktop */}
+        <div className="flex items-center justify-between space-x-1 sm:justify-end sm:text-right sm:flex-shrink-0 sm:ml-4">
+          <div className="flex flex-col sm:items-end">
+            <div className="flex items-center space-x-2">
+              <span className="text-white font-medium flex items-center space-x-1 text-base">
+                {isPriceLoading ? (
+                  <span className="text-gray-400 text-sm">Loading...</span>
+                ) : (
+                  <span>{formatPrice(investment.current_price)}</span>
+                )}
+                {isPriceLoading && (
+                  <div className="relative group">
+                    <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                      Loading current price...
+                    </div>
+                  </div>
+                )}
+              </span>
+              
+              {!isPriceLoading && !isNaN(investment.changePercent) && (
+                <div className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${
+                  investment.trend === 'up'
+                    ? 'bg-green-500/20 text-green-400'
+                    : 'bg-red-500/20 text-red-400'
+                }`}>
+                  {investment.trend === 'up' ? (
+                    <TrendingUp className="w-3 h-3" />
+                  ) : (
+                    <TrendingDown className="w-3 h-3" />
+                  )}
+                  <span>{Math.abs(investment.changePercent).toFixed(1)}%</span>
+                </div>
+              )}
+              
+              {isPriceLoading && (
+                <div className="flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-500/20 text-gray-400">
+                  <span>---%</span>
+                </div>
+              )}
+            </div>
+            {/* Label based on item type */}
+            <p className="text-sm text-gray-400 mt-0.5">
+              from {formatPrice(investment.buy_price)}
+              {isWatchlistItem && <span className="text-gray-500"> (baseline)</span>}
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -201,7 +206,7 @@ const RecentPriceChanges = React.memo(({
 
   // Configuration constants
   const itemsPerPage = 5;
-  const maxItemsToShow = showAll ? investments.length : 10;
+  const maxItemsToShow = showAll ? activeData.length : 10;
 
   // Memoized price formatting function to prevent unnecessary re-renders of child components
   const formatPrice = useCallback((price) => {
@@ -319,67 +324,66 @@ const RecentPriceChanges = React.memo(({
   }, []);
 
   return (
-    <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl mb-8 p-6 border border-gray-700/50 h-[700px] flex flex-col">
-      {/* Header with new toggle */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-4">
-          <h2 className="text-xl font-semibold text-white">Recent Price Changes</h2>
-          
-          {/* View Mode Toggle */}
-          <div className="flex bg-gray-700/50 rounded-lg p-1 border border-gray-600/50">
-            <button
-              onClick={() => onViewModeChange('portfolio')}
-              className={`px-3 py-1.5 rounded text-sm font-medium transition-all duration-200 ${
-                viewMode === 'portfolio'
-                  ? 'bg-orange-500 text-white shadow-lg'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Portfolio
-            </button>
-            <button
-              onClick={() => onViewModeChange('watchlist')}
-              className={`px-3 py-1.5 rounded text-sm font-medium transition-all duration-200 ${
-                viewMode === 'watchlist'
-                  ? 'bg-orange-500 text-white shadow-lg'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Watchlist
-            </button>
-          </div>
-        </div>
-        
-        <div className="flex items-center space-x-3">
-          {/* Active items counter */}
-          <div className="text-sm text-gray-400">
-            {priceChanges.length} active items
+    <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl mb-8 p-4 sm:p-6 border border-gray-700/50 flex flex-col h-[600px] sm:h-auto sm:min-h-[700px]">
+      {/* Header with responsive layout */}
+      <div className="mb-4 sm:mb-4 flex-shrink-0">
+        {/* Top row: Title/Toggle on left, Buttons on right */}
+        <div className="flex flex-wrap gap-2 items-start justify-between mb-3">
+  <div className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:space-x-4 sm:space-y-0">
+    <h2 className="text-xl font-semibold text-white whitespace-nowrap">Recent Price Changes</h2>
+            
+            {/* View Mode Toggle */}
+            <div className="flex bg-gray-700/50 rounded-lg p-1 border border-gray-600/50 w-fit">
+              <button
+                onClick={() => onViewModeChange('portfolio')}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-all duration-200 ${
+                  viewMode === 'portfolio'
+                    ? 'bg-orange-500 text-white shadow-lg'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Portfolio
+              </button>
+              <button
+                onClick={() => onViewModeChange('watchlist')}
+                className={`px-3 py-1.5 rounded text-sm font-medium transition-all duration-200 ${
+                  viewMode === 'watchlist'
+                    ? 'bg-orange-500 text-white shadow-lg'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Watchlist
+              </button>
+            </div>
           </div>
           
-          {/* Sort order toggle button */}
-          <button
-            onClick={handleSortToggle}
-            className="flex items-center space-x-2 px-3 py-2 rounded-lg bg-gray-700/60 hover:bg-gray-600/60 text-gray-300 hover:text-white transition-all duration-200 text-sm border border-gray-600/50 hover:border-gray-500/50"
-          >
-            {sortOrder === 'most' ? (
-              <>
-                <TrendingUp className="w-4 h-4" />
-                <span>Most Changed</span>
-              </>
-            ) : (
-              <>
-                <TrendingDown className="w-4 h-4" />
-                <span>Least Changed</span>
-              </>
-            )}
-          </button>
-          
-          {/* Show All/Top 10 toggle - only shown when there are more than 10 items */}
-          {investments.length > 10 && (
-            <div className="relative">
+          {/* Control buttons - Right Side */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Sort order toggle button - shorter text on mobile */}
+            <button
+              onClick={handleSortToggle}
+              className="flex items-center space-x-1 whitespace-nowrap sm:space-x-2 px-2 sm:px-3 py-2 rounded-lg bg-gray-700/60 hover:bg-gray-600/60 text-gray-300 hover:text-white transition-all duration-200 text-sm border border-gray-600/50 hover:border-gray-500/50"
+            >
+              {sortOrder === 'most' ? (
+                <>
+                  <TrendingUp className="w-4 h-4" />
+                  <span className="hidden md:inline">Most Changed</span>
+                  <span className="md:hidden">Most</span>
+                </>
+              ) : (
+                <>
+                  <TrendingDown className="w-4 h-4" />
+                  <span className="hidden md:inline">Least Changed</span>
+                  <span className="md:hidden">Least</span>
+                </>
+              )}
+            </button>
+            
+            {/* Show All/Top 10 toggle */}
+            {activeData.length > 10 && (
               <button
                 onClick={handleShowAllToggle}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 border ${
+                className={`flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 border ${
                   showAll 
                     ? 'bg-orange-500/20 border-orange-500/50 text-orange-300 hover:bg-orange-500/30' 
                     : 'bg-gray-700/60 border-gray-600/50 text-gray-300 hover:bg-gray-600/60 hover:text-white hover:border-gray-500/50'
@@ -387,30 +391,38 @@ const RecentPriceChanges = React.memo(({
               >
                 {showAll ? (
                   <>
-                    <ListFilterPlus className="w-4 h-4" />
-                    <span>All Items</span>
+                    <ListFilter className="hidden md:inline w-4 h-4" />  
+                    <span className="hidden md:inline">
+                      All Items <span className="text-gray-400">({activeData.length})</span>
+                    </span>
+                    <span className="md:hidden">
+                      All <span className="text-gray-400">({activeData.length})</span>
+                    </span>
                   </>
                 ) : (
                   <>
                     <ListFilter className="w-4 h-4" />
-                    <span>Top 10</span>
+                    <span className="hidden md:inline">Top 10</span>
+                    <span className="md:hidden">10</span>
                   </>
                 )}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
       
       {/* Main content area - uses flexbox to fill available space */}
-      <div className="flex-grow flex flex-col overflow-hidden">
+      <div className="flex-grow flex flex-col overflow-hidden sm:overflow-visible">
         {/* Conditional rendering: either show items or centered empty state */}
         {currentPageItems.length === 0 ? (
           // Empty state - centered in the entire available space
           <div className="flex-grow flex items-center justify-center">
             <div className="text-center mb-12">
               <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <ChartNoAxesColumn className="w-8 h-8 text-gray-500" />
+                <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
               </div>
               <h3 className="text-xl font-medium text-gray-400 mb-2">No price changes to display</h3>
               <p className="text-gray-500 max-w-md">Items will appear here when adding investments</p>
@@ -418,8 +430,8 @@ const RecentPriceChanges = React.memo(({
           </div>
         ) : (
           <>
-            {/* Investment items list */}
-            <div className="space-y-4 flex-grow">
+            {/* Investment items list - scrollable on mobile, fixed on desktop */}
+            <div className="space-y-3 sm:space-y-4 flex-grow overflow-y-auto sm:overflow-y-visible overflow-x-hidden">
               {currentPageItems.map((investment) => {
                 const itemState = itemStates.get(investment.id) || { isNew: false, isPriceLoading: false };
                 return (
@@ -439,13 +451,15 @@ const RecentPriceChanges = React.memo(({
 
             {/* Pagination controls - pinned to bottom of container */}
             {totalPages > 1 && (
-              <PaginationControls
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPrevious={handlePreviousPage}
-                onNext={handleNextPage}
-                onPageClick={handlePageClick}
-              />
+              <div className="flex-shrink-0">
+                <PaginationControls
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPrevious={handlePreviousPage}
+                  onNext={handleNextPage}
+                  onPageClick={handlePageClick}
+                />
+              </div>
             )}
           </>
         )}
