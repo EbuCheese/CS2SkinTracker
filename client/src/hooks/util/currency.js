@@ -1,15 +1,15 @@
 // Currency conversion rates - update these regularly via API
 const EXCHANGE_RATES = {
   USD: 1,
-  EUR: 0.92,
-  GBP: 0.79,
-  CAD: 1.36,
-  AUD: 1.52,
-  CNY: 7.24,
-  JPY: 149.50,
-  KRW: 1318.50,
-  RUB: 92.50,
-  BRL: 4.97
+  EUR: 0.858,   // was 0.92
+  GBP: 0.736,   // was 0.79
+  CAD: 1.389,   // was 1.36
+  AUD: 1.559,   // was 1.52
+  CNY: 7.31,    // was 7.24
+  JPY: 148.20,  // was 149.50
+  KRW: 1374.0,  // was 1318.50
+  RUB: 85.50,   // was 92.50
+  BRL: 5.84     // was 4.97
 };
 
 // Currency symbols and formatting
