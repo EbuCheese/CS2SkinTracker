@@ -75,6 +75,26 @@ const InvestmentsPage = ({ userSession }) => {
   const summary = usePortfolioSummary(
     activeTab, investments, soldItems, currentItems, groupedSoldItems, portfolioSummary, optimisticSoldItems, searchQuery
   );
+
+  const isServerSummaryMode = useMemo(() => {
+    return activeTab !== 'Sold' && currentItems.length === investments.length && !!portfolioSummary;
+  }, [activeTab, currentItems.length, investments.length, portfolioSummary]);
+
+  const displaySummary = useMemo(() => {
+    if (activeTab === 'Sold') return summary;
+    if (!isServerSummaryMode) return summary;
+
+    const optimisticBuyDelta = optimisticUpdates.totalInvested || 0;
+    const optimisticCurrentDelta = optimisticUpdates.totalCurrentValue || 0;
+    const optimisticUnrealizedDelta = optimisticUpdates.totalUnrealizedPL || 0;
+
+    return {
+      ...summary,
+      totalBuyValue: (summary.totalBuyValue || 0) + optimisticBuyDelta,
+      totalCurrentValue: (summary.totalCurrentValue || 0) + optimisticCurrentDelta,
+      totalProfit: (summary.totalProfit || 0) + optimisticUnrealizedDelta
+    };
+  }, [activeTab, isServerSummaryMode, summary, optimisticUpdates]);
   
   // Tab configuration and UI helpers
   const { mainTabs, soldTab, searchPlaceholder, getAddButtonText, getTabDisplayName } = usePortfolioTabs(activeTab);
@@ -323,18 +343,42 @@ const InvestmentsPage = ({ userSession }) => {
 
 // handle addition of new investment items
 const handleAddItem = useCallback((newItem) => {
+  const safeBuyPrice = parseFloat(newItem.buy_price) || 0;
+  const safeQuantity = parseInt(newItem.quantity) || 0;
+
+  const rawCurrentPrice = parseFloat(newItem.current_price);
+  const safeCurrentPrice = rawCurrentPrice > 0 ? rawCurrentPrice : null;
+
+  const hasInitialMarketPrice = safeCurrentPrice && safeCurrentPrice > 0;
+  const initialCurrentContribution = hasInitialMarketPrice ? safeCurrentPrice * safeQuantity : 0;
+  const initialUnrealizedPL = hasInitialMarketPrice
+    ? (safeCurrentPrice - safeBuyPrice) * safeQuantity
+    : 0;
+
   // Calculate initial metrics manually
   const itemWithMetrics = {
     ...newItem,
-    unrealized_profit_loss: (newItem.current_price - newItem.buy_price) * newItem.quantity,
+    current_price: safeCurrentPrice,
+    buy_price: safeBuyPrice,
+    quantity: safeQuantity,
+    unrealized_profit_loss: initialUnrealizedPL,
     realized_profit_loss: 0,
-    original_quantity: newItem.quantity,
+    original_quantity: safeQuantity,
     total_sold_quantity: 0,
     total_sale_value: 0
   };
   
   setInvestments(prev => [itemWithMetrics, ...prev]);
   updateItemState(newItem.id, { isNew: true, isPriceLoading: true });
+
+  // Only add current value optimistically once market price exists to avoid buy-price flicker.
+  setOptimisticUpdates(prev => ({
+    totalInvested: (prev.totalInvested || 0) + (safeBuyPrice * safeQuantity),
+    totalCurrentValue: (prev.totalCurrentValue || 0) + initialCurrentContribution,
+    currentHoldingsValue: (prev.currentHoldingsValue || 0) + initialCurrentContribution,
+    totalRealizedPL: prev.totalRealizedPL || 0,
+    totalUnrealizedPL: (prev.totalUnrealizedPL || 0) + initialUnrealizedPL
+  }));
 
   setTimeout(() => {
     refreshSingleItemPrice(
@@ -346,6 +390,21 @@ const handleAddItem = useCallback((newItem) => {
           inv.id === itemId ? updatedItemData : inv
         ));
         updateItemState(itemId, { isPriceLoading: false });
+
+        const refreshedPrice = parseFloat(updatedItemData.current_price);
+        if (!refreshedPrice || refreshedPrice <= 0) {
+          return;
+        }
+
+        const finalCurrentContribution = refreshedPrice * safeQuantity;
+        const finalUnrealizedPL = (refreshedPrice - safeBuyPrice) * safeQuantity;
+
+        setOptimisticUpdates(prev => ({
+          ...prev,
+          totalCurrentValue: (prev.totalCurrentValue || 0) + (finalCurrentContribution - initialCurrentContribution),
+          currentHoldingsValue: (prev.currentHoldingsValue || 0) + (finalCurrentContribution - initialCurrentContribution),
+          totalUnrealizedPL: (prev.totalUnrealizedPL || 0) + (finalUnrealizedPL - initialUnrealizedPL)
+        }));
       },
       // Error callback - still stop loading indicator
       (itemId, error) => {
@@ -365,7 +424,7 @@ const handleAddItem = useCallback((newItem) => {
   setTimeout(() => {
     updateItemState(newItem.id, { isPriceLoading: false });
   }, 5000);
-}, [setInvestments, updateItemState, refreshSingleItemPrice, userSession]);
+}, [setInvestments, updateItemState, refreshSingleItemPrice, userSession, toast]);
 
 
   // STABLE CALLBACKS: Tab and form handlers
@@ -685,7 +744,7 @@ const handleAddItem = useCallback((newItem) => {
                 {activeTab === 'Sold' ? 'Total Sold' : 'Current Invested'}
               </div>
               <div className="text-white text-xl font-semibold">
-                {activeTab === 'Sold' ? convertAndFormat(summary.totalCurrentValue, currency) : convertAndFormat(summary.totalBuyValue, currency)}
+                {activeTab === 'Sold' ? convertAndFormat(displaySummary.totalCurrentValue, currency) : convertAndFormat(displaySummary.totalBuyValue, currency)}
               </div>
             </div>
 
@@ -695,7 +754,7 @@ const handleAddItem = useCallback((newItem) => {
                 {activeTab === 'Sold' ? 'Total Invested' : 'Current Value'}
               </div>
               <div className="text-white text-xl font-semibold">
-                {activeTab === 'Sold' ? convertAndFormat(summary.totalBuyValue, currency) : convertAndFormat(summary.totalCurrentValue, currency)}
+                {activeTab === 'Sold' ? convertAndFormat(displaySummary.totalBuyValue, currency) : convertAndFormat(displaySummary.totalCurrentValue, currency)}
               </div>
             </div>
 
@@ -705,10 +764,10 @@ const handleAddItem = useCallback((newItem) => {
                 {activeTab === 'Sold' ? 'Realized P&L' : 'Unrealized P&L'}
               </div>
               <div className={`text-xl font-semibold flex items-center space-x-1 ${
-                summary.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'
+                displaySummary.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'
               }`}>
-                {summary.totalProfit >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                <span>{convertAndFormat(Math.abs(summary.totalProfit), currency)} ({summary.profitPercentage.toFixed(2)}%)</span>
+                {displaySummary.totalProfit >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                <span>{convertAndFormat(Math.abs(displaySummary.totalProfit), currency)} ({displaySummary.profitPercentage.toFixed(2)}%)</span>
               </div>
             </div>
 
@@ -717,7 +776,7 @@ const handleAddItem = useCallback((newItem) => {
               <div className="text-gray-400 text-sm">
                 {activeTab === 'Sold' ? 'Sales' : 'Items'}
               </div>
-              <div className="text-white text-xl font-semibold">{summary.itemCount}</div>
+              <div className="text-white text-xl font-semibold">{displaySummary.itemCount}</div>
             </div>
           </div>
         )}

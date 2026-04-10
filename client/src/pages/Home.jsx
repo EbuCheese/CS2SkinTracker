@@ -185,10 +185,13 @@ const portfolioMetrics = useMemo(() => {
   // Handle current_price like db
   const rawCurrentPrice = parseFloat(newItem.current_price);
   const safeCurrentPrice = (rawCurrentPrice && rawCurrentPrice > 0) ? rawCurrentPrice : null;
-
-  const unrealizedPL = (safeCurrentPrice && safeCurrentPrice > 0 && safeQuantity > 0) 
-    ? (safeCurrentPrice - safeBuyPrice) * safeQuantity 
+  const hasInitialMarketPrice = safeCurrentPrice && safeCurrentPrice > 0;
+  const initialCurrentContribution = hasInitialMarketPrice ? safeCurrentPrice * safeQuantity : 0;
+  const initialUnrealizedPL = hasInitialMarketPrice
+    ? (safeCurrentPrice - safeBuyPrice) * safeQuantity
     : 0;
+
+  const unrealizedPL = initialUnrealizedPL;
 
   // Calculate initial metrics manually
   const itemWithMetrics = {
@@ -211,7 +214,7 @@ const portfolioMetrics = useMemo(() => {
 
   // Update optimistic portfolio summary
   const totalInvestedIncrease = safeBuyPrice * safeQuantity;
-  const totalCurrentValueIncrease = safeCurrentPrice ? safeCurrentPrice * safeQuantity : safeBuyPrice * safeQuantity;
+  const totalCurrentValueIncrease = initialCurrentContribution;
   
   setOptimisticUpdates(prev => ({
     totalInvested: (prev.totalInvested || 0) + totalInvestedIncrease,
@@ -234,15 +237,21 @@ const portfolioMetrics = useMemo(() => {
       updateItemState(itemId, { isPriceLoading: false });
       
       // RECALCULATE optimistic updates with new price
-      const oldPrice = safeBuyPrice; // What we used initially
-      const newPrice = updatedItemData.current_price || oldPrice;
-      const priceDifference = (newPrice - oldPrice) * safeQuantity;
+      const refreshedPrice = parseFloat(updatedItemData.current_price);
+      if (!refreshedPrice || refreshedPrice <= 0) {
+        return;
+      }
+
+      const finalCurrentContribution = refreshedPrice * safeQuantity;
+      const finalUnrealizedPL = (refreshedPrice - safeBuyPrice) * safeQuantity;
+      const currentDelta = finalCurrentContribution - initialCurrentContribution;
+      const unrealizedDelta = finalUnrealizedPL - initialUnrealizedPL;
       
       setOptimisticUpdates(prev => ({
         ...prev,
-        currentHoldingsValue: (prev.currentHoldingsValue || 0) + priceDifference,
-        totalCurrentValue: (prev.totalCurrentValue || 0) + priceDifference,
-        totalUnrealizedPL: (prev.totalUnrealizedPL || 0) + priceDifference
+        currentHoldingsValue: (prev.currentHoldingsValue || 0) + currentDelta,
+        totalCurrentValue: (prev.totalCurrentValue || 0) + currentDelta,
+        totalUnrealizedPL: (prev.totalUnrealizedPL || 0) + unrealizedDelta
       }));
     },
       // Error callback - stop loading indicator
