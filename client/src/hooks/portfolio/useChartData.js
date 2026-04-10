@@ -11,7 +11,7 @@ export const useChartData = (userSession, selectedTimePeriod, hasInvestments) =>
   const hasInitiallyLoaded = useRef(false);
   const lastTimePeriod = useRef(null);
 
-  const ENABLE_MOCK_DATA = true; // Toggle this for testing
+  const ENABLE_MOCK_DATA = false; // Toggle this for testing
 
 // Mock data generator
 const generateMockData = (timePeriod) => {

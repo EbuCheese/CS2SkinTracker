@@ -5,13 +5,15 @@ import { supabase } from '@/supabaseClient';
 import { ItemCard, ItemList, ImagePopupModal } from '@/components/item-display';
 import { AddItemForm } from '@/components/forms'
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
-import { useScrollLock, useAdvancedDebounce, useItemFormatting } from '@/hooks/util';
+import { useScrollLock, useAdvancedDebounce, useItemFormatting, convertAndFormat } from '@/hooks/util';
 import { usePortfolioData, usePortfolioFiltering, usePortfolioSummary, usePortfolioTabs, useSingleItemPrice } from '@/hooks/portfolio';
 import { useToast } from '@/contexts/ToastContext';
+import { useUserSettings } from '@/contexts/UserSettingsContext';
 
 const InvestmentsPage = ({ userSession }) => {
   // toast context
   const toast = useToast()
+  const { currency } = useUserSettings();
 
   // location
   const location = useLocation();
@@ -680,7 +682,7 @@ const handleAddItem = useCallback((newItem) => {
                 {activeTab === 'Sold' ? 'Total Sold' : 'Current Invested'}
               </div>
               <div className="text-white text-xl font-semibold">
-                ${activeTab === 'Sold' ? summary.totalCurrentValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : summary.totalBuyValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {activeTab === 'Sold' ? convertAndFormat(summary.totalCurrentValue, currency) : convertAndFormat(summary.totalBuyValue, currency)}
               </div>
             </div>
 
@@ -690,7 +692,7 @@ const handleAddItem = useCallback((newItem) => {
                 {activeTab === 'Sold' ? 'Total Invested' : 'Current Value'}
               </div>
               <div className="text-white text-xl font-semibold">
-                ${activeTab === 'Sold' ? summary.totalBuyValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : summary.totalCurrentValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {activeTab === 'Sold' ? convertAndFormat(summary.totalBuyValue, currency) : convertAndFormat(summary.totalCurrentValue, currency)}
               </div>
             </div>
 
@@ -703,7 +705,7 @@ const handleAddItem = useCallback((newItem) => {
                 summary.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'
               }`}>
                 {summary.totalProfit >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                <span>${Math.abs(summary.totalProfit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({summary.profitPercentage.toFixed(2)}%)</span>
+                <span>{convertAndFormat(Math.abs(summary.totalProfit), currency)} ({summary.profitPercentage.toFixed(2)}%)</span>
               </div>
             </div>
 
