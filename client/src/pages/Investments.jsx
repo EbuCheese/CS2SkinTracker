@@ -583,7 +583,10 @@ const handleAddItem = useCallback((newItem) => {
           {/* Different action buttons based on error type */}
           {errorDetails?.action === 'add_first_item' ? (
             <button
-              onClick={handleShowAddForm}
+              onClick={() => {
+                retry();
+                handleShowAddForm();
+              }}
               className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg hover:from-orange-600 hover:to-red-700 transition-all duration-200 font-medium flex items-center space-x-2 mx-auto shadow-lg"
             >
               <Plus className="w-5 h-5" />
